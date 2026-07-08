@@ -39,6 +39,17 @@ class QwenConfig(BaseSettings):
     model: str = ""
 
 
+class ProxyConfig(BaseSettings):
+    """Proxy 后端配置：namespace -> 后端 MCP server URL。
+
+    从环境变量加载 JSON，如::
+
+        AGENTRIG_PROXY__BACKENDS='{"echo":"http://localhost:9001/mcp"}'
+    """
+
+    backends: dict[str, str] = {}
+
+
 class Settings(BaseSettings):
     """顶层配置，从环境变量加载。
 
@@ -56,6 +67,7 @@ class Settings(BaseSettings):
     agent: AgentConfig = AgentConfig()
     database: DatabaseConfig = DatabaseConfig()
     qwen: QwenConfig = QwenConfig()
+    proxy: ProxyConfig = ProxyConfig()
 
 
 def get_settings() -> Settings:

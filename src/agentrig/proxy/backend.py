@@ -1,12 +1,12 @@
-"""后端 MCP server 连接管理（命名空间 -> session）。
-
-第一周只持有 session 引用（duck-typed：需 async list_tools() / async
-call_tool(name, args)）。真实连接（streamable_http_client + ClientSession）
-放 PR3b 在 lifespan 装配。
-"""
+"""后端 MCP server 连接管理（命名空间 -> session）。"""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
+
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
 
 NAMESPACE_SEP = "__"
 
@@ -33,3 +33,16 @@ class BackendRegistry:
     def all(self) -> dict[str, Any]:
         """返回 namespace -> session 的快照。"""
         return dict(self._sessions)
+
+
+@asynccontextmanager
+async def connect_backend(url: str) -> AsyncIterator[ClientSession]:
+    """连一个后端 MCP server（streamable HTTP），返回初始化好的 ClientSession。
+
+    长连复用 —— 在 proxy 整个生命周期内持有，不要每次调用重建。
+    退出 context 时自动发 DELETE 终止会话。
+    """
+    async with streamable_http_client(url) as (read, write, _get_session_id):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            yield session
