@@ -4,22 +4,30 @@
 遇 TOOL_CALLS 时，生成 mock 并通过 send_tool_results 回灌；
 全部累积进 `RoundData`。
 
-第一周范围：单场景单轮，不做机判。`_generate_mocks` 是占位；
-后续 PR 接 ToolMockHub（L0/L1/L2）。
+第一周范围：单场景单轮，不做机判。mock 生成通过 mock_policy 注入
+（ToolMockHub 实现 MockPolicy）；不传则用占位（echo 工具名）。
 """
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
 from .models import RoundData, ToolCall, ToolResult
+from .proxy.mock_policy import MockPolicy
 from .transports.base import AgentTransport, EventType, NormalizedEvent
 
 
 class CaseRunner:
     """单场景编排器（第一周：一轮，无机判）。"""
 
-    def __init__(self, transport: AgentTransport, *, max_rounds: int = 10) -> None:
+    def __init__(
+        self,
+        transport: AgentTransport,
+        *,
+        mock_policy: MockPolicy | None = None,
+        max_rounds: int = 10,
+    ) -> None:
         self.transport = transport
+        self.mock_policy = mock_policy
         self.max_rounds = max_rounds
 
     async def run(
@@ -52,7 +60,13 @@ class CaseRunner:
                 rd.error = ev.error
 
     async def _generate_mocks(self, calls: list[ToolCall]) -> list[ToolResult]:
-        """占位 mock 策略；后续 PR 接 ToolMockHub。"""
-        return [
-            ToolResult(tool_call_id=c.tool_call_id, result={"echo": c.name}) for c in calls
-        ]
+        """生成 mock：有 mock_policy 用它，否则占位（echo 工具名）。"""
+        if self.mock_policy is not None:
+            return [
+                ToolResult(
+                    tool_call_id=c.tool_call_id,
+                    result=self.mock_policy.generate(c.name, c.arguments),
+                )
+                for c in calls
+            ]
+        return [ToolResult(tool_call_id=c.tool_call_id, result={"echo": c.name}) for c in calls]
