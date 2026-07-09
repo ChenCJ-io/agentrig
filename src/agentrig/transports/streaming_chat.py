@@ -26,12 +26,22 @@ class StreamingChatTransport(AgentTransport):
 
     session_id 由 agent 在 session_created 事件返回，transport 持有；
     后续 send_tool_results 用它回灌（协议：回灌必须带 session_id）。
+
+    transport 参数可选，注入 httpx transport（如 ASGITransport）做内进程测试；
+    默认 None 走真实 HTTP。
     """
 
-    def __init__(self, base_url: str, *, request_timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        request_timeout: float = 60.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.request_timeout = request_timeout
         self.session_id: str | None = None
+        self._transport = transport
 
     async def send_user_message(
         self,
@@ -76,7 +86,10 @@ class StreamingChatTransport(AgentTransport):
         """POST /chat/stream，读 SSE，归一事件。"""
         url = f"{self.base_url}/chat/stream"
         headers = {"Accept": "text/event-stream"}
-        async with httpx.AsyncClient(timeout=self.request_timeout) as client:
+        client_kwargs: dict[str, Any] = {"timeout": self.request_timeout}
+        if self._transport is not None:
+            client_kwargs["transport"] = self._transport
+        async with httpx.AsyncClient(**client_kwargs) as client:
             async with client.stream("POST", url, json=payload, headers=headers) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():

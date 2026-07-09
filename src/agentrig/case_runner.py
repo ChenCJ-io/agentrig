@@ -10,6 +10,7 @@ MockPolicy）；不传则用占位（echo 工具名）。递归深度受 max_rou
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from .models import RoundData, ToolCall, ToolResult
 from .proxy.mock_policy import MockPolicy
@@ -74,17 +75,16 @@ class CaseRunner:
                 rd.error = ev.error
 
     async def _generate_mocks(self, calls: list[ToolCall]) -> list[ToolResult]:
-        """生成 mock：有 mock_policy 用它，否则占位（echo 工具名）。"""
-        if self.mock_policy is not None:
-            return [
-                ToolResult(
-                    tool_call_id=c.tool_call_id,
-                    name=c.name,
-                    result=self.mock_policy.generate(c.name, c.arguments),
-                )
-                for c in calls
-            ]
-        return [
-            ToolResult(tool_call_id=c.tool_call_id, name=c.name, result={"echo": c.name})
-            for c in calls
-        ]
+        """生成 mock：mock_policy 命中用预设，否则占位（防未配 mock 的工具调用报错）。"""
+        results: list[ToolResult] = []
+        for c in calls:
+            if self.mock_policy is not None and self.mock_policy.should_mock(
+                c.name, c.arguments
+            ):
+                result: Any = self.mock_policy.generate(c.name, c.arguments)
+            else:
+                result = {"echo": c.name}
+            results.append(
+                ToolResult(tool_call_id=c.tool_call_id, name=c.name, result=result)
+            )
+        return results
