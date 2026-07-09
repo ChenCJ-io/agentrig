@@ -18,6 +18,8 @@ class ToolResult(BaseModel):
     """工具调用的返回结果（mock 或真实）。"""
 
     tool_call_id: str
+    # 工具名：Lassist tool_result item 必填；OpenAI tool message 不要但携带无害
+    name: str
     # 当前先松散；后续 PR 约束为 MCP structured content。
     result: Any
 

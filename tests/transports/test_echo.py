@@ -34,7 +34,7 @@ async def test_echo_tool_call_loop() -> None:
     after = [
         e
         async for e in transport.send_tool_results(
-            [ToolResult(tool_call_id="c1", result={"r": 1})]
+            [ToolResult(tool_call_id="c1", name="search", result={"r": 1})]
         )
     ]
     assert after[-1].type is EventType.DONE

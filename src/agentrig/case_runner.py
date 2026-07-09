@@ -65,8 +65,12 @@ class CaseRunner:
             return [
                 ToolResult(
                     tool_call_id=c.tool_call_id,
+                    name=c.name,
                     result=self.mock_policy.generate(c.name, c.arguments),
                 )
                 for c in calls
             ]
-        return [ToolResult(tool_call_id=c.tool_call_id, result={"echo": c.name}) for c in calls]
+        return [
+            ToolResult(tool_call_id=c.tool_call_id, name=c.name, result={"echo": c.name})
+            for c in calls
+        ]
