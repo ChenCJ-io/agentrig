@@ -13,6 +13,7 @@ class TraceEntry:
     arguments: dict[str, Any]
     source: str  # "mock" | "real"
     is_error: bool = False
+    result: Any = None  # 工具返回（mock 原始值 / 真实 content 列表），供采样
 
 
 @dataclass
