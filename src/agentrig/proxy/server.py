@@ -17,6 +17,7 @@ from starlette.applications import Starlette
 from starlette.routing import Route
 
 from ..config import get_settings
+from ..runtime import get_runtime
 from .aggregator import AgentRigProxy
 from .backend import BackendRegistry, connect_backend
 from .mock_policy import MockPolicy
@@ -51,6 +52,12 @@ def build_proxy_app(
     return Starlette(routes=[Route("/mcp", endpoint=asgi_endpoint)], lifespan=lifespan)
 
 
-# 模块级默认 app（从环境变量读 backends），供 `uvicorn agentrig.proxy.server:app`
+# 模块级默认 app（从环境变量读 backends，注入 runtime 的 mock hub + trace），
+# 供 `uvicorn agentrig.proxy.server:app`
 _settings = get_settings()
-app = build_proxy_app(dict(_settings.proxy.backends))
+_rt = get_runtime()
+app = build_proxy_app(
+    dict(_settings.proxy.backends),
+    mock_policy=_rt.hub,
+    trace_sink=_rt.trace,
+)

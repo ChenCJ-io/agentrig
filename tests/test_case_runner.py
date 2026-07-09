@@ -35,3 +35,22 @@ async def test_minimal_case() -> None:
     assert len(rd.tool_calls) == 1
     assert rd.tool_calls[0].name == "search"
     assert len(rd.tool_results) == 1
+
+
+async def test_max_rounds_stops_infinite_tool_loop() -> None:
+    """agent 陷入 tool-call 死循环时，max_rounds 截断并记 error（不无限递归）。"""
+    loop_event = NormalizedEvent(
+        type=EventType.TOOL_CALLS,
+        tool_calls=[{"tool_call_id": "c", "name": "loop", "arguments": {}}],
+    )
+    script = EchoScript(
+        on_user_message=[[loop_event]],
+        on_tool_results={i: [loop_event] for i in range(10)},
+    )
+    runner = CaseRunner(EchoTransport(script), max_rounds=2)
+    rounds = [r async for r in runner.run("loop")]
+
+    rd = rounds[0]
+    assert rd.error is not None
+    assert "max_rounds" in rd.error
+    assert rd.done is False

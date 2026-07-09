@@ -4,8 +4,8 @@
 遇 TOOL_CALLS 时，生成 mock 并通过 send_tool_results 回灌；
 全部累积进 `RoundData`。
 
-第一周范围：单场景单轮，不做机判。mock 生成通过 mock_policy 注入
-（ToolMockHub 实现 MockPolicy）；不传则用占位（echo 工具名）。
+单场景单轮编排（无机判）。mock 生成通过 mock_policy 注入（ToolMockHub 实现
+MockPolicy）；不传则用占位（echo 工具名）。递归深度受 max_rounds 限制。
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from .transports.base import AgentTransport, EventType, NormalizedEvent
 
 
 class CaseRunner:
-    """单场景编排器（第一周：一轮，无机判）。"""
+    """单场景编排器（一轮，无机判）。"""
 
     def __init__(
         self,
@@ -39,8 +39,18 @@ class CaseRunner:
         )
         yield rd
 
-    async def _drive(self, events: AsyncIterator[NormalizedEvent], rd: RoundData) -> None:
-        """消费一段事件流；遇 TOOL_CALLS 时，生成 mock 并递归继续。"""
+    async def _drive(
+        self,
+        events: AsyncIterator[NormalizedEvent],
+        rd: RoundData,
+        *,
+        depth: int = 0,
+    ) -> None:
+        """消费一段事件流；遇 TOOL_CALLS 时，生成 mock 并递归继续。
+
+        depth 限制 tool-calling 递归深度，超过 max_rounds 则记 error 停止
+        （防止 agent 陷入 tool-call 死循环导致无限递归）。
+        """
         async for ev in events:
             if ev.type is EventType.SESSION_CREATED and ev.session_id:
                 rd.session_id = ev.session_id
@@ -50,9 +60,13 @@ class CaseRunner:
                 rd.tool_calls.extend(ToolCall(**tc) for tc in ev.tool_calls)
                 results = await self._generate_mocks(rd.tool_calls)
                 rd.tool_results.extend(results)
+                if depth + 1 >= self.max_rounds:
+                    rd.error = f"max_rounds exceeded ({self.max_rounds})"
+                    return
                 await self._drive(
                     self.transport.send_tool_results(results, session_id=rd.session_id),
                     rd,
+                    depth=depth + 1,
                 )
             elif ev.type is EventType.DONE:
                 rd.done = True
