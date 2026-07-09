@@ -6,8 +6,8 @@ transport 抽象掉被测 agent 的协议。它只负责一件事：驱动 agent
 
 递归 tool-calling 回路拆给调用方（CaseRunner）：transport yield 出
 TOOL_CALLS 时，CaseRunner 生成 mock 并调 `send_tool_results` 继续。
-这是对老代码 `agent_client.AgentSSEClient` 的刻意反转 —— 老代码把 mock
-生成焊死在 transport 内，导致难测试、难换 mock 策略。
+这是对「把 mock 焊死在 transport 内」的写法的刻意反转 —— 那种写法难测试、
+难换 mock 策略；这里把 mock 注入交给调用方（CaseRunner）。
 """
 from __future__ import annotations
 

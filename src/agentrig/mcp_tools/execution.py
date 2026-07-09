@@ -4,7 +4,7 @@ run_single_case 从 repo 取 case，构造 transport + mock，CaseRunner 跑，
 返回结果（passed + tool_calls + missing expected + error）。
 
 第一周 transport 用 EchoTransport（模拟 agent 调 case.mock 的工具）；
-后续 PR 接真实 transport（Lassist/OpenAI/MCP）。
+后续 PR 接真实 transport（streaming-chat/OpenAI/MCP）。
 """
 from __future__ import annotations
 

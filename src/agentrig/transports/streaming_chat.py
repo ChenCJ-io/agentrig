@@ -1,14 +1,13 @@
-"""LassistTransport：Lassist 式 SSE 中间人 transport（真实 transport 参考实现）。
+"""StreamingChatTransport：streaming-chat 式 SSE agent 的参考 transport。
 
-连一个 Lassist 式 agent（POST `/chat/stream`，SSE 响应）。transport 持有 session_id
-（首话由 agent 在 `session_created` 事件返回，后续请求带）。mock 生成在 CaseRunner
-（不在 transport）—— 这是 AgentTransport 抽象的核心，与老代码 `agent_client` 把
-mock 焊死在 transport 内相反。
+连一个外置 tool-calling 的 streaming-chat agent（POST `/chat/stream`，SSE 响应）。
+transport 持有 session_id（首话由 agent 在 `session_created` 事件返回，后续请求带）。
+mock 生成在 CaseRunner（不在 transport）—— 这是 AgentTransport 抽象的核心：
+transport 只驱动一段对话并把响应归一成 `NormalizedEvent`，工具返回由调用方注入。
 
-参考老代码 `agent_client.AgentSSEClient` 的 SSE 解析 + 请求格式，去掉 Pixcake 专有
-字段（device_info / chat_channel / user_id），留通用 Lassist 协议核心。
-
-开源用户参考它写自己的 transport（OpenAI / Anthropic / 自研协议）。
+协议是「外置 tool-calling 往返」的一种实现（agent 把 tool_call 暴露在对话流里，
+而非内部闭环），天然让 AgentRig 做中间人。开源用户参考它写自己的 transport
+（OpenAI streaming / Anthropic / 自研协议）。
 """
 from __future__ import annotations
 
@@ -22,11 +21,11 @@ from ..models import ToolResult
 from .base import AgentTransport, EventType, NormalizedEvent
 
 
-class LassistTransport(AgentTransport):
-    """连 Lassist 式 agent（POST /chat/stream + SSE 响应）。
+class StreamingChatTransport(AgentTransport):
+    """连 streaming-chat 式 agent（POST /chat/stream + SSE 响应）。
 
     session_id 由 agent 在 session_created 事件返回，transport 持有；
-    后续 send_tool_results 用它回灌（Lassist 协议：回灌必须有 session_id）。
+    后续 send_tool_results 用它回灌（协议：回灌必须带 session_id）。
     """
 
     def __init__(self, base_url: str, *, request_timeout: float = 60.0) -> None:
@@ -61,7 +60,7 @@ class LassistTransport(AgentTransport):
         *,
         session_id: str | None = None,
     ) -> AsyncIterator[NormalizedEvent]:
-        del session_id  # Lassist 协议用 transport 持有的 session_id
+        del session_id  # 协议用 transport 持有的 session_id
         if self.session_id is None:
             yield NormalizedEvent(type=EventType.ERROR, error="no session_id for tool_result")
             return
@@ -90,9 +89,9 @@ class LassistTransport(AgentTransport):
 
 
 def _build_tool_result_item(r: ToolResult) -> dict[str, Any]:
-    """构造 tool_result 请求体的一项（对齐老代码 build_agent_result_item）。
+    """构造 tool_result 请求体的一项。
 
-    result 序列化为 JSON 字符串（Lassist 协议要求字符串，不是对象）。
+    result 序列化为 JSON 字符串（协议要求字符串，不是对象）。
     """
     result_str = r.result if isinstance(r.result, str) else json.dumps(
         r.result, ensure_ascii=False
@@ -106,7 +105,7 @@ def _build_tool_result_item(r: ToolResult) -> dict[str, Any]:
 
 
 def _parse_sse_line(line: str) -> NormalizedEvent | None:
-    """解析 SSE data: 行（Lassist 格式：data: {type, run_id, data}）。"""
+    """解析 SSE data: 行（streaming-chat 格式：data: {type, run_id, data}）。"""
     if not line.startswith("data:"):
         return None
     data_str = line[5:].strip()
@@ -122,7 +121,7 @@ def _parse_sse_line(line: str) -> NormalizedEvent | None:
 
 
 def _normalize(raw: dict[str, Any]) -> NormalizedEvent | None:
-    """把 Lassist SSE 事件归一成 NormalizedEvent。外层 {type, run_id, data}。"""
+    """把 streaming-chat SSE 事件归一成 NormalizedEvent。外层 {type, run_id, data}。"""
     ev_type = raw.get("type")
     data = raw.get("data") or {}
 

@@ -1,12 +1,12 @@
-"""LassistTransport 单元测试：SSE 解析 + 事件归一 + tool_result item 构造。
+"""StreamingChatTransport 单元测试：SSE 解析 + 事件归一 + tool_result item 构造。
 
-httpx 部分需真实 Lassist agent，留集成测试；这里测纯函数。
+httpx 部分需真实 agent，留集成测试；这里测纯函数。
 """
 from __future__ import annotations
 
 from agentrig.models import ToolResult
 from agentrig.transports.base import EventType
-from agentrig.transports.lassist import _build_tool_result_item, _parse_sse_line
+from agentrig.transports.streaming_chat import _build_tool_result_item, _parse_sse_line
 
 
 def test_parse_session_created() -> None:
@@ -54,19 +54,19 @@ def test_parse_error() -> None:
 
 def test_parse_non_data_line_returns_none() -> None:
     assert _parse_sse_line("") is None
-    assert _parse_sse_line("event: ping") is None  # Lassist 不用 event: 行
+    assert _parse_sse_line("event: ping") is None  # 本协议不用 event: 行
     assert _parse_sse_line("data: not-json") is None
     assert _parse_sse_line("data: ") is None
 
 
 def test_parse_unknown_type_returns_none() -> None:
-    """suggestions/questions 等第一周不归一，返回 None（后续 PR 扩展）。"""
+    """suggestions/questions 等早期不归一，返回 None（后续 PR 扩展）。"""
     ev = _parse_sse_line('data: {"type":"suggestions","data":{"items":["x"]}}')
     assert ev is None
 
 
 def test_build_tool_result_item_serializes_result_as_json_string() -> None:
-    """result 必须是 JSON 字符串（Lassist 协议），不是对象。"""
+    """result 必须是 JSON 字符串（协议要求），不是对象。"""
     item = _build_tool_result_item(
         ToolResult(tool_call_id="tc1", name="read", result={"k": "v"})
     )
