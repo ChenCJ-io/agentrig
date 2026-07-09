@@ -1,11 +1,10 @@
 """execution 组 MCP 工具：跑测试用例。
 
 run_single_case 从 repo 取 case，构造 transport + mock，CaseRunner 跑，
-返回结果（passed + tool_calls + missing expected + error）。
+按 case.judge_mode 选 rule / ai / off 判定，返回 passed + reasons + 详情。
 
 transport 双模式：配了 AGENTRIG_AGENT__SERVER_URL 走 StreamingChatTransport
-（真实被测 agent）；否则降级 EchoTransport（模拟 agent 按 case.mock 自呼自应，
-供无 agent 环境冒烟/单测）。
+（真实被测 agent）；否则降级 EchoTransport（模拟 agent 按 case.mock 自呼自应）。
 """
 from __future__ import annotations
 
@@ -16,9 +15,10 @@ from mcp.server.fastmcp import FastMCP
 
 from ..case_runner import CaseRunner
 from ..config import get_settings
-from ..judges import rule_judge
+from ..judges import ai_judge, rule_judge
 from ..mock import ToolMockHub
 from ..models import TestCase
+from ..providers import get_llm_provider
 from ..storage import TestCaseRepo, get_repo
 from ..transports.base import EventType, NormalizedEvent
 from ..transports.echo import EchoScript, EchoTransport
@@ -62,15 +62,25 @@ def _echo_script_for_case(case: TestCase) -> EchoScript:
     return EchoScript(on_user_message=on_user_message, on_tool_results=on_tool_results)
 
 
+async def _judge(rd: Any, case: TestCase) -> rule_judge.Verdict:
+    """按 case.judge_mode 选判定器。"""
+    if case.judge_mode == "ai":
+        provider = get_llm_provider()
+        if provider is None:
+            return rule_judge.Verdict(False, ["ai judge 未配 LLM provider"])
+        return await ai_judge.judge(rd, case, provider)
+    if case.judge_mode == "off":
+        return rule_judge.Verdict(
+            passed=rd.error is None,
+            reasons=[f"error: {rd.error}"] if rd.error else [],
+        )
+    return rule_judge.judge(rd, case)
+
+
 async def run_single_case_impl(
     repo: TestCaseRepo, case_id: str
 ) -> dict[str, Any]:
-    """跑一个用例，返回结果 dict。
-
-    - transport：有 agent url 走真实，否则降级 echo
-    - mock：case.mock 作 ToolMockHub 的 L0 inline
-    - 断言：expected_tools 都被调了 + 无 error → passed
-    """
+    """跑一个用例，返回结果 dict（passed 取 judge_mode 选定的判定器）。"""
     case = repo.get(case_id)
     if case is None:
         return {"error": f"not found: {case_id}"}
@@ -95,12 +105,13 @@ async def run_single_case_impl(
     called = {tc.name for tc in rd.tool_calls}
     missing = set(case.expected_tools) - called
 
-    verdict = rule_judge.judge(rd, case)
+    verdict = await _judge(rd, case)
 
     return {
         "case_id": case.id,
         "passed": verdict.passed,
         "reasons": verdict.reasons,
+        "judge_mode": case.judge_mode,
         "assistant_text": rd.assistant_text,
         "tool_calls": [tc.name for tc in rd.tool_calls],
         "tool_results_count": len(rd.tool_results),

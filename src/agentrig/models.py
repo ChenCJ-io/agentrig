@@ -1,7 +1,7 @@
 """测试执行的领域模型（协议无关）。"""
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -45,8 +45,8 @@ class RoundData(BaseModel):
 class TestCase(BaseModel):
     """一个测试用例（CC 通过 authoring MCP 工具构建）。
 
-    第一周最小字段集：输入 + 期望工具 + mock 配置 + 标签。
-    后续 PR 加 scenario（多轮）/ rubric（断言语义）/ judge_mode。
+    最小字段集：输入 + 期望工具 + mock 配置 + 标签 + 断言/判据。
+    后续 PR 加 scenario（多轮）。
     """
 
     # pytest 默认收集 Test* 类当测试；这是领域模型，标记不收集
@@ -60,6 +60,10 @@ class TestCase(BaseModel):
     # 结构化断言：[{kind, ...}]，kind ∈
     # expected_tools / text_contains / tool_call_order / not_called
     expectations: list[dict[str, Any]] = Field(default_factory=list)
-    # 工具名 -> mock 结果（L0 风格，第一周简化；后续接 ToolMockHub 完整配置）
+    # 工具名 -> mock 结果（L0 风格，简化；后续接 ToolMockHub 完整配置）
     mock: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
+    # ai judge 的自然语言判据（judge_mode="ai" 时用）
+    rubric: str | None = None
+    # 判定模式：rule（结构化断言）/ ai（LLM 按 rubric）/ off（只判 error）
+    judge_mode: Literal["rule", "ai", "off"] = "rule"

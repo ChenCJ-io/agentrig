@@ -1,7 +1,7 @@
 """AgentRig 配置（基于 pydantic-settings）。
 
 配置从 `AGENTRIG_*` 环境变量加载（嵌套用 `__` 分隔，如
-`AGENTRIG_QWEN__API_KEY`）。TOML 文件支持留到后续 PR。
+`AGENTRIG_LLM__API_KEY`）。TOML 文件支持留到后续 PR。
 """
 from __future__ import annotations
 
@@ -25,14 +25,14 @@ class AgentConfig(BaseSettings):
 
 
 class DatabaseConfig(BaseSettings):
-    """持久化配置（v0.1 可选，无 DB 时降级内存）。"""
+    """持久化配置（无 url 时降级内存）。"""
 
     url: str = ""
     schema_name: str = "agentrig"
 
 
-class QwenConfig(BaseSettings):
-    """LLM provider 配置（默认 Qwen；后续通过 LLMProvider 抽象可插拔）。"""
+class LLMConfig(BaseSettings):
+    """LLM provider 配置（OpenAI 兼容；通过 LLMProvider 抽象可插拔）。"""
 
     api_key: SecretStr = SecretStr("")
     base_url: str = ""
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     server: ServerConfig = ServerConfig()
     agent: AgentConfig = AgentConfig()
     database: DatabaseConfig = DatabaseConfig()
-    qwen: QwenConfig = QwenConfig()
+    llm: LLMConfig = LLMConfig()
     proxy: ProxyConfig = ProxyConfig()
 
 
