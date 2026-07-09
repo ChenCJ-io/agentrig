@@ -55,8 +55,11 @@ class TestCase(BaseModel):
     id: str
     name: str
     user_message: str
-    # 期望 agent 调用的工具名（断言用；空则不断言）
+    # 期望 agent 调用的工具名（断言用；空则不断言；等价于 expectations 的一种糖）
     expected_tools: list[str] = Field(default_factory=list)
+    # 结构化断言：[{kind, ...}]，kind ∈
+    # expected_tools / text_contains / tool_call_order / not_called
+    expectations: list[dict[str, Any]] = Field(default_factory=list)
     # 工具名 -> mock 结果（L0 风格，第一周简化；后续接 ToolMockHub 完整配置）
     mock: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)

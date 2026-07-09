@@ -16,6 +16,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..case_runner import CaseRunner
 from ..config import get_settings
+from ..judges import rule_judge
 from ..mock import ToolMockHub
 from ..models import TestCase
 from ..storage import TestCaseRepo, get_repo
@@ -93,11 +94,13 @@ async def run_single_case_impl(
 
     called = {tc.name for tc in rd.tool_calls}
     missing = set(case.expected_tools) - called
-    passed = not missing and rd.error is None
+
+    verdict = rule_judge.judge(rd, case)
 
     return {
         "case_id": case.id,
-        "passed": passed,
+        "passed": verdict.passed,
+        "reasons": verdict.reasons,
         "assistant_text": rd.assistant_text,
         "tool_calls": [tc.name for tc in rd.tool_calls],
         "tool_results_count": len(rd.tool_results),
