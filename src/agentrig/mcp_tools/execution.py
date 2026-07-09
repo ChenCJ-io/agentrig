@@ -18,8 +18,7 @@ from ..case_runner import CaseRunner
 from ..config import get_settings
 from ..mock import ToolMockHub
 from ..models import TestCase
-from ..storage import get_repo
-from ..storage.repo import InMemoryTestCaseRepo
+from ..storage import TestCaseRepo, get_repo
 from ..transports.base import EventType, NormalizedEvent
 from ..transports.echo import EchoScript, EchoTransport
 from ..transports.streaming_chat import StreamingChatTransport
@@ -63,7 +62,7 @@ def _echo_script_for_case(case: TestCase) -> EchoScript:
 
 
 async def run_single_case_impl(
-    repo: InMemoryTestCaseRepo, case_id: str
+    repo: TestCaseRepo, case_id: str
 ) -> dict[str, Any]:
     """跑一个用例，返回结果 dict。
 

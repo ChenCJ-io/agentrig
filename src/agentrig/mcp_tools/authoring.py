@@ -11,12 +11,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..models import TestCase
-from ..storage import get_repo
-from ..storage.repo import InMemoryTestCaseRepo
+from ..storage import TestCaseRepo, get_repo
 
 
 async def upsert_test_case_impl(
-    repo: InMemoryTestCaseRepo, case: dict[str, Any]
+    repo: TestCaseRepo, case: dict[str, Any]
 ) -> TestCase:
     """创建/更新用例（纯函数）。"""
     tc = TestCase(**case)
@@ -24,12 +23,12 @@ async def upsert_test_case_impl(
     return tc
 
 
-async def list_test_cases_impl(repo: InMemoryTestCaseRepo) -> list[dict[str, Any]]:
+async def list_test_cases_impl(repo: TestCaseRepo) -> list[dict[str, Any]]:
     """列出所有用例（dict 列表）。"""
     return [c.model_dump() for c in repo.list_all()]
 
 
-async def get_test_case_impl(repo: InMemoryTestCaseRepo, case_id: str) -> str:
+async def get_test_case_impl(repo: TestCaseRepo, case_id: str) -> str:
     """取单个用例 JSON；不存在返回 'not found: <id>'。"""
     c = repo.get(case_id)
     if c is None:

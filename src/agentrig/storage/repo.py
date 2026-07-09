@@ -1,7 +1,7 @@
-"""in-memory 用例存储（v0.1 骨架；后续接 DB）。
+"""in-memory 用例存储（默认后端；满足 TestCaseRepo Protocol）。
 
-模块级单例通过 get_repo() 获取（运行时）。测试可直接 new InMemoryTestCaseRepo()
-建独立实例避免污染全局。
+测试可直接 new InMemoryTestCaseRepo() 建独立实例避免污染全局。
+运行时单例由 storage.get_repo() 提供（按配置选内存/SQLite）。
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from ..models import TestCase
 
 
 class InMemoryTestCaseRepo:
-    """简单的内存用例仓库，按 id 索引。"""
+    """简单的内存用例仓库，按 id 索引（满足 TestCaseRepo Protocol）。"""
 
     def __init__(self) -> None:
         self._cases: dict[str, TestCase] = {}
@@ -34,12 +34,3 @@ class InMemoryTestCaseRepo:
     def clear(self) -> None:
         """清空（测试用）。"""
         self._cases.clear()
-
-
-# 模块级单例（运行时用；测试建独立实例）
-_repo = InMemoryTestCaseRepo()
-
-
-def get_repo() -> InMemoryTestCaseRepo:
-    """全局仓库单例。"""
-    return _repo
