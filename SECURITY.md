@@ -8,8 +8,7 @@ Please **do not** open a public GitHub issue for security vulnerabilities.
 
 私密上报方式 / Report privately via:
 
-- **GitHub Security Advisory**：Repo → Security → Report a vulnerability（推荐 / preferred）
-- 或邮件 / or email：见仓库 maintainer 联系方式
+- **GitHub Security Advisory**：Repo → Security → Report a vulnerability（唯一渠道 / the only channel）
 
 请附 / Please include：影响范围、复现步骤、建议修复 / impact, reproduction steps, suggested fix。
 

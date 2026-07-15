@@ -45,8 +45,8 @@ AgentRig 的核心是「用例积累飞轮」。欢迎为被测 agent 补回归�
 ## 前端开发
 
 ```bash
-# 终端 1：起后端
-AGENTRIG_SERVER__PORT=8081 uv run agentrig serve
+# 终端 1：起后端（默认 127.0.0.1:8000）
+uv run agentrig serve
 # 终端 2：前端热重载（vite，proxy /api → 后端）
 cd web && npm run dev
 ```
