@@ -1,11 +1,11 @@
 # AgentRig CC 测试 Skill 包
 
 > 最后更新：2026-07-07 · 状态：✅ 评估定稿
-> 数据来源：`lassist-v1/.claude/skills` 11 个 skill 实勘
+> 数据来源：`streaming-chat-v1/.claude/skills` 11 个 skill 实勘
 
 ## 核心结论
 
-业务 agent（lassist）沉淀的 CC skill 是**意外加分项**——质量高、约 60% 通用、提炼出的「agent 回归测试方法论」是任何 LLM agent 项目都适用的硬通货。建议作为 AgentRig 开源的一部分（形态 A 随主仓库），让用户 clone 即得「开箱即用的 CC 测试能力包」。
+业务 agent（streaming-chat）沉淀的 CC skill 是**意外加分项**——质量高、约 60% 通用、提炼出的「agent 回归测试方法论」是任何 LLM agent 项目都适用的硬通货。建议作为 AgentRig 开源的一部分（形态 A 随主仓库），让用户 clone 即得「开箱即用的 CC 测试能力包」。
 
 ## 为什么 skill 是飞轮的关键使能
 
@@ -30,7 +30,7 @@
 
 ## 三件套（v0.1 必发）
 
-lassist 沉淀的 7 个 AgentRig 相关 skill 里，三个核心是开源级教材：
+streaming-chat 沉淀的 7 个 AgentRig 相关 skill 里，三个核心是开源级教材：
 
 ### 1. build-test-case（case 构建流水线）
 查重(find_cases_by_tool) → 取真实样本(get_tool_result_samples, from_sample_id 零失真) → 校准 schema(get_case_schema, 不硬编码) → 设计 rubric(判可观测不判内部) → upsert(编译器式自我修正) → 停下等 approve
@@ -41,15 +41,15 @@ lassist 沉淀的 7 个 AgentRig 相关 skill 里，三个核心是开源级教�
 ### 3. harvest-tool-samples（真实样本采集）
 只收真实会话(conv_*)、排除 mock 回放(session_*)；按工具名聚合
 
-## 通用 vs Lassist 专有
+## 通用 vs streaming-chat 专有
 
 | skill | 通用度 | 开源？ |
 |---|---|---|
-| build-test-case | 主体框架通用，示例 Lassist | ✅ 脱敏（替换 apply_creative/image_id）|
+| build-test-case | 主体框架通用，示例 streaming-chat | ✅ 脱敏（替换 search_tool/item_id）|
 | run-test-cases | 执行诊断流程通用 | ✅ 脱敏 |
-| harvest-tool-samples | 采样方法论通用，脚本耦合 lassist 日志 | ✅ 脱敏（脚本标「示例需改」）|
+| harvest-tool-samples | 采样方法论通用，脚本耦合 streaming-chat 日志 | ✅ 脱敏（脚本标「示例需改」）|
 | fix-bug-from-errors | 错误管线方法论通用，脚本耦合错误 JSON | 🟡 v0.2（或标示例脚本）|
-| analyze-session / mine-cases-from-sessions | 耦合 lassist DB schema | ❌ 不开放（留 examples）|
+| analyze-session / mine-cases-from-sessions | 耦合 streaming-chat DB schema | ❌ 不开放（留 examples）|
 | weekly-report | 仅引用 | 🟡 v0.2 |
 
 ## 开源形态：A（随主仓库 `agentrig/skills/`）
@@ -72,7 +72,7 @@ agentrig/skills/
 
 ## 开源前脱敏清单（核心三件套，2-3 天）
 
-1. **业务词替换**：apply_creative / image_id / masks / aigcType / ai_culling / project_state / 9.x 版本号 / wechat → 中性占位（search_tool / item_id）
+1. **业务词替换**：search_tool / item_id / masks / aigcType / ai_culling / project_state / 9.x 版本号 / wechat → 中性占位（search_tool / item_id）
 2. **§7 通用化或移除**：reference.md「附件保真三形态」是点修专有，降级为通用「会话上下文物化契约」或删
 3. **MCP 前缀统一**：散见的 `mcp__agent-scope__*` 与裸工具名统一为开源 server 名（`agentrig`）
 4. **补 `skills/README.md`**：目录级说明
