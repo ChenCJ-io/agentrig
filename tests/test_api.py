@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from agentrig.app import app
+from agentrig.app import app, create_app
 
 
 @pytest.fixture(scope="module")
@@ -62,3 +62,13 @@ def test_spa_blocks_path_traversal(client: TestClient) -> None:
     r = client.get("/%2e%2e/%2e%2e/etc/passwd")
     # resolve 校验后回退 index.html，绝不会返回 /etc/passwd 内容
     assert "root:" not in r.text
+
+
+def test_token_guard_protects_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """设 AGENTRIG_SERVER__API_TOKEN 后 /api 需 Bearer；空则不保护（默认本地）。"""
+    monkeypatch.setenv("AGENTRIG_SERVER__API_TOKEN", "secret")
+    fresh = create_app()
+    c = TestClient(fresh)
+    assert c.get("/api/overview").status_code == 401
+    assert c.get("/api/overview", headers={"Authorization": "Bearer secret"}).status_code == 200
+    assert c.get("/api/overview", headers={"Authorization": "Bearer wrong"}).status_code == 401

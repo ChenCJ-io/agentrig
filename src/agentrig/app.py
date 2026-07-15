@@ -2,25 +2,29 @@
 
 lifespan：MCP session manager（/mcp）+ proxy（/proxy）。一个 `agentrig serve` 同时暴露：
 - /api：REST API（前端 web 用）
-- /mcp：ping + authoring + execution + sampling 工具（CC 操作 AgentRig 的入口）
+- /mcp：authoring/execution/sampling/discovery/results/verdict/observability 工具
 - /proxy：MCP proxy（agent 连这里用工具，AgentRig 聚合 + mock + trace）
 
-无 proxy.backends 配置时，/proxy 仍起（空后端，list_tools 返回空）。
+安全：可选 Bearer token（AGENTRIG_SERVER__API_TOKEN 非空时 /api /mcp /proxy 需鉴权）+
+安全响应头（CSP/nosniff/frame/referrer）。默认绑 127.0.0.1；公网暴露务必设 token。
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import cast
+from typing import Any, cast
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse, Response
 from mcp.server.fastmcp.server import StreamableHTTPASGIApp
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from starlette.requests import Request
 from starlette.types import ASGIApp
 
 from . import __version__
 from .api import router as api_router
-from .config import get_settings
+from .config import Settings, get_settings
 from .mcp_server import build_mcp_app, mcp_lifespan
 from .proxy.aggregator import AgentRigProxy
 from .proxy.backend import connect_backend
@@ -30,10 +34,8 @@ from .seed import maybe_seed
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    maybe_seed()  # 同步预填 demo 用例（仓库空时）—— 不放 lifespan，避免 session manager 复用冲突
+    maybe_seed()
 
-    # proxy 组件用进程级 runtime 单例（mock hub + trace + backend registry），
-    # 让 execution / sampling 工具共享同一组 mock 策略与 trace
     rt = get_runtime()
     proxy = AgentRigProxy(rt.registry, mock_policy=rt.hub, trace_sink=rt.trace)
     proxy_session_manager = StreamableHTTPSessionManager(app=proxy.build_server())
@@ -41,27 +43,54 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        print(f"AgentRig {__version__} starting")
+        logging.getLogger("agentrig").info("AgentRig %s starting", __version__)
         async with mcp_lifespan():
             async with AsyncExitStack() as stack:
-                # 连所有配置的后端（长连），注册到 runtime registry
                 for ns, url in settings.proxy.backends.items():
                     sess = await stack.enter_async_context(connect_backend(url))
                     rt.registry.add(ns, sess)
                 async with proxy_session_manager.run():
                     yield
-        print("AgentRig shutting down")
+        logging.getLogger("agentrig").info("AgentRig shutting down")
 
     app = FastAPI(title="AgentRig", version=__version__, lifespan=lifespan)
+    _add_security(app, settings)
     app.include_router(api_router)
     app.mount("/mcp", build_mcp_app())
     app.mount("/proxy", cast(ASGIApp, proxy_endpoint))
-
-    # 生产：若前端已 build（web/dist），挂为 SPA（单服务，无需单独 dev server）。
-    # dev 模式用 vite（5173）+ proxy /api 到后端。
     _mount_spa(app)
-
     return app
+
+
+def _add_security(app: FastAPI, settings: Settings) -> None:
+    logging.basicConfig(
+        level=settings.server.log_level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logger = logging.getLogger("agentrig")
+    token = settings.server.api_token
+    protected = ("/api", "/mcp", "/proxy")
+    if token:
+        logger.warning("API token 鉴权已启用：/api /mcp /proxy 需 Authorization: Bearer <token>")
+
+    @app.middleware("http")
+    async def _token_guard(request: Request, call_next: Any) -> Response:
+        if token and any(request.url.path.startswith(p) for p in protected):
+            if request.headers.get("authorization", "") != f"Bearer {token}":
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return cast(Response, await call_next(request))
+
+    @app.middleware("http")
+    async def _security_headers(request: Request, call_next: Any) -> Response:
+        resp = cast(Response, await call_next(request))
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["X-Frame-Options"] = "DENY"
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "connect-src 'self'; img-src 'self' data:"
+        )
+        return resp
 
 
 def _mount_spa(app: FastAPI) -> None:
@@ -79,7 +108,6 @@ def _mount_spa(app: FastAPI) -> None:
         candidate = (dist / full_path).resolve()
         if full_path and candidate.is_file() and dist in candidate.parents:
             return FileResponse(candidate)
-        # 非静态资源（前端路由如 /cases/xxx）→ 回退 index.html，交给 react-router
         return FileResponse(dist / "index.html")
 
 
