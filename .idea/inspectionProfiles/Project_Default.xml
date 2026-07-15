@@ -1,0 +1,30 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="fastapi" />
+          <option value="uvicorn" />
+          <option value="pydantic" />
+          <option value="agno" />
+          <option value="asyncpg" />
+          <option value="sqlalchemy" />
+          <option value="loguru" />
+          <option value="pgvector" />
+          <option value="psycopg" />
+          <option value="psycopg-binary" />
+          <option value="psycopg2-binary" />
+          <option value="langfuse" />
+          <option value="openlit" />
+          <option value="httpx" />
+          <option value="slowapi" />
+          <option value="json-repair" />
+          <option value="cerebras-cloud-sdk" />
+          <option value="nest-asyncio" />
+          <option value="httpx-sse" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
