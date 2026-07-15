@@ -51,3 +51,14 @@ def test_upsert_and_run(client: TestClient) -> None:
     run = client.post("/api/cases/tc_api_test/run").json()
     assert "passed" in run
     assert run["case_id"] == "tc_api_test"
+
+
+def test_spa_blocks_path_traversal(client: TestClient) -> None:
+    """SPA catch-all 不能用 %2e%2e 读 dist 外文件。CI 未 build 前端时跳过。"""
+    from pathlib import Path
+
+    if not Path("web/dist").is_dir():
+        return
+    r = client.get("/%2e%2e/%2e%2e/etc/passwd")
+    # resolve 校验后回退 index.html，绝不会返回 /etc/passwd 内容
+    assert "root:" not in r.text

@@ -33,10 +33,12 @@ MCP server 暴露在 `http://127.0.0.1:8000/mcp`。健康检查：
 ```bash
 curl -X POST http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"t"},"capabilities":{}}}'
 
 curl -X POST http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ping","arguments":{}}}'
 # → result.content[0].text == "pong"
 ```

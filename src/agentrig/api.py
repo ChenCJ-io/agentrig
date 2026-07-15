@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -16,8 +17,8 @@ from .storage import get_repo
 
 router = APIRouter(prefix="/api", tags=["agentrig"])
 
-# 简单 in-memory run 历史（alpha；后续 PR 接持久化）
-_runs: list[dict[str, Any]] = []
+# 简单 in-memory run 历史（alpha；后续 PR 接持久化）。deque 有界，防无限增长。
+_runs: deque[dict[str, Any]] = deque(maxlen=500)
 
 
 @router.get("/overview")

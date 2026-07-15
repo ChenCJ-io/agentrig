@@ -69,14 +69,15 @@ def _mount_spa(app: FastAPI) -> None:
 
     from starlette.responses import FileResponse
 
-    dist = Path("web/dist")
+    dist = Path("web/dist").resolve()
     if not dist.is_dir():
         return
 
     @app.get("/{full_path:path}")
     async def _spa(full_path: str) -> FileResponse:
-        candidate = dist / full_path
-        if full_path and candidate.is_file():
+        # 路径穿越防护：resolve 后必须仍在 dist 目录下（挡 %2e%2e / .. 等）
+        candidate = (dist / full_path).resolve()
+        if full_path and candidate.is_file() and dist in candidate.parents:
             return FileResponse(candidate)
         # 非静态资源（前端路由如 /cases/xxx）→ 回退 index.html，交给 react-router
         return FileResponse(dist / "index.html")

@@ -1,6 +1,8 @@
 """SQLite 持久化存储测试。"""
 from __future__ import annotations
 
+import pytest
+
 from agentrig.models import TestCase
 from agentrig.storage.sqlite_repo import SqliteTestCaseRepo
 
@@ -59,3 +61,11 @@ def test_sqlite_persists_across_instances(tmp_path: object) -> None:
     got = repo2.get("c1")
     assert got is not None
     assert got.user_message == "msg-c1"
+
+
+def test_sqlite_rejects_path_traversal() -> None:
+    """database url 含 .. 时拒绝（防穿越到任意位置写文件）。"""
+    with pytest.raises(ValueError):
+        SqliteTestCaseRepo("../evil.db")
+    with pytest.raises(ValueError):
+        SqliteTestCaseRepo("sqlite:///../../etc/evil")
