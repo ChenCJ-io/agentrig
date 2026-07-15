@@ -58,8 +58,10 @@ class CaseRunner:
             elif ev.type is EventType.TEXT_DELTA and ev.text:
                 rd.assistant_text += ev.text
             elif ev.type is EventType.TOOL_CALLS:
-                rd.tool_calls.extend(ToolCall(**tc) for tc in ev.tool_calls)
-                results = await self._generate_mocks(rd.tool_calls)
+                # 只对本轮新 tool_calls 生成 mock（rd.tool_calls 是累积，不能整包传入）
+                new_calls = [ToolCall(**tc) for tc in ev.tool_calls]
+                rd.tool_calls.extend(new_calls)
+                results = await self._generate_mocks(new_calls)
                 rd.tool_results.extend(results)
                 if depth + 1 >= self.max_rounds:
                     rd.error = f"max_rounds exceeded ({self.max_rounds})"

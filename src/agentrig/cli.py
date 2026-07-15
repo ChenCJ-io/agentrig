@@ -1,7 +1,8 @@
-"""AgentRig CLI 入口（`agentrig serve`）。"""
+"""AgentRig CLI 入口（`agentrig serve` / `agentrig demo`）。"""
 from __future__ import annotations
 
 import argparse
+import asyncio
 
 import uvicorn
 
@@ -17,6 +18,8 @@ def main() -> None:
     serve.add_argument("--host", default=None, help="覆盖监听 host")
     serve.add_argument("--port", type=int, default=None, help="覆盖监听端口")
 
+    sub.add_parser("demo", help="一键验收演示（起内置 sample agent 跑通完整闭环）")
+
     args = parser.parse_args()
 
     if args.cmd == "serve":
@@ -24,6 +27,10 @@ def main() -> None:
         host: str = args.host if args.host is not None else settings.server.host
         port: int = args.port if args.port is not None else settings.server.port
         uvicorn.run("agentrig.app:app", host=host, port=port, reload=args.reload)
+    elif args.cmd == "demo":
+        from .demo import run_demo
+
+        raise SystemExit(asyncio.run(run_demo()))
 
 
 if __name__ == "__main__":

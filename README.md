@@ -15,7 +15,7 @@ proxy 回放、随开发持续积累回归用例。
 
 🚧 早期开发（`v0.1.0a0`），尚未生产可用。
 
-设计文档见 [`docs/`](./docs/)。CC 测试 skill 包见 [`skills/`](./skills/)。
+设计文档见 [`docs/`](./docs/)。CC 测试 skill 包见 [`skills/`](./skills/)。一键验收 `uv run agentrig demo`（见 [`验收清单`](./docs/acceptance.md)）。
 
 ## 快速开始
 
