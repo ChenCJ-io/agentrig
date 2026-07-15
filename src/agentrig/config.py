@@ -17,8 +17,6 @@ agentrig.toml 示例::
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 from pydantic import SecretStr
 from pydantic_settings import (
     BaseSettings,
@@ -98,20 +96,15 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # 优先级：构造参数 > 环境变量 > TOML（文件存在时）> dotenv > secret
-        sources: list[PydanticBaseSettingsSource] = [init_settings, env_settings]
-        toml_file = settings_cls.model_config.get("toml_file")
-        files: list[str] = []
-        if isinstance(toml_file, str):
-            files = [toml_file]
-        elif isinstance(toml_file, Path):
-            files = [str(toml_file)]
-        elif isinstance(toml_file, (list, tuple)):
-            files = [str(f) for f in toml_file if isinstance(f, (str, Path))]
-        if any(Path(f).exists() for f in files):
-            sources.append(TomlConfigSettingsSource(settings_cls))
-        sources.extend([dotenv_settings, file_secret_settings])
-        return tuple(sources)
+        # 优先级：构造参数 > 环境变量 > TOML > dotenv > secret。
+        # TomlConfigSettingsSource 对不存在的文件静默忽略（配置文件可选）。
+        return (
+            init_settings,
+            env_settings,
+            TomlConfigSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
 
 def get_settings() -> Settings:
