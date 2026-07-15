@@ -16,7 +16,15 @@ from typing import cast
 from mcp.server.fastmcp import FastMCP
 from starlette.types import ASGIApp
 
-from .mcp_tools import authoring, execution, sampling
+from .mcp_tools import (
+    authoring,
+    discovery,
+    execution,
+    observability,
+    results,
+    sampling,
+    verdict,
+)
 
 mcp: FastMCP = FastMCP("agentrig", stateless_http=True, streamable_http_path="/")
 
@@ -27,10 +35,14 @@ def ping() -> str:
     return "pong"
 
 
-# 注册工具组（authoring: 构建/查询；execution: 跑用例；sampling: 真实样本；后续 results/verdict/...）
+# 注册工具组（六组：discovery/authoring/execution/results/verdict/observability + sampling）
 authoring.register(mcp)
 execution.register(mcp)
 sampling.register(mcp)
+discovery.register(mcp)
+results.register(mcp)
+verdict.register(mcp)
+observability.register(mcp)
 
 
 def build_mcp_app() -> ASGIApp:
