@@ -31,6 +31,9 @@ class ServerConfig(BaseSettings):
 
     host: str = "127.0.0.1"
     port: int = 8000
+    # 非空时 /api /mcp /proxy 需 Authorization: Bearer <token>（公网暴露务必设置）
+    api_token: str = ""
+    log_level: str = "INFO"
 
 
 class AgentConfig(BaseSettings):

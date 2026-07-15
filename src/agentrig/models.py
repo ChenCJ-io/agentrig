@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ToolCall(BaseModel):
@@ -67,3 +67,14 @@ class TestCase(BaseModel):
     rubric: str | None = None
     # 判定模式：rule（结构化断言）/ ai（LLM 按 rubric）/ off（只判 error）
     judge_mode: Literal["rule", "ai", "off"] = "rule"
+
+    @field_validator("expectations")
+    @classmethod
+    def _validate_expectations(cls, v: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        known = {"expected_tools", "text_contains", "tool_call_order", "not_called"}
+        for e in v:
+            if e.get("kind") not in known:
+                raise ValueError(
+                    f"unknown expectation kind: {e.get('kind')!r}（允许：{sorted(known)}）"
+                )
+        return v

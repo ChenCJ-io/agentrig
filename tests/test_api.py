@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from agentrig.app import app
+from agentrig.app import app, create_app
 
 
 @pytest.fixture(scope="module")
@@ -51,3 +51,24 @@ def test_upsert_and_run(client: TestClient) -> None:
     run = client.post("/api/cases/tc_api_test/run").json()
     assert "passed" in run
     assert run["case_id"] == "tc_api_test"
+
+
+def test_spa_blocks_path_traversal(client: TestClient) -> None:
+    """SPA catch-all 不能用 %2e%2e 读 dist 外文件。CI 未 build 前端时跳过。"""
+    from pathlib import Path
+
+    if not Path("web/dist").is_dir():
+        return
+    r = client.get("/%2e%2e/%2e%2e/etc/passwd")
+    # resolve 校验后回退 index.html，绝不会返回 /etc/passwd 内容
+    assert "root:" not in r.text
+
+
+def test_token_guard_protects_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """设 AGENTRIG_SERVER__API_TOKEN 后 /api 需 Bearer；空则不保护（默认本地）。"""
+    monkeypatch.setenv("AGENTRIG_SERVER__API_TOKEN", "secret")
+    fresh = create_app()
+    c = TestClient(fresh)
+    assert c.get("/api/overview").status_code == 401
+    assert c.get("/api/overview", headers={"Authorization": "Bearer secret"}).status_code == 200
+    assert c.get("/api/overview", headers={"Authorization": "Bearer wrong"}).status_code == 401

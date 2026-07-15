@@ -6,6 +6,16 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
 authors = [{ name = "AgentRig Contributors" }]
+keywords = ["mcp", "agent", "testing", "regression", "llm", "ai", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -23,6 +33,12 @@ dev = [
     "mypy>=1.11",
     "asgi-lifespan>=2.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ChenCJ-io/agentrig"
+Repository = "https://github.com/ChenCJ-io/agentrig"
+Issues = "https://github.com/ChenCJ-io/agentrig/issues"
+Changelog = "https://github.com/ChenCJ-io/agentrig/blob/main/CHANGELOG.md"
 
 [project.scripts]
 agentrig = "agentrig.cli:main"

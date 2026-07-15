@@ -67,16 +67,21 @@ export default function CaseEditor() {
     try {
       const r = await upsertCase(patched);
       setC(r);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
     } catch {
-      /* 离线：保留本地 */
+      /* 离线：保留本地，不标已保存 */
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
   };
 
   const saveRun = async () => {
     const patched: TestCase = { ...c, mock: safeParse(mockText) };
+    if (!patched.id.trim()) {
+      window.alert(`${t("editor.caseId")} ⚠`);
+      return;
+    }
     const savedCase = await upsertCase(patched).catch(() => patched);
+    if (!savedCase.id.trim()) return;
     const run = await runCase(savedCase.id).catch(() => null);
     nav(`/cases/${savedCase.id}/run`, {
       state: { run, caseName: savedCase.name },

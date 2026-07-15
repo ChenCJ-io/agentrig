@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from ..config import get_settings
 from .protocol import TestCaseRepo
 from .repo import InMemoryTestCaseRepo
@@ -10,18 +12,22 @@ from .sqlite_repo import SqliteTestCaseRepo
 __all__ = ["InMemoryTestCaseRepo", "SqliteTestCaseRepo", "TestCaseRepo", "get_repo"]
 
 _repo: TestCaseRepo | None = None
+_lock = threading.Lock()
 
 
 def get_repo() -> TestCaseRepo:
-    """全局仓库单例：配了 database.url 用 SQLite，否则内存。"""
+    """全局仓库单例（double-checked locking，线程安全）。"""
     global _repo
     if _repo is None:
-        url = get_settings().database.url
-        _repo = SqliteTestCaseRepo(url) if url else InMemoryTestCaseRepo()
+        with _lock:
+            if _repo is None:
+                url = get_settings().database.url
+                _repo = SqliteTestCaseRepo(url) if url else InMemoryTestCaseRepo()
     return _repo
 
 
 def reset_repo() -> None:
     """清空单例（测试隔离用）。"""
     global _repo
-    _repo = None
+    with _lock:
+        _repo = None
