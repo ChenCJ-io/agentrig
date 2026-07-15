@@ -1,9 +1,7 @@
-# AgentRig 开源筹备工作区
+# AgentRig 设计文档
 
-> ⚠️ 这是**内部开源筹备文档**，位于当前私有仓库 `ts-agent-scope` 中，**不是开源仓库本身**。
-> 开源仓库（暂定名 `agentrig`）会在脱敏 + 通用化完成后另起。
-
-本目录累积 AgentRig 从「Pixcake Agent 可视化测试平台」脱敏开源的全部讨论与决策。
+> 项目设计决策记录：定位、竞品、执行模型、协议适配、前端、PR 计划、CC skill 包。
+> 面向使用者与贡献者——理解 AgentRig 怎么设计、为什么这么设计、怎么扩展。
 
 ## 这是什么项目
 
@@ -31,7 +29,7 @@
 - **技术定位**：MCP 时代的「工具层测试台」（vs Langfuse 对话层观测），agent-native testing（AI 测 AI）
 - **主接入**：MCP proxy/aggregator（agent 配一处 mcp config）
 - **加分资产**：开箱即用的 CC 测试 skill 包（教 CC 用 MCP 工具做测试的方法论，竞品没有，见 `08`）
-- **策略**：最小开源版 v0.1-alpha（后端 + MCP proxy + skill 三件套，约 2-2.5 周），Pixcake 专有部分不开源
+- **策略**：最小开源版 v0.1-alpha（后端 + MCP proxy + skill 三件套），原内部项目专有部分不开源
 - **启动日期**：2026-07-07
 
 ## 维护约定
