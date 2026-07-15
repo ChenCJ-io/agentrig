@@ -71,13 +71,12 @@ def test_not_called() -> None:
     assert rule_judge.judge(_rd(["danger"]), case).passed is False
 
 
-def test_unknown_kind_recorded_as_reason() -> None:
-    case = TestCase(
-        id="c", name="n", user_message="m", expectations=[{"kind": "weird"}]
-    )
-    v = rule_judge.judge(_rd(), case)
-    assert v.passed is False
-    assert any("unknown" in r for r in v.reasons)
+def test_validator_rejects_unknown_expectation_kind() -> None:
+    """TestCase 构造时拒绝未知 expectation kind（入库前校验，防脏数据）。"""
+    import pytest
+
+    with pytest.raises(Exception):  # pydantic ValidationError
+        TestCase(id="c", name="n", user_message="m", expectations=[{"kind": "weird"}])
 
 
 def test_empty_case_passes() -> None:

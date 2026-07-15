@@ -1,4 +1,5 @@
 import { Route, Routes } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./components/Layout";
 import CaseEditor from "./pages/CaseEditor";
 import Overview from "./pages/Overview";
@@ -8,16 +9,18 @@ import TestCases from "./pages/TestCases";
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Overview />} />
-        <Route path="/cases" element={<TestCases />} />
-        <Route path="/cases/new" element={<CaseEditor />} />
-        <Route path="/cases/:id" element={<CaseEditor />} />
-        <Route path="/cases/:id/run" element={<RunDetail />} />
-        <Route path="/runs" element={<Overview />} />
-        <Route path="*" element={<Placeholder />} />
-      </Route>
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Overview />} />
+          <Route path="/cases" element={<TestCases />} />
+          <Route path="/cases/new" element={<CaseEditor />} />
+          <Route path="/cases/:id" element={<CaseEditor />} />
+          <Route path="/cases/:id/run" element={<RunDetail />} />
+          <Route path="/runs" element={<Overview />} />
+          <Route path="*" element={<Placeholder />} />
+        </Route>
+      </Routes>
+    </ErrorBoundary>
   );
 }
