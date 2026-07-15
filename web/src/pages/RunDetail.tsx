@@ -16,30 +16,29 @@ export default function RunDetail() {
   const [run, setRun] = useState<RunResult | null>(st?.run ?? null);
   const [caseName, setCaseName] = useState(st?.caseName ?? id ?? "");
   const [tc, setTc] = useState<TestCase | null>(null);
-  const [loading, setLoading] = useState(!run && !!id);
+  const [loading, setLoading] = useState(false);
 
-  const load = () => {
+  // 进入只加载用例（不自动 run——避免意外触发真实 agent 调用 / token 消耗）
+  useEffect(() => {
+    if (!id) return;
+    getCase(id)
+      .then((c) => {
+        setTc(c);
+        setCaseName(c.name);
+      })
+      .catch(() => setTc(mockCases.find((x) => x.id === id) ?? null));
+  }, [id]);
+
+  const runNow = async () => {
     if (!id) return;
     setLoading(true);
-    Promise.all([
-      getCase(id).catch(() => mockCases.find((x) => x.id === id) ?? null),
-      runCase(id).catch(() => null),
-    ])
-      .then(([c, r]) => {
-        if (c) {
-          setTc(c);
-          setCaseName(c.name);
-        }
-        if (r) setRun(r);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const r = await runCase(id).catch(() => null);
+      if (r) setRun(r);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  useEffect(() => {
-    if (!run && id) load();
-    if (id) getCase(id).then(setTc).catch(() => setTc(mockCases.find((x) => x.id === id) ?? null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
 
   // 工具时间线：name 列表 + 对应 mock result（来自 case.mock）
   const tools = run?.tool_calls ?? [];
@@ -71,7 +70,7 @@ export default function RunDetail() {
               </span>
             )}
           </div>
-          <Button variant="primary" onClick={load}>
+          <Button variant="primary" onClick={runNow}>
             <Play width={14} height={14} />
             {t("run.runNow")}
           </Button>
