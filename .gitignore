@@ -16,3 +16,5 @@ htmlcov/
 .env.*
 .DS_Store
 .omx/
+.idea/
+.vscode/
