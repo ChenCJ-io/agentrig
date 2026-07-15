@@ -1,12 +1,29 @@
 """AgentRig 配置（基于 pydantic-settings）。
 
-配置从 `AGENTRIG_*` 环境变量加载（嵌套用 `__` 分隔，如
-`AGENTRIG_LLM__API_KEY`）。TOML 文件支持留到后续 PR。
+配置来源（优先级高 → 低）：构造参数 > 环境变量 > TOML 文件 > 默认值。
+- 环境变量：`AGENTRIG_*`，嵌套用 `__` 分隔（如 `AGENTRIG_LLM__API_KEY`）
+- TOML：默认读 `agentrig.toml` 顶层字段（文件不存在则忽略）
+
+agentrig.toml 示例::
+
+    environment = "prod"
+
+    [server]
+    port = 9000
+
+    [llm]
+    api_key = "sk-..."
+    model = "gpt-x"
 """
 from __future__ import annotations
 
 from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
 
 
 class ServerConfig(BaseSettings):
@@ -51,15 +68,16 @@ class ProxyConfig(BaseSettings):
 
 
 class Settings(BaseSettings):
-    """顶层配置，从环境变量加载。
+    """顶层配置：构造参数 > 环境变量 > TOML > 默认值。
 
-    嵌套字段用 `__` 分隔，如 `AGENTRIG_SERVER__PORT=9000`。
+    环境变量 `AGENTRIG_*`，嵌套 `__` 分隔。TOML 默认读 `agentrig.toml` 顶层。
     """
 
     model_config = SettingsConfigDict(
         env_prefix="AGENTRIG_",
         env_nested_delimiter="__",
         extra="ignore",
+        toml_file="agentrig.toml",
     )
 
     environment: str = "dev"
@@ -68,6 +86,25 @@ class Settings(BaseSettings):
     database: DatabaseConfig = DatabaseConfig()
     llm: LLMConfig = LLMConfig()
     proxy: ProxyConfig = ProxyConfig()
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # 优先级：构造参数 > 环境变量 > TOML > dotenv > secret。
+        # TomlConfigSettingsSource 对不存在的文件静默忽略（配置文件可选）。
+        return (
+            init_settings,
+            env_settings,
+            TomlConfigSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
 
 def get_settings() -> Settings:
