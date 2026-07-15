@@ -1,11 +1,13 @@
 # AgentRig
 
+[English](./README.en.md) | 中文
+
 > 面向 AI agent 的 MCP 原生测试台。
 >
 > *每次改动都在长用例，每次发版都跑全量。*
 >
 > *The MCP-native test rig for AI agents. Every change grows the suite, every
-> release runs it all.*（开源发布时本 README 翻译为英文）
+> release runs it all.*
 
 AgentRig 是一个为 MCP 时代构建的 agent 回归测试平台。它让你的编码 agent
 （Claude Code、Codex）拥有业务 agent 的回归闭环 —— 构建测试场景、通过工具层
