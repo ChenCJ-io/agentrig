@@ -39,6 +39,8 @@ curl -X POST http://127.0.0.1:8000/mcp \
 # → result.content[0].text == "pong"
 ```
 
+完整端到端（构建用例 → 跑 → 看判定）见 [`docs/quickstart.md`](./docs/quickstart.md)。
+
 ## 开发
 
 ```bash
