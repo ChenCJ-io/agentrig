@@ -1,33 +1,28 @@
-# AgentRig 测试 Skill 包
+# AgentRig V1 编码 Agent Skills
 
-教编码 Agent（Claude Code / Codex 等）怎么用 AgentRig 的 MCP 工具做**回归测试**。
+这组 Skill 指导 Codex、Claude Code 等外部编码 Agent 使用 AgentRig MCP。V1 中外部编码
+Agent 是执行控制方：负责选案、提交运行、读取原子证据，并可在关闭 Evidence Judge 时
+回写自己的判定。
 
-## 为什么有这组 skill
-
-AgentRig 的差异化不止在工具，更在「CC 会用工具做测试」这套方法论。光给工具，CC
-不一定知道**何时查重、何时取真实样本、rubric 怎么写**。这组 skill 把实战沉淀的方法论
-固化成 CC 能读的指令——装上即得「开箱即用的测试能力包」。
-
-## 三件套（core/）
-
-| Skill | 何时用 | 核心动作 |
-|---|---|---|
-| [`build-test-case`](./core/build-test-case/) | 给业务 agent 构建/更新回归用例 | 查重 → 取真实样本 → 设计断言 → upsert → 停下等确认 |
-| [`run-test-cases`](./core/run-test-cases/) | 跑用例 + 诊断失败 | run_single_case → 读 reasons → 区分假红/真红 |
-| [`harvest-tool-samples`](./core/harvest-tool-samples/) | 采集真实工具返回样本 | 从 proxy trace 捞真实返回 → 喂给 mock（零失真） |
+| Skill | 用途 |
+|---|---|
+| [`build-test-case`](./core/build-test-case/) | 查重后创建或修改 draft/rejected 多轮用例 |
+| [`run-test-cases`](./core/run-test-cases/) | 异步执行单个、批量、多版本、重复和 A/B 测试 |
+| [`harvest-tool-samples`](./core/harvest-tool-samples/) | 从已存档 Real Tool 证据显式创建 Sample 草稿 |
 
 ## 前置条件
 
-- AgentRig 已起：`uv run agentrig serve`（暴露 `/mcp` 工具 + `/proxy` 代理）
-- 在编码工具的 MCP 配置里把 AgentRig 配为 server（server 名 `agentrig`）
-- 被测 agent 若要真跑：配 `AGENTRIG_AGENT__SERVER_URL`，或通过 `/proxy` 走工具代理
+1. 启动 AgentRig：`uv run agentrig serve`。
+2. 将 `http://127.0.0.1:8000/mcp/` 配置为编码 Agent 的 MCP Server。
+3. 在 AgentRig 中创建 Target；密钥只用 `env:VARIABLE_NAME` 引用。
+4. 创建 ExecutionProfile，明确工具控制方式、Provider 顺序和主评判器。
 
-## 核心方法论（贯穿三件套）
+## 共同原则
 
-1. **查重先于构建** —— 先 `list_test_cases`，别重复造用例
-2. **真实样本零失真** —— mock 基于真实工具返回（`get_real_tool_samples`），别凭空臆造
-3. **判可观测，不判内部机制** —— rubric/expectations 断言 agent 的可观测行为（调了什么工具、说了什么），不测服务端内部实现
-4. **编译器式自我修正** —— `upsert_test_case` 报错 → 按错误改 → 重试，直到接受
-5. **人机边界** —— 构建完停下等 approve，不要全自动跑
-
-> 示例里用 `echo` / `reverse` / `search` 等中性工具名。接你自己的 agent 时，换成它的真实工具名。
+- 只使用 V1 原子工具；不寻找旧的 `upsert_test_case`、`run_single_case` 或全局 Trace 工具。
+- MCP 可以管理 draft/rejected 用例和 draft Sample，但不能执行人工审核。
+- 一个 `run_cases` 同时覆盖单用例与批量；结果通过 Run ID 异步查询。
+- Fixture、approved Sample、Simulation Curator、Real Tool 按 Profile 配置顺序降级。
+- Real Tool 只有在部署允许、Profile 启用且用户明确授权时才调用。
+- Rule、Evidence Judge 和 External 判定分别存档；当前状态以用例的主评判器为准。
+- 所有判断引用 CaseRun 中真实的脱敏事件，不依据不可观察的内部实现。

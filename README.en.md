@@ -2,56 +2,94 @@
 
 English | [中文](./README.md)
 
-> The MCP-native test rig for AI agents.
->
-> *Every change grows the suite. Every release runs it all.*
+> The MCP-native regression test rig for AI agents.
 
-AgentRig is a regression testing platform for the MCP era. It gives your coding
-agent (Claude Code, Codex) a regression loop for business agents — build test
-scenarios, replay them through a tool-layer proxy, and accumulate regression
-cases as you develop.
+AgentRig V1 is controlled by Codex, Claude Code, or a human operator. The controller
+uses atomic MCP tools to select or author cases, submit asynchronous runs, inspect
+redacted evidence, and optionally write an external verdict. AgentRig owns deterministic
+execution, tool-result control, evidence persistence, and evaluator archives.
 
-## Status
+V1 includes two optional intelligent agents:
 
-🚧 Early development (`v0.1.0a0`), not production-ready.
+- **Simulation Curator** generates and validates context-aware tool results after
+  fixtures and approved samples miss.
+- **Evidence Judge** returns pass, fail, or inconclusive from a rubric and persisted
+  evidence.
 
-Design docs: [`docs/`](./docs/). CC test skill pack: [`skills/`](./skills/).
-One-command acceptance: `uv run agentrig demo` (see [`acceptance`](./docs/acceptance.md)).
+Core mode needs no model API key. A controller may disable Evidence Judge and submit its
+own verdict after inspecting a CaseRun.
+
+## Implemented in V1
+
+- One asynchronous `run_cases` path for single cases, batches, versions, repetitions,
+  and two-target A/B runs.
+- HTTP/SSE, Pixcake HTTP/SSE, OpenAI-compatible, allowlisted Python, and experimental
+  JSONL subprocess drivers.
+- Controlled, CaseRun-scoped MCP proxy, and observe-only tool modes.
+- Configurable Fixture → Sample → Simulation Curator → Real Tool provider order.
+- Separate Rule, Evidence Judge, and External Controller records.
+- Async SQLAlchemy for SQLite/PostgreSQL, an 11-table schema, Alembic migrations, and
+  immutable run snapshots.
+- HTTP API, Streamable HTTP MCP, a React administration UI, and Codex/Claude Code skills.
 
 ## Quick start
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Python 3.12+ and [uv](https://docs.astral.sh/uv/) are required. Building the Web UI also
+requires Node.js 20+.
 
 ```bash
 uv sync --extra dev
+cd web && npm ci && npm run build && cd ..
+uv run agentrig db upgrade
 uv run agentrig serve
 ```
 
-The MCP server is at `http://127.0.0.1:8000/mcp`. Health check:
+Default endpoints:
 
-```bash
-curl -X POST http://127.0.0.1:8000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"t"},"capabilities":{}}}'
+| Surface | URL |
+|---|---|
+| Web | `http://127.0.0.1:8000/` |
+| HTTP API | `http://127.0.0.1:8000/api/` |
+| Controller MCP | `http://127.0.0.1:8000/mcp/` |
+| Tested-agent tool proxy | `http://127.0.0.1:8000/proxy` |
 
-curl -X POST http://127.0.0.1:8000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ping","arguments":{}}}'
-# → result.content[0].text == "pong"
+Codex MCP configuration:
+
+```toml
+[mcp_servers.agentrig]
+url = "http://127.0.0.1:8000/mcp/"
 ```
 
-For the full end-to-end (build a case → run → see the verdict), see
-[`docs/quickstart.md`](./docs/quickstart.md).
+For a shared deployment, keep the access token in an environment variable and configure only
+its reference:
 
-## Development
+```toml
+[server]
+api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
+```
+
+Run the dependency-free vertical demo with:
 
 ```bash
-uv run ruff check      # lint
-uv run mypy            # type check (strict)
-uv run pytest          # tests
+uv run agentrig demo
 ```
+
+See [docs](./docs/README.md) for architecture and module boundaries, and
+[skills](./skills/README.md) for controller workflows.
+
+## Validation
+
+```bash
+uv run ruff check src tests examples
+uv run mypy src/agentrig
+uv run pytest
+cd web && npm run typecheck && npm run build
+```
+
+## Status
+
+The current version is `0.1.0a0`. The V1 core is implemented but remains Alpha and
+should not yet be used as an unattended production release gate.
 
 ## License
 

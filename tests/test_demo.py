@@ -5,6 +5,6 @@ from agentrig.demo import run_demo
 
 
 async def test_run_demo_returns_zero_when_passing() -> None:
-    """验收演示应跑通 sample_agent 的 search→summarize 闭环并返回 0。"""
+    """验收演示应跑通内置的 search→summarize 闭环并返回 0。"""
     code = await run_demo()
     assert code == 0

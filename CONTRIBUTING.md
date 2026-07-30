@@ -1,25 +1,25 @@
 # 贡献指南
 
-感谢关注 AgentRig!这是一份如何参与贡献的说明。
+感谢关注 AgentRig！这是一份如何参与贡献的说明。
 
 ## 开发环境
 
-需要 Python 3.12+、[uv](https://docs.astral.sh/uv/)、Node.js 18+。
+需要 Python 3.12+、[uv](https://docs.astral.sh/uv/)、Node.js 20+。
 
 ```bash
-uv sync --extra dev          # 后端依赖
-cd web && npm install        # 前端依赖
+uv sync --extra dev
+cd web && npm ci
 ```
 
 ## 跑测试与检查
 
-提交前请确保三绿:
+提交前请确保以下检查通过：
 
 ```bash
-uv run ruff check            # 代码规范
-uv run mypy                  # 类型检查（strict）
-uv run pytest                # 后端单测
-cd web && npm run build      # 前端构建
+uv run ruff check src tests examples
+uv run mypy src/agentrig
+uv run pytest
+cd web && npm run typecheck && npm run build
 ```
 
 一键验收平台闭环:
@@ -35,12 +35,14 @@ uv run agentrig demo
 3. commit 用约定式前缀：`feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:`
 4. PR 描述：动机、改了什么、怎么验证
 
-## 加一条回归用例
+## 增加回归用例
 
-AgentRig 的核心是「用例积累飞轮」。欢迎为被测 agent 补回归用例：
+可以通过两种方式创建 V1 用例：
 
-- 用前端编辑器（`/cases/new`）
-- 或通过 MCP 工具（`upsert_test_case`）让 Claude Code 自主构建——装上 [`skills/core/`](./skills/) 三件套即可，见 [`docs/quickstart.md`](./docs/quickstart.md)
+- Web 控制台：`/evaluation/test-cases`
+- MCP 原子工具：`create_test_case`，配合 [`skills/core/`](./skills/) 工作流
+
+用例由 MCP 创建后是 draft。approved/rejected 审核只能通过 Web 或 HTTP API 完成。
 
 ## 前端开发
 
@@ -51,7 +53,7 @@ uv run agentrig serve
 cd web && npm run dev
 ```
 
-生产构建：`cd web && npm run build`（产出 `web/dist`，由后端 `agentrig serve` 单服务挂载）。
+生产构建产出 `web/dist/client`，由 `agentrig serve` 同服务挂载。
 
 ## 代码风格
 
@@ -62,11 +64,22 @@ cd web && npm run dev
 ## 目录速览
 
 ```
-src/agentrig/      后端（transports / proxy / mock / judges / providers / mcp_tools / api）
-web/               前端（React + Vite + Tailwind）
-skills/core/       CC 测试 skill 三件套
-examples/          demo_agent / sample_agent（确定性被测 agent）
-docs/              设计文档 + quickstart + acceptance
+src/agentrig/
+├── cases/         用例与 selector
+├── targets/       Target、版本与 Driver
+├── profiles/      ExecutionProfile
+├── tool_results/  Fixture / Sample / Curator / Real Tool Provider
+├── agents/        Simulation Curator 与 Evidence Judge
+├── evaluations/   Rule / Judge / External 判定
+├── runs/          Planner / Scheduler / Executor / 事件
+├── proxy/         CaseRun 级 MCP Proxy
+├── mcp/           编码 Agent 使用的原子 MCP Tools
+└── infrastructure/database/
+
+web/               React Router V1 管理界面
+skills/core/       Codex/Claude Code 三份工作流 Skill
+examples/v1/       三条可执行纵向 Demo
+docs/              当前 V1 架构与接入说明
 ```
 
 ## 行为准则

@@ -1,0 +1,147 @@
+import { apiRequest, jsonBody } from "./client";
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TestCase {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  supported_versions: string[];
+  primary_evaluator: string;
+  review_status: "draft" | "approved" | "rejected";
+  turns: Array<Record<string, unknown>>;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+export interface Target {
+  id: string;
+  name: string;
+  driver_type: string;
+  endpoint: string | null;
+  versions: Array<{ version: string }>;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+export interface ExecutionProfile {
+  id: string;
+  name: string;
+  description: string;
+  config: {
+    tool_mode: string;
+    provider_chain: Array<{ name: string }>;
+    primary_evaluator: string | null;
+    concurrency: number;
+    [key: string]: unknown;
+  };
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+export interface Sample {
+  id: string;
+  name: string;
+  tool_name: string | null;
+  sample_kind: "single" | "sequence";
+  status: "draft" | "approved" | "disabled";
+  source_type: string;
+  supported_versions: string[];
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
+export interface Run {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  resolved_case_ids: string[];
+  total_count: number;
+  completed_count: number;
+  failed_count: number;
+  skipped_count: number;
+  cancelled_count: number;
+  created_at: string;
+  finished_at: string | null;
+  [key: string]: unknown;
+}
+
+export interface CaseRun {
+  id: string;
+  run_id: string;
+  case_id: string;
+  version: string | null;
+  repeat_index: number;
+  comparison_pair_id: string | null;
+  comparison_role: string | null;
+  status: string;
+  primary_evaluator: string;
+  evaluation_state: string;
+  error_code: string | null;
+  error_message: string | null;
+  summary: Record<string, unknown>;
+  events?: Array<{
+    id: string;
+    seq: number;
+    event_type: string;
+    payload: Record<string, unknown>;
+    created_at: string;
+  }>;
+  evaluations?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export async function getPage<T>(path: string): Promise<Page<T>> {
+  return apiRequest<Page<T>>(path);
+}
+
+export async function getOne<T>(path: string): Promise<T> {
+  return apiRequest<T>(path);
+}
+
+export async function createOne<T>(path: string, value: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "POST",
+    ...jsonBody(value),
+  });
+}
+
+export async function patchOne<T>(
+  path: string,
+  value: unknown,
+): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "PATCH",
+    ...jsonBody(value),
+  });
+}
+
+export async function deleteOne(path: string): Promise<void> {
+  await apiRequest<unknown>(path, { method: "DELETE" });
+}
+
+export async function postAction<T>(
+  path: string,
+  value?: unknown,
+): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "POST",
+    ...(value === undefined ? {} : jsonBody(value)),
+  });
+}
+
+export async function putOne<T>(path: string, value: unknown): Promise<T> {
+  return apiRequest<T>(path, {
+    method: "PUT",
+    ...jsonBody(value),
+  });
+}

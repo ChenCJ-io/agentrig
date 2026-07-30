@@ -1,85 +1,81 @@
 ---
 name: build-test-case
-description: 为业务 agent 构建或更新一个 AgentRig 回归测试用例。查重、取真实工具样本、设计断言、写 mock，最后停下等确认。Build or update an AgentRig regression test case: dedupe, harvest real tool samples, design assertions, write mock, then pause for approval.
+description: 使用 AgentRig V1 MCP 原子工具创建或修改多轮测试用例，包含查重、Fixture/Sample 选择、有限断言和 draft 人工审核边界。
 ---
 
-# build-test-case
+# 构建 AgentRig V1 测试用例
 
-给被测的业务 agent 构建一条回归用例。**不是凭空写**，而是基于真实工具返回 +
-对 agent 行为的理解。
+本 Skill 用于创建或修改测试用例。它不负责审核，也不在写完后自动执行。
 
-## 何时用
+## 工作顺序
 
-- 你改了业务 agent 的代码，想针对本次改动加一条回归用例
-- 用户让你「给这个 agent / 这个改动补个测试」
-- 已有用例需要更新（agent 行为变了，旧断言不再合适）
+1. 调用 `get_test_case_schema` 获取当前写入结构，不凭记忆猜字段。
+2. 用 `list_test_cases`、`find_cases_by_tool` 和 `list_tags` 查重。
+3. 已有同一场景时，先 `get_test_case`，再用 `update_test_case` 做最小修改。
+4. 没有重复场景时，用 `create_test_case` 创建 draft。
+5. 回读用例，向用户概括覆盖范围、工具结果来源和评判方式，然后停止。
 
-## 流程（按顺序）
+approved 用例不可由 MCP 修改或删除。不要规避这条人工审核边界；需要变更时请用户在
+Web 中处理审核状态或另建用例。
 
-### 1. 先查重，别重复造
+## 工具结果怎么选
 
-调 `list_test_cases` 看现有用例。按「被测工具 / 场景」判断是否已有覆盖本次改动的用例。
-有 → 优先更新（`upsert_test_case` 同 id 覆盖），没有 → 新建。
+按场景采用一种或组合使用：
 
-### 2. 取真实工具样本（零失真）
+- 确定、场景专属的结果：写到对应轮次的 `fixtures`。
+- 可跨用例复用的真实结构：先用 `list_samples(status="approved")` 查 Sample。
+- 结果需要根据前文动态生成：填写 `simulation_instruction`，执行时选择包含
+  `simulation_curator` 的 ExecutionProfile。
+- 只有用户明确允许真实调用时，才建议使用包含 `real_tool` 的 Profile。
 
-调 `get_real_tool_samples`（可选传 `tool_name` 过滤），拿**真实工具的返回结构**。
-
-> ⚠️ mock 的值要贴合真实返回，别脑补。脑补的 mock 测的是「你想象的 agent」，
-> 不是真实 agent。真实样本来自 proxy 录的 trace（agent 真跑过 `/proxy` 才有）。
-> 没有真实样本时，至少按工具的 inputSchema / 返回类型构造合理的占位。
-
-### 3. 设计断言（判可观测，不判内部）
-
-用 `expected_tools` / `expectations` / `rubric` 三选一或组合：
-
-- `expected_tools: [...]` —— agent **应该调用**这些工具（最常用）
-- `expectations: [{kind, ...}]` —— 结构化断言：
-  - `{"kind":"expected_tools","tools":[...]}` —— 等价上面
-  - `{"kind":"text_contains","needle":"退款"}` —— 回复文本应包含某词
-  - `{"kind":"tool_call_order","tools":["search","summarize"]}` —— 按顺序调用
-  - `{"kind":"not_called","tools":["delete"]}` —— 不应调用（防误操作）
-- `rubric: "..."` + `judge_mode: "ai"` —— 自然语言判据，交 LLM 判（需配 LLM provider）
-
-> 断言只判**可观测结果**（调了什么、说了什么），不判服务端内部机制——否则换实现就假红。
-
-### 4. 写 mock
-
-`mock` 是 `{工具名: 返回值}` 字典，作工具调用的回放返回。基于第 2 步真实样本写：
+Fixture 结构：
 
 ```json
 {
-  "search": {"hits": [{"id": "a1", "title": "..."}], "total": 1},
-  "summarize": "摘要内容..."
+  "tool_name": "orders__create",
+  "match_arguments": {"sku": "A-1"},
+  "result": {"order_id": "O-100", "status": "created"},
+  "repeatable": false
 }
 ```
 
-### 5. upsert（编译器式自我修正）
+同一轮多个同名 Fixture 按顺序、默认一次性消费。Fixture 属于用例，不要为它填写
+`sample_id`。
 
-调 `upsert_test_case`，`case` 字段：
+## 断言与评判
 
-```json
-{
-  "id": "search-then-summarize",
-  "name": "搜索后摘要",
-  "user_message": "帮我搜一下 X 并总结",
-  "expected_tools": ["search", "summarize"],
-  "mock": {"search": {...}, "summarize": "..."},
-  "tags": ["search-flow"]
-}
-```
+Rule 只使用以下有限断言：
 
-**报错就改**：字段不符 / 类型错 → 按错误信息修 → 重试，直到 `upserted: ...`。
-不要一次写完美，像编译器迭代。
+- `first_action`
+- `tool_called`
+- `tool_not_called`
+- `tool_call_order`
+- `tool_arguments_equal`
+- `tool_arguments_schema`
+- `text_contains`
+- `text_regex`
+- `no_execution_error`
 
-### 6. 停下，等 approve
+断言只检查可观察行为，不检查缓存命中、内部函数或私有状态。
 
-构建完**不要自动跑**。告诉用户：「已构建用例 X（断言：应调 search+summarize），
-要跑吗？」等人确认后再交给 `run-test-cases`。
+- 适合确定性判断：`primary_evaluator: "rule"`，并提供断言。
+- 需要语义判断：`primary_evaluator: "evidence_judge"`，并提供 case 或 turn rubric。
+- 希望 Codex/Claude Code 根据完整运行证据判断：使用
+  `primary_evaluator: "external_controller"`；执行后由控制方调用
+  `submit_external_verdict`。
 
-## 反模式（别这么做）
+## 多轮用例
 
-- ❌ 不查重直接新建 → 用例库膨胀、重复
-- ❌ mock 脑补，不查真实样本 → 测的是想象，不防真回归
-- ❌ 断言内部实现（如「应走 cache 分支」）→ 换实现就假红
-- ❌ 构建完全自动跑 + 自动改 → 越界，人机边界要守住
+`turns.position` 必须从 1 连续递增。后续轮次沿用同一 Driver 会话；后一次 Curator
+调用可以看到本 CaseRun 之前的脱敏事件和模拟状态。不要把期望答案写进
+`simulation_instruction`。
+
+## 完成边界
+
+创建或修改成功后，不调用 `run_cases`，也不能通过 MCP 审核。告诉用户：
+
+- 用例 ID 与当前 draft/rejected 状态；
+- 覆盖了哪些轮次和工具；
+- 使用 Fixture、Sample 还是 Curator；
+- 主评判器；
+- 是否要继续执行。

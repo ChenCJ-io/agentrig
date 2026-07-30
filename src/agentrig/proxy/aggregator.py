@@ -1,21 +1,16 @@
-"""AgentRig MCP Proxy/Aggregator 核心逻辑。
-
-聚合多个后端 MCP server 的工具（加命名空间前缀）暴露给 agent；call_tool 时
-按命名空间路由，转发前检查 mock，转发后记 trace（含返回结果，供采样）。
-
-对上是 low-level MCP server（build_server()），对下用 BackendRegistry 持有
-后端 session。mock 生成与 trace 在这里 —— 不在后端 session，便于单测和换策略。
-"""
+"""AgentRig V1 CaseRun 级 MCP Proxy。"""
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import TYPE_CHECKING, Any
 
 from mcp import types
 from mcp.server.lowlevel.server import Server
 
 from .backend import NAMESPACE_SEP, BackendRegistry
-from .mock_policy import MockPolicy
-from .trace import TraceEntry, TraceSink
+
+if TYPE_CHECKING:
+    from .scoped import ProxyScopeRegistry
 
 
 class AgentRigProxy:
@@ -25,13 +20,12 @@ class AgentRigProxy:
         self,
         backends: BackendRegistry,
         *,
-        mock_policy: MockPolicy | None = None,
-        trace_sink: TraceSink | None = None,
+        scope_registry: ProxyScopeRegistry | None = None,
     ) -> None:
         self.backends = backends
-        self.mock_policy = mock_policy
-        self.trace_sink = trace_sink
+        self.scope_registry = scope_registry
         self._server: Server | None = None
+        self._tool_definitions: dict[str, types.Tool] = {}
 
     async def list_tools(self) -> list[types.Tool]:
         """聚合所有后端工具，加命名空间前缀（如 fs__read_file）。"""
@@ -44,52 +38,49 @@ class AgentRigProxy:
                         name=f"{ns}{NAMESPACE_SEP}{t.name}",
                         description=t.description,
                         inputSchema=t.inputSchema,
+                        outputSchema=t.outputSchema,
                     )
                 )
+        self._tool_definitions = {tool.name: tool for tool in tools}
         return tools
 
     async def call_tool(
         self, name: str, arguments: dict[str, Any]
-    ) -> list[types.ContentBlock]:
-        """路由一次工具调用：mock 命中则返回预设；否则转发后端 + 记 trace。"""
-        # 1. mock 命中？命中即返回，不转发
-        if self.mock_policy is not None and self.mock_policy.should_mock(name, arguments):
-            value = self.mock_policy.generate(name, arguments)
-            content = _to_content(value)
-            if self.trace_sink is not None:
-                self.trace_sink.record(
-                    TraceEntry(name, arguments, source="mock", result=value)
-                )
-            return content
-
-        # 2. 路由转发到后端
-        if NAMESPACE_SEP not in name:
-            return _error_content(f"unknown tool (no namespace): {name}")
-        ns, real = name.split(NAMESPACE_SEP, 1)
-        sess = self.backends.get(ns)
-        if sess is None:
-            return _error_content(f"unknown backend: {ns}")
+    ) -> types.CallToolResult:
+        """使用请求携带的短期 Scope 调用该 CaseRun 的 Provider 链。"""
+        scope_token = self._scope_token()
+        if not scope_token:
+            return _error_result("X-AgentRig-Proxy-Scope header is required")
+        if self.scope_registry is None:
+            return _error_result("scoped proxy is unavailable")
+        scope = self.scope_registry.get(scope_token)
+        if scope is None:
+            return _error_result("proxy scope is invalid or expired")
+        definition = self._tool_definitions.get(name)
         try:
-            result = await sess.call_tool(real, arguments)
-        except Exception as e:
-            if self.trace_sink is not None:
-                self.trace_sink.record(
-                    TraceEntry(
-                        name, arguments, source="real", is_error=True, result=repr(e)
-                    )
-                )
-            return _error_content(f"backend error: {e!r}")
-        if self.trace_sink is not None:
-            self.trace_sink.record(
-                TraceEntry(
-                    name,
-                    arguments,
-                    source="real",
-                    is_error=result.isError,
-                    result=list(result.content),
-                )
+            result = await scope.resolve(
+                name,
+                arguments,
+                result_schema=definition.outputSchema if definition is not None else None,
             )
-        return list(result.content)
+        except Exception as exc:
+            return _error_result(str(exc))
+        return _value_result(result.result)
+
+    def _scope_token(self) -> str | None:
+        if self._server is None:
+            return None
+        try:
+            request = self._server.request_context.request
+        except LookupError:
+            return None
+        if request is None:
+            return None
+        token = request.headers.get("x-agentrig-proxy-scope")
+        if token:
+            return str(token)
+        query_token = request.query_params.get("agentrig_scope")
+        return str(query_token) if query_token else None
 
     def build_server(self) -> Server:
         """构建 low-level MCP Server（注册 list_tools / call_tool handler）。
@@ -109,20 +100,23 @@ class AgentRigProxy:
             @server.call_tool()  # type: ignore[untyped-decorator]
             async def _call(
                 name: str, arguments: dict[str, Any]
-            ) -> list[types.ContentBlock]:
+            ) -> types.CallToolResult:
                 return await self.call_tool(name, arguments)
 
             self._server = server
         return self._server
 
+def _value_result(value: Any) -> types.CallToolResult:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return types.CallToolResult(
+        content=[types.TextContent(type="text", text=text)],
+        structuredContent=value if isinstance(value, dict) else None,
+        isError=False,
+    )
 
-def _to_content(value: Any) -> list[types.ContentBlock]:
-    """把 mock 值转成 ContentBlock 列表（统一 TextContent）。"""
-    if isinstance(value, list):
-        return value
-    return [types.TextContent(type="text", text=str(value))]
 
-
-def _error_content(msg: str) -> list[types.ContentBlock]:
-    """构造错误文本（骨架；后续用 CallToolResult(isError=True) 表达）。"""
-    return [types.TextContent(type="text", text=f"[proxy error] {msg}")]
+def _error_result(msg: str) -> types.CallToolResult:
+    return types.CallToolResult(
+        content=[types.TextContent(type="text", text=f"[proxy error] {msg}")],
+        isError=True,
+    )

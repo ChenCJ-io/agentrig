@@ -1,81 +1,164 @@
-"""agentrig demo：一键自检验收。
+"""AgentRig V1 一键纵向验收演示。"""
 
-起内进程 sample_agent（search → summarize 两步 tool-calling），跑一条多步用例，
-打印人类可读的验收报告，证明平台核心闭环（真实 transport + mock 注入 + 多轮
-tool-calling + 机判）工作。退出码 0=通过。
-
-    uv run agentrig demo
-"""
 from __future__ import annotations
 
-import importlib
-import sys
-from pathlib import Path
-from typing import Any
+from collections.abc import AsyncIterator
 
-from httpx import ASGITransport
+from .bootstrap import ServiceContainer
+from .cases import TestCaseCreate
+from .config import Settings
+from .infrastructure.database import Database
+from .profiles import ProfileCreate
+from .runs.schemas import RunCasesRequest
+from .targets import TargetCreate
+from .targets.drivers import (
+    DriverCapabilities,
+    DriverEvent,
+    DriverEventType,
+    DriverPrepareContext,
+    DriverRegistry,
+    DriverSession,
+    ToolCall,
+    ToolResult,
+)
 
-from .case_runner import CaseRunner
-from .judges import rule_judge
-from .mock import ToolMockHub
-from .models import TestCase
-from .transports.streaming_chat import StreamingChatTransport
 
+class DemoDriver:
+    """演示专用确定性 Driver：先调用 search，再根据 Fixture 回复。"""
 
-def _load_sample_app() -> Any:
-    """从 examples/ 加载 sample_agent 的 FastAPI app（examples 不在安装包内）。"""
-    repo_root = Path(__file__).resolve().parents[2]  # src/agentrig/demo.py → 仓库根
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    mod = importlib.import_module("examples.sample_agent")
-    return mod.app
+    def capabilities(self) -> DriverCapabilities:
+        return DriverCapabilities(
+            multi_turn=True,
+            tool_call_observation=True,
+            tool_result_injection=True,
+        )
+
+    async def prepare(self, context: DriverPrepareContext) -> DriverSession:
+        return DriverSession(id=f"demo-{context.case_run_id}")
+
+    async def send_user_message(
+        self,
+        session: DriverSession,
+        message: str,
+    ) -> AsyncIterator[DriverEvent]:
+        del session
+        yield DriverEvent(
+            type=DriverEventType.TOOL_CALLS,
+            tool_calls=[
+                ToolCall(
+                    id="demo-call",
+                    name="search",
+                    arguments={"query": message},
+                    result_schema={
+                        "type": "object",
+                        "required": ["items"],
+                        "properties": {"items": {"type": "array"}},
+                    },
+                )
+            ],
+        )
+
+    async def send_tool_results(
+        self,
+        session: DriverSession,
+        results: list[ToolResult],
+    ) -> AsyncIterator[DriverEvent]:
+        del session
+        count = len(results[0].result["items"])
+        yield DriverEvent(
+            type=DriverEventType.ASSISTANT_MESSAGE_COMPLETED,
+            text=f"搜索完成，共 {count} 条结果。",
+        )
+        yield DriverEvent(type=DriverEventType.COMPLETED)
+
+    async def cancel(self, session: DriverSession) -> None:
+        session.state["cancelled"] = True
+
+    async def close(self, session: DriverSession) -> None:
+        session.state["closed"] = True
 
 
 async def run_demo() -> int:
-    """跑验收演示，返回退出码（0=通过，1=失败）。"""
-    from asgi_lifespan import LifespanManager
-
-    sample_app = _load_sample_app()
-
-    case = TestCase(
-        id="acceptance-search-summarize",
-        name="搜索后总结（验收用例）",
-        user_message="帮我查一下 AgentRig 并总结",
-        expected_tools=["search", "summarize"],
-        expectations=[{"kind": "tool_call_order", "tools": ["search", "summarize"]}],
-        mock={
-            "search": {"hits": [{"title": "AgentRig", "url": "https://example.com"}], "total": 1},
-            "summarize": "AgentRig 是 MCP 原生 agent 测试台。",
-        },
-        tags=["acceptance"],
+    registry = DriverRegistry()
+    registry.register("demo", DemoDriver)
+    services = ServiceContainer.build(
+        Settings(),
+        database=Database("sqlite+aiosqlite:///:memory:"),
+        drivers=registry,
     )
+    await services.initialize()
+    try:
+        await services.cases.create(
+            TestCaseCreate.model_validate(
+                {
+                    "id": "case_demo",
+                    "name": "搜索结果回灌",
+                    "supported_versions": ["v1"],
+                    "primary_evaluator": "rule",
+                    "turns": [
+                        {
+                            "position": 1,
+                            "user_message": "AgentRig",
+                            "fixtures": [
+                                {
+                                    "tool_name": "search",
+                                    "match_arguments": {"query": "AgentRig"},
+                                    "result": {"items": [{"title": "AgentRig V1"}]},
+                                }
+                            ],
+                            "assertions": [
+                                {"kind": "tool_called", "tool_name": "search"},
+                                {"kind": "text_contains", "value": "1 条结果"},
+                                {"kind": "no_execution_error"},
+                            ],
+                        }
+                    ],
+                }
+            )
+        )
+        await services.targets.create(
+            TargetCreate.model_validate(
+                {
+                    "id": "target_demo",
+                    "name": "Demo Agent",
+                    "driver_type": "demo",
+                    "versions": [{"version": "v1"}],
+                }
+            )
+        )
+        await services.profiles.create(
+            ProfileCreate.model_validate(
+                {
+                    "id": "profile_demo",
+                    "name": "Core Demo",
+                    "config": {
+                        "tool_mode": "controlled",
+                        "provider_chain": [{"name": "fixture"}],
+                        "primary_evaluator": "rule",
+                    },
+                }
+            )
+        )
+        submitted = await services.runs.run_cases(
+            RunCasesRequest.model_validate(
+                {
+                    "case_ids": ["case_demo"],
+                    "targets": [{"target_id": "target_demo"}],
+                    "profile_id": "profile_demo",
+                }
+            )
+        )
+        await services.scheduler.wait(submitted.run_id)
+        run = await services.runs.get_run(submitted.run_id)
+        page = await services.runs.list_case_runs(submitted.run_id)
+        detail = await services.runs.get_case_run(page.items[0].id)
 
-    transport = StreamingChatTransport(
-        base_url="http://test", transport=ASGITransport(app=sample_app)
-    )
-    hub = ToolMockHub()
-    for tool, result in case.mock.items():
-        hub.set_inline(tool, result)
-
-    async with LifespanManager(sample_app):
-        runner = CaseRunner(transport, mock_policy=hub, max_rounds=10)
-        rounds = [r async for r in runner.run(case.user_message)]
-
-    rd = rounds[-1]
-    verdict = rule_judge.judge(rd, case)
-
-    print("=" * 60)
-    print("AgentRig 验收演示（真实 transport + mock + 多轮 tool-calling + 机判）")
-    print("=" * 60)
-    print(f"用例      : {case.name}")
-    print(f"输入      : {case.user_message}")
-    print(f"工具调用  : {[tc.name for tc in rd.tool_calls]}")
-    print(f"mock 回灌 : {len(rd.tool_results)} 次")
-    print(f"agent 回复: {rd.assistant_text or '(无)'}")
-    print(f"执行错误  : {rd.error or '无'}")
-    print("-" * 60)
-    print(f"判定      : {'✅ PASS' if verdict.passed else '❌ FAIL'}")
-    for reason in verdict.reasons:
-        print(f"  - {reason}")
-    print("=" * 60)
-    return 0 if verdict.passed else 1
+        print("AgentRig V1 Demo")
+        print(f"Run       : {run.id} ({run.status})")
+        print(f"CaseRun   : {detail.id} ({detail.status})")
+        print(f"Evaluation: {detail.evaluation_state}")
+        print(f"Events    : {len(detail.events)}")
+        print(f"Evaluators: {[item.evaluator_type.value for item in detail.evaluations]}")
+        return 0 if detail.evaluation_state == "pass" else 1
+    finally:
+        await services.close()

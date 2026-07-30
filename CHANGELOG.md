@@ -4,51 +4,31 @@
 
 ## [Unreleased]
 
-## [0.1.0a0] - 2026-07-15
+## [0.1.0a0] - 2026-07-30
 
-首个公开 alpha：后端闭环 + MCP + CC skill + 前端 web，端到端可验收。
+首个 V1 alpha：由 Codex/Claude Code 通过 MCP 控制测试选择与执行，平台提供可组合的
+Agent 测试运行时。
 
-### Added — 后端核心
+### Added
 
-- **AgentTransport 抽象**：Protocol + NormalizedEvent，驱动任意 tool-calling agent
-- **StreamingChatTransport**：外置 tool-calling SSE agent 的参考 transport（POST `/chat/stream`）
-- **EchoTransport**：脚本驱动的降级 transport（无 agent 环境冒烟/单测）
-- **MCP Proxy/aggregator**：对上是 server、对下是 client；命名空间前缀、动态发现后端工具、mock 注入、全量 trace
-- **四层 mock**：L0 内联 / L1 剧本 / **L1.5 等价变形**（参数归一化）/ L2 样本库
-- **机判**：`rule_judge`（expected_tools / text_contains / tool_call_order / not_called）+ `ai_judge`（LLM 按 rubric）+ `off`
-- **录制泛化**：`get_real_tool_samples`，从 proxy trace 捞真实工具返回样本给 CC 写用例
-- **用例持久化**：`TestCaseRepo` Protocol + SQLite / 内存后端（按 `AGENTRIG_DATABASE__URL` 选）
-- **LLM provider 抽象**：`LLMProvider` Protocol + `OpenAICompatProvider`
-- **TOML 配置**：`agentrig.toml`（优先级 构造参数 > env > TOML > 默认）
+- 用例、运行目标、运行配置、执行、评判和工具样本六个独立领域模块。
+- 异步单用例/批量执行、多版本展开、部分跳过、重复运行、A/B 对比、取消与中断恢复标记。
+- `controlled`、`proxy`、`direct` 三种工具执行模式。
+- Fixture、审核样本、Simulation Curator 和真实工具 Provider 链及可配置降级。
+- Simulation Curator 与 Evidence Judge 两个可选内置 Agent。
+- Rule、Evidence Judge、外部 Codex/Claude Code 三类评判记录；最终状态以外部控制方为准。
+- HTTP/SSE、Pixcake HTTP/SSE、OpenAI-compatible、Python 和 subprocess Driver。
+- SQLite/PostgreSQL 持久化、Alembic migration、凭据引用、日志脱敏和真实工具权限边界。
+- 31 个原子 MCP 工具、V1 HTTP API、React Router 管理界面和三条纵向 Demo。
+- AgentScope/Pixcake 真实兼容测试，覆盖单工具、跨轮回滚和同轮连续工具调用。
 
-### Added — 接入与工具
+### Changed
 
-- **MCP 工具组**：authoring（upsert/list/get case）、execution（run_single_case）、sampling（get_real_tool_samples）
-- **REST API**（`/api`）：overview / cases CRUD / run / tool-samples，供前端调用
-- **CC 测试 skill 包**（`skills/core/`）：build-test-case、run-test-cases、harvest-tool-samples（双语 frontmatter）
-- **一键验收**：`agentrig demo`（起内置 sample agent 跑通真实 tool-calling 闭环 + 机判）
-- **内置被测 agent**：`demo_agent`（单步）、`sample_agent`（两步 search→summarize）
+- 以领域服务和 Repository 接口替代早期单文件 Runner、旧 Transport/Mock/Judge 原型。
+- 文档收敛为总体架构、实现接入与 V1 验收三份权威说明。
+- 前端改为 React Router SPA，并随 wheel 打包生产静态资源。
 
-### Added — 前端 web
+### Removed
 
-- React + Vite + Tailwind，按设计稿一比一实现四页：
-  - **Overview**：Release Gate + 4 metric 卡 + 近期运行表 + 用例增长
-  - **Test cases**：列表 + 过滤 + 搜索 + 状态 badge + 分页
-  - **Case editor**：scenario 输入 + 断言编辑 + mock JSON + 运行目标/最近结果/覆盖面板
-  - **Run detail**：判定 badge + 工具调用时间线 + agent 回复 + 判定理由
-- **中英文切换**（i18n context + 全文字典 + 侧栏一键切换）
-
-### Added — 文档与治理
-
-- 设计文档（`docs/01-08`）+ `quickstart.md` + `acceptance.md`
-- `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md`
-- CI（GitHub Actions）：后端 ruff/mypy/pytest（3.12+3.13）+ 前端 build
-
-### 修复的 Bug
-
-- `case_runner` 只对本轮新 tool_calls 生成 mock（原传累积 `rd.tool_calls` 致多步 agent 死循环）
-- `aggregator` 的 `type: ignore` code typo（`no-untyped-decorator` → `untyped-decorator`）
-
-### 脱敏
-
-- 全仓清理内部代号（`lassist` → `streaming_chat` / `StreamingChatTransport`），`Lassist`/`Pixcake`/`agent_client` 零残留
+- 删除早期三 Agent/发布 Gate 设计、竞品草稿、旧 Demo Agent、旧 API 与重复测试体系。
+- 删除旧 `judges`、`mcp_tools`、`mock`、`providers`、`storage`、`transports` 等平行实现。

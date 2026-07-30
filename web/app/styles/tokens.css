@@ -1,0 +1,34 @@
+:root {
+  /* 全深色主题（对齐 .pen V1：页面 #1E1E1E / sidebar #121212 / 卡片 #2D2D2D / 边框 #333333）。
+     分层：sidebar #121212（最暗）< hero #171918 < canvas #1E1E1E < card #2D2D2D。 */
+  --oc-canvas: #1e1e1e;        /* 页面背景 */
+  --oc-cobalt: #2563eb;        /* 主色 */
+  --oc-cobalt-soft: #1e2a4a;   /* 主色软底（深） */
+  --oc-cobalt-hover: #1d4ed7;  /* 主色 hover */
+  --oc-ink: #121212;           /* 最暗层（sidebar/hero 背景，不作文字色） */
+  --oc-fg: #e8ebe9;            /* 主文字（浅色，深底可读） */
+  --oc-graphite: #3a3a3a;      /* 深灰强调 */
+  --oc-muted: #b0b0b0;         /* 次要文字 */
+  --oc-faint: #6b6b6b;         /* 弱文字 */
+  --oc-line: #333333;          /* 标准边框 */
+  --oc-line-strong: #404040;   /* 强边框 */
+  --oc-white: #2d2d2d;         /* 卡片/面板背景（深） */
+  --oc-surface-2: #252525;     /* 次级表面（介于 canvas 与 card） */
+  --oc-canvas-hover: #383838;  /* hover 表面 */
+  --oc-green: #4ade80;
+  --oc-green-soft: #1f3d2e;
+  --oc-amber: #f59e0b;
+  --oc-amber-soft: #3d2f12;
+  --oc-coral: #f87171;
+  --oc-coral-soft: #3d2020;
+  --oc-sidebar-line: #262626;
+  --oc-sidebar-muted: #b0b0b0;
+  --oc-sidebar-faint: #6b6b6b;
+  --font-display: "Funnel Sans", "Noto Sans SC", system-ui, sans-serif;
+  --font-sans: "Geist", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --radius: 3px;
+  --shadow-focus: 0 0 0 3px rgb(37 99 235 / 40%);
+  --shell-topbar: 60px;
+  --shell-sidebar: 232px;
+}

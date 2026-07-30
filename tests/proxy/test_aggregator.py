@@ -1,56 +1,27 @@
-"""AgentRigProxy 单元测试：聚合 + 路由转发 + mock 注入 + trace（用 stub 后端）。"""
+"""V1 MCP Proxy 的工具聚合和 CaseRun Scope 测试。"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from mcp import types
 
-from agentrig.proxy import (
-    NAMESPACE_SEP,
-    AgentRigProxy,
-    BackendRegistry,
-    StaticMockPolicy,
-    TraceSink,
-)
+from agentrig.proxy import NAMESPACE_SEP, AgentRigProxy, BackendRegistry
+from agentrig.targets.drivers import ToolResult
 
 
 @dataclass
 class _FakeListResult:
-    """stub for mcp ListToolsResult。"""
-
     tools: list[types.Tool]
-
-
-@dataclass
-class _FakeCallResult:
-    """stub for mcp CallToolResult。"""
-
-    content: list[types.TextContent]
-    isError: bool = False
 
 
 @dataclass
 class _FakeBackendSession:
-    """stub 后端 ClientSession：记录调用并返回预设。"""
-
     tools: list[types.Tool]
-    results: dict[str, Any] = field(default_factory=dict)
-    calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
 
     async def list_tools(self) -> _FakeListResult:
         return _FakeListResult(self.tools)
-
-    async def call_tool(
-        self, name: str, arguments: dict[str, Any] | None = None
-    ) -> _FakeCallResult:
-        self.calls.append((name, arguments or {}))
-        if name in self.results:
-            r = self.results[name]
-            if isinstance(r, list):
-                return _FakeCallResult(content=r)
-            return _FakeCallResult(content=[types.TextContent(type="text", text=str(r))])
-        return _FakeCallResult(content=[types.TextContent(type="text", text=f"ok:{name}")])
 
 
 def _tool(name: str) -> types.Tool:
@@ -58,71 +29,77 @@ def _tool(name: str) -> types.Tool:
 
 
 async def test_list_tools_aggregates_with_namespace() -> None:
-    """多个后端工具应聚合，且加 namespace 前缀防撞名。"""
-    fs = _FakeBackendSession(tools=[_tool("read")])
-    git = _FakeBackendSession(tools=[_tool("commit")])
-    reg = BackendRegistry()
-    reg.add("fs", fs)
-    reg.add("git", git)
+    registry = BackendRegistry()
+    registry.add("fs", _FakeBackendSession(tools=[_tool("read")]))
+    registry.add("git", _FakeBackendSession(tools=[_tool("commit")]))
 
-    proxy = AgentRigProxy(reg)
-    tools = await proxy.list_tools()
-    assert {t.name for t in tools} == {
+    tools = await AgentRigProxy(registry).list_tools()
+
+    assert {tool.name for tool in tools} == {
         f"fs{NAMESPACE_SEP}read",
         f"git{NAMESPACE_SEP}commit",
     }
 
 
-async def test_call_tool_forwards_to_backend() -> None:
-    """无 mock 时，按命名空间路由转发到对应后端。"""
-    fs = _FakeBackendSession(tools=[_tool("read")], results={"read": "hello"})
-    reg = BackendRegistry()
-    reg.add("fs", fs)
+async def test_call_without_case_scope_is_rejected(
+    monkeypatch: Any,
+) -> None:
+    proxy = AgentRigProxy(BackendRegistry())
+    monkeypatch.setattr(proxy, "_scope_token", lambda: None)
 
-    proxy = AgentRigProxy(reg)
-    content = await proxy.call_tool(f"fs{NAMESPACE_SEP}read", {"path": "/x"})
-    assert content[0].text == "hello"
-    assert fs.calls == [("read", {"path": "/x"})]
+    result = await proxy.call_tool("fs__read", {"path": "/tmp/a"})
 
-
-async def test_mock_intercepts_before_forwarding() -> None:
-    """mock 命中时直接返回预设，不转发后端。"""
-    fs = _FakeBackendSession(tools=[_tool("read")])
-    reg = BackendRegistry()
-    reg.add("fs", fs)
-
-    mock = StaticMockPolicy({f"fs{NAMESPACE_SEP}read": "mocked!"})
-    proxy = AgentRigProxy(reg, mock_policy=mock)
-    content = await proxy.call_tool(f"fs{NAMESPACE_SEP}read", {"path": "/x"})
-    assert content[0].text == "mocked!"
-    assert fs.calls == []  # 未转发
+    assert result.isError is True
+    assert "header is required" in result.content[0].text
 
 
-async def test_trace_records_mock_and_real() -> None:
-    """trace 应区分 mock / real 来源，并记录后端 isError。"""
-    fs = _FakeBackendSession(
-        tools=[_tool("read"), _tool("write")],
-        results={"write": "done"},
+async def test_scoped_call_uses_case_provider_and_preserves_output_schema(
+    monkeypatch: Any,
+) -> None:
+    class Scope:
+        async def resolve(
+            self,
+            name: str,
+            arguments: dict[str, Any],
+            *,
+            result_schema: dict[str, Any] | None,
+        ) -> ToolResult:
+            assert name == "fs__read"
+            assert arguments == {"path": "/tmp/a"}
+            assert result_schema == {"type": "object"}
+            return ToolResult(
+                tool_call_id="call_1",
+                tool_name=name,
+                result={"source": "case-scope"},
+                source="fixture",
+            )
+
+    class Scopes:
+        def get(self, token: str) -> Scope | None:
+            return Scope() if token == "scope-token" else None
+
+    registry = BackendRegistry()
+    registry.add(
+        "fs",
+        _FakeBackendSession(
+            tools=[
+                types.Tool(
+                    name="read",
+                    description="read",
+                    inputSchema={},
+                    outputSchema={"type": "object"},
+                )
+            ]
+        ),
     )
-    reg = BackendRegistry()
-    reg.add("fs", fs)
+    proxy = AgentRigProxy(
+        registry,
+        scope_registry=Scopes(),  # type: ignore[arg-type]
+    )
+    await proxy.list_tools()
+    monkeypatch.setattr(proxy, "_scope_token", lambda: "scope-token")
 
-    trace = TraceSink()
-    mock = StaticMockPolicy({f"fs{NAMESPACE_SEP}read": "mocked"})
-    proxy = AgentRigProxy(reg, mock_policy=mock, trace_sink=trace)
+    result = await proxy.call_tool("fs__read", {"path": "/tmp/a"})
 
-    await proxy.call_tool(f"fs{NAMESPACE_SEP}read", {})
-    await proxy.call_tool(f"fs{NAMESPACE_SEP}write", {"path": "/y"})
-
-    assert len(trace.entries) == 2
-    assert trace.entries[0].source == "mock"
-    assert trace.entries[1].source == "real"
-    assert trace.entries[1].is_error is False
-
-
-async def test_unknown_backend_returns_error_text() -> None:
-    """未知后端应返回错误文本（第一周骨架表达，不抛异常）。"""
-    reg = BackendRegistry()
-    proxy = AgentRigProxy(reg)
-    content = await proxy.call_tool("unknown__tool", {})
-    assert content[0].text.startswith("[proxy error]")
+    assert result.isError is False
+    assert result.structuredContent == {"source": "case-scope"}

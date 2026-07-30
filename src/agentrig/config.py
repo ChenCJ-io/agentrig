@@ -1,7 +1,7 @@
 """AgentRig 配置（基于 pydantic-settings）。
 
 配置来源（优先级高 → 低）：构造参数 > 环境变量 > TOML 文件 > 默认值。
-- 环境变量：`AGENTRIG_*`，嵌套用 `__` 分隔（如 `AGENTRIG_LLM__API_KEY`）
+- 环境变量：`AGENTRIG_*`，嵌套用 `__` 分隔
 - TOML：默认读 `agentrig.toml` 顶层字段（文件不存在则忽略）
 
 agentrig.toml 示例::
@@ -11,13 +11,12 @@ agentrig.toml 示例::
     [server]
     port = 9000
 
-    [llm]
-    api_key = "sk-..."
-    model = "gpt-x"
+    [execution]
+    default_concurrency = 4
 """
 from __future__ import annotations
 
-from pydantic import SecretStr
+from pydantic import field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -32,31 +31,49 @@ class ServerConfig(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     # 非空时 /api /mcp /proxy 需 Authorization: Bearer <token>（公网暴露务必设置）
-    api_token: str = ""
+    api_token_ref: str | None = None
     log_level: str = "INFO"
 
-
-class AgentConfig(BaseSettings):
-    """被测 agent 的连接配置。"""
-
-    server_url: str = ""
-    user_id: str = "agentrig"
-    request_timeout: float = 60.0
+    @field_validator("api_token_ref")
+    @classmethod
+    def token_is_an_environment_reference(cls, value: str | None) -> str | None:
+        if value is not None and (not value.startswith("env:") or value == "env:"):
+            raise ValueError("api_token_ref must use env:VARIABLE_NAME")
+        return value
 
 
 class DatabaseConfig(BaseSettings):
-    """持久化配置（无 url 时降级内存）。"""
+    """V1 数据库配置。
+
+    ``url`` 接受 SQLAlchemy asyncio URL。留空时，应用使用工作目录下的
+    ``.agentrig/agentrig.db``；测试可以显式传 ``sqlite+aiosqlite:///:memory:``。
+    """
 
     url: str = ""
-    schema_name: str = "agentrig"
+class ExecutionConfig(BaseSettings):
+    """进程内 Scheduler 与外部组件的部署上限。"""
+
+    default_concurrency: int = 4
+    max_concurrency: int = 20
+    default_case_timeout_seconds: float = 300.0
+    default_component_timeout_seconds: float = 60.0
+    real_tool_allowlist: list[str] = []
+    python_driver_allowlist: list[str] = []
+    subprocess_allowlist: list[str] = []
 
 
-class LLMConfig(BaseSettings):
-    """LLM provider 配置（OpenAI 兼容；通过 LLMProvider 抽象可插拔）。"""
+class EvidenceConfig(BaseSettings):
+    """运行证据落库前的统一脱敏配置。"""
 
-    api_key: SecretStr = SecretStr("")
-    base_url: str = ""
-    model: str = ""
+    sensitive_keys: list[str] = [
+        "authorization",
+        "cookie",
+        "api_key",
+        "token",
+        "secret",
+    ]
+    sensitive_paths: list[str] = []
+    max_event_payload_bytes: int = 1_000_000
 
 
 class ProxyConfig(BaseSettings):
@@ -68,6 +85,9 @@ class ProxyConfig(BaseSettings):
     """
 
     backends: dict[str, str] = {}
+    # 被测 Agent 可访问的 Proxy 地址。留空时按 server.host/server.port 推导；
+    # 容器、远端 Target 或反向代理部署应显式配置。
+    public_url: str = ""
 
 
 class Settings(BaseSettings):
@@ -85,9 +105,9 @@ class Settings(BaseSettings):
 
     environment: str = "dev"
     server: ServerConfig = ServerConfig()
-    agent: AgentConfig = AgentConfig()
     database: DatabaseConfig = DatabaseConfig()
-    llm: LLMConfig = LLMConfig()
+    execution: ExecutionConfig = ExecutionConfig()
+    evidence: EvidenceConfig = EvidenceConfig()
     proxy: ProxyConfig = ProxyConfig()
 
     @classmethod

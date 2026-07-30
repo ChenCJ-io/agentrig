@@ -22,3 +22,4 @@ htmlcov/
 # playwright 截图/缓存（验证产物，不入库）
 .playwright-mcp/
 /*.png
+.agentrig/
