@@ -23,3 +23,6 @@ htmlcov/
 .playwright-mcp/
 /*.png
 .agentrig/
+
+# 本地比赛手册与参赛资料，不随开源仓库发布
+docs/design-history/*.pdf

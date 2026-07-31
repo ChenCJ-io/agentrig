@@ -1,6 +1,6 @@
 [project]
 name = "agentrig"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "The MCP-native test rig for AI agents."
 readme = "README.md"
 license = { text = "MIT" }

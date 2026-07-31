@@ -29,9 +29,20 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
+def prepare_database_url(url: str) -> str:
+    """规范化数据库 URL，并为文件 SQLite 创建父目录。"""
+
+    normalized = normalize_database_url(url)
+    if normalized.startswith("sqlite+aiosqlite:///"):
+        raw_path = normalized.removeprefix("sqlite+aiosqlite:///")
+        if raw_path and raw_path != ":memory:":
+            Path(raw_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+    return normalized
+
+
 class Database:
     def __init__(self, url: str = "", *, echo: bool = False) -> None:
-        self.url = normalize_database_url(url)
+        self.url = prepare_database_url(url)
         engine_options: dict[str, object] = {"echo": echo, "pool_pre_ping": True}
         self._session_lock: asyncio.Lock | None = None
         if self.url == "sqlite+aiosqlite:///:memory:":
@@ -40,10 +51,6 @@ class Database:
             # rollback/commit 干扰另一个请求。串行化数据库临界区只用于该测试/
             # Demo 形态，文件 SQLite 与 PostgreSQL 仍保持正常连接池并发。
             self._session_lock = asyncio.Lock()
-        elif self.url.startswith("sqlite+aiosqlite:///"):
-            raw_path = self.url.removeprefix("sqlite+aiosqlite:///")
-            if raw_path and raw_path != ":memory:":
-                Path(raw_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
         self.engine: AsyncEngine = create_async_engine(self.url, **engine_options)
         self.sessions = async_sessionmaker(
             self.engine,

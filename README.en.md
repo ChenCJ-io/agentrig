@@ -120,7 +120,7 @@ cd web && npm run typecheck && npm run build
 
 ## Status
 
-The current version is `0.1.0a0`. The V1 core is implemented but remains Alpha and
+The current version is `0.1.0a1`. The V1 core is implemented but remains Alpha and
 should not yet be used as an unattended production release gate.
 
 ## License

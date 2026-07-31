@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from agentrig.config import get_settings
 from agentrig.infrastructure.database.orm import Base
-from agentrig.infrastructure.database.session import normalize_database_url
+from agentrig.infrastructure.database.session import prepare_database_url
 
 config = context.config
 if config.config_file_name is not None:
@@ -19,7 +19,7 @@ if config.config_file_name is not None:
 
 config.set_main_option(
     "sqlalchemy.url",
-    normalize_database_url(get_settings().database.url),
+    prepare_database_url(get_settings().database.url),
 )
 target_metadata = Base.metadata
 

@@ -137,7 +137,7 @@ cd web && npm run typecheck && npm run build
 
 ## 状态
 
-当前版本为 `0.1.0a0`。V1 核心链路已实现，仍处于 Alpha 阶段，不建议直接作为无人值守的
+当前版本为 `0.1.0a1`。V1 核心链路已实现，仍处于 Alpha 阶段，不建议直接作为无人值守的
 生产发布门禁。
 
 ## License

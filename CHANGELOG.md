@@ -4,6 +4,36 @@
 
 ## [Unreleased]
 
+## [0.1.0a1] - 2026-07-31
+
+第二个 V1 alpha：补齐 ACP/Goose 真实接入、部署预检、诊断证据和安全交付闭环。
+
+### Added
+
+- stdio ACP Driver、CaseRun MCP Proxy 注入、运行目录隔离和分级子进程清理。
+- Driver/Target/Profile/Sample/Run JSON Schema 发现工具，以及 CaseRun 事件筛选分页。
+- Goose `v1.45.0` + `deepseek-v4-flash` 真实兼容测试，覆盖 Fixture、approved Sample、
+  多轮上下文、并发和故意失败诊断。
+- Web 访问令牌设置/更新入口；API 返回 401 时自动显示认证对话框。
+- GitHub Actions：Python 3.12/3.13 测试、Ruff、Mypy、前端构建、包构建和 wheel 隔离安装。
+- `v*` Tag 校验版本后创建 GitHub Release 并上传 sdist/wheel；Alpha 阶段不自动发布 PyPI。
+
+### Changed
+
+- ACP Target 写入时即校验 command、cwd、allowlist、Secret 和隔离配置；
+  `check_target` 会执行真实 initialize/session 探针。
+- Run 与 CaseRun 明确区分“调度完成”和“评测通过”，前端会直接显示失败数量。
+- Codex MCP 和容器 ACP 部署文档增加 Bearer Token 与
+  `host.docker.internal` Proxy 安全配置。
+
+### Fixed
+
+- Target 版本配置改为递归合并，避免嵌套 `device_info` 父字段丢失。
+- 拒绝未知 Driver 和无效 ACP options，不再把 JSON Schema 中的业务属性名误判为明文密钥。
+- Driver request/session、工具前文本、Provider、validation 和工具结果事件按真实时序存档。
+- Driver 执行失败改为 `evaluation_error`，取消和中断使用明确的终态语义。
+- wheel 在全新工作目录执行 `agentrig db upgrade` 时自动创建默认 `.agentrig` 数据库目录。
+
 ## [0.1.0a0] - 2026-07-30
 
 首个 V1 alpha：由 Codex/Claude Code 通过 MCP 控制测试选择与执行，平台提供可组合的
