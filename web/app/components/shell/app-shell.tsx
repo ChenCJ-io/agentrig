@@ -1,6 +1,13 @@
-import { Bell, ChevronDown, CircleHelp, LogOut, X } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { Bell, ChevronDown, CircleHelp, KeyRound, LogOut, X } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
+
+import {
+  authRequiredEvent,
+  clearAuthToken,
+  hasStoredAuthToken,
+  storeAuthToken,
+} from "~/api/client";
 
 import { getShellContext, isNavigationActive } from "./navigation";
 
@@ -12,6 +19,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [shellNotice, setShellNotice] = useState<string | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [accessToken, setAccessToken] = useState("");
+  const [hasLocalToken, setHasLocalToken] = useState(false);
+
+  useEffect(() => {
+    setHasLocalToken(hasStoredAuthToken());
+    const requireAuth = () => {
+      setAccessToken("");
+      setAuthDialogOpen(true);
+    };
+    window.addEventListener(authRequiredEvent, requireAuth);
+    return () => window.removeEventListener(authRequiredEvent, requireAuth);
+  }, []);
 
   function showHelpStatus() {
     setUserMenuOpen(false);
@@ -19,16 +39,34 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   function handleLogout() {
-    const hadLocalToken = Boolean(window.localStorage.getItem("auth_token"));
+    const hadLocalToken = hasStoredAuthToken();
     if (hadLocalToken) {
-      window.localStorage.removeItem("auth_token");
+      clearAuthToken();
     }
     setUserMenuOpen(false);
-    setShellNotice(
-      hadLocalToken
-        ? "本地访问令牌已清除。"
-        : "当前没有本地访问令牌。",
-    );
+    setHasLocalToken(false);
+    if (hadLocalToken) {
+      window.location.reload();
+      return;
+    }
+    setShellNotice("当前没有本地访问令牌。");
+  }
+
+  function openAuthDialog() {
+    setUserMenuOpen(false);
+    setNotificationOpen(false);
+    setAccessToken("");
+    setAuthDialogOpen(true);
+  }
+
+  function saveAccessToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = accessToken.trim();
+    if (!token) return;
+    storeAuthToken(token);
+    setHasLocalToken(true);
+    setAuthDialogOpen(false);
+    window.location.reload();
   }
 
   return (
@@ -100,6 +138,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
               {userMenuOpen ? (
                 <div className="user-menu__popover" role="menu">
+                  <button role="menuitem" type="button" onClick={openAuthDialog}>
+                    <KeyRound size={14} />
+                    {hasLocalToken ? "更新访问令牌" : "设置访问令牌"}
+                  </button>
                   <button role="menuitem" type="button" onClick={showHelpStatus}>
                     <CircleHelp size={14} /> 帮助与反馈
                   </button>
@@ -119,6 +161,64 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button type="button" onClick={() => setShellNotice(null)} aria-label="关闭状态提示" title="关闭状态提示">
             <X size={13} />
           </button>
+        </div>
+      ) : null}
+
+      {authDialogOpen ? (
+        <div className="auth-dialog-backdrop" role="presentation">
+          <section
+            aria-labelledby="auth-dialog-title"
+            aria-modal="true"
+            className="auth-dialog"
+            role="dialog"
+          >
+            <header>
+              <div>
+                <span>ACCESS CONTROL</span>
+                <strong id="auth-dialog-title">设置访问令牌</strong>
+              </div>
+              <button
+                aria-label="关闭访问令牌对话框"
+                onClick={() => setAuthDialogOpen(false)}
+                title="关闭"
+                type="button"
+              >
+                <X size={15} />
+              </button>
+            </header>
+            <form onSubmit={saveAccessToken}>
+              <p>
+                当前 AgentRig 服务要求 Bearer Token。令牌仅保存在这个浏览器的本地存储中，
+                后续 API 请求会自动携带。
+              </p>
+              <label htmlFor="agentrig-access-token">访问令牌</label>
+              <input
+                autoComplete="off"
+                autoFocus
+                id="agentrig-access-token"
+                onChange={(event) => setAccessToken(event.target.value)}
+                placeholder={hasLocalToken ? "输入新的令牌" : "输入服务访问令牌"}
+                type="password"
+                value={accessToken}
+              />
+              <footer>
+                <button
+                  className="button button--quiet"
+                  onClick={() => setAuthDialogOpen(false)}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button
+                  className="button button--primary"
+                  disabled={!accessToken.trim()}
+                  type="submit"
+                >
+                  保存并重新加载
+                </button>
+              </footer>
+            </form>
+          </section>
         </div>
       ) : null}
 

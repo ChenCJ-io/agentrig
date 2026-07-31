@@ -10,6 +10,9 @@ export class ApiError extends Error {
 }
 
 const apiRoot = import.meta.env.VITE_API_ROOT ?? "";
+const authTokenStorageKey = "auth_token";
+
+export const authRequiredEvent = "agentrig:auth-required";
 
 export function resolveApiUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path;
@@ -18,8 +21,23 @@ export function resolveApiUrl(path: string): string {
 
 export function getAuthHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const token = window.localStorage.getItem("auth_token");
+  const token = window.localStorage.getItem(authTokenStorageKey);
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export function hasStoredAuthToken(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    Boolean(window.localStorage.getItem(authTokenStorageKey))
+  );
+}
+
+export function storeAuthToken(token: string): void {
+  window.localStorage.setItem(authTokenStorageKey, token);
+}
+
+export function clearAuthToken(): void {
+  window.localStorage.removeItem(authTokenStorageKey);
 }
 
 export async function apiRequest<T>(
@@ -36,6 +54,9 @@ export async function apiRequest<T>(
       ...init.headers,
     },
   });
+  if (response.status === 401 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(authRequiredEvent));
+  }
   const text = await response.text();
   let payload: unknown;
   if (text) {

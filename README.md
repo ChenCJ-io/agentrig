@@ -54,6 +54,8 @@ Codex MCP 配置：
 ```toml
 [mcp_servers.agentrig]
 url = "http://127.0.0.1:8000/mcp/"
+# 启用 server.api_token_ref 时取消下一行注释；Codex 从环境变量读取 Token。
+# bearer_token_env_var = "AGENTRIG_ACCESS_TOKEN"
 ```
 
 首次可先跑不依赖外部服务的纵向验收：
@@ -100,6 +102,26 @@ allowlist、ExecutionProfile Provider 链和用户授权同时成立。
 ```bash
 export AGENTRIG_ACCESS_TOKEN='replace-with-a-random-token'
 ```
+
+浏览器首次收到 401 时会自动显示“设置访问令牌”对话框，也可以从右上角用户菜单打开。
+令牌只保存在当前浏览器的本地存储中。Codex 需继承同名环境变量，并在 MCP 配置中设置
+`bearer_token_env_var`。
+
+容器内 ACP Agent 需要访问宿主机上的 Proxy。此时不要继续使用回环地址；应同时启用
+Token，并显式配置容器可达地址：
+
+```toml
+[server]
+host = "0.0.0.0"
+port = 8000
+api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
+
+[proxy]
+public_url = "http://host.docker.internal:8000/proxy"
+```
+
+AgentRig 会把服务 Token 和 CaseRun 的短期 Scope 一起注入 ACP MCP 配置。不要在
+`agentrig.toml`、Target 或 Codex 配置中写入实际 Token。
 
 ## 开发校验
 

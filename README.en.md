@@ -60,6 +60,8 @@ Codex MCP configuration:
 ```toml
 [mcp_servers.agentrig]
 url = "http://127.0.0.1:8000/mcp/"
+# Uncomment when server.api_token_ref is enabled. Codex reads the token from the environment.
+# bearer_token_env_var = "AGENTRIG_ACCESS_TOKEN"
 ```
 
 A local ACP launcher must first be included in the deployment
@@ -76,6 +78,27 @@ its reference:
 [server]
 api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
 ```
+
+The Web UI opens an access-token dialog after its first 401 response; the same dialog is
+available from the user menu. The token is stored only in that browser's local storage.
+Codex must inherit the same environment variable and set `bearer_token_env_var` in its
+MCP configuration.
+
+An ACP agent running in a container needs a host-reachable proxy URL. In that setup,
+enable the access token instead of exposing an unauthenticated service:
+
+```toml
+[server]
+host = "0.0.0.0"
+port = 8000
+api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
+
+[proxy]
+public_url = "http://host.docker.internal:8000/proxy"
+```
+
+AgentRig injects both the server token and the short-lived CaseRun scope into the ACP MCP
+configuration. Never put the token value in `agentrig.toml`, a Target, or Codex config.
 
 Run the dependency-free vertical demo with:
 
