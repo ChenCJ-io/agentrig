@@ -6,7 +6,14 @@ from typing import Any, Protocol
 
 from ..evaluations.models import EvaluationOutcome, EvaluatorType
 from .models import CaseRunStatus, RunEventType, RunStatus
-from .schemas import CaseRunDetail, CaseRunPage, RunEvent, RunPage, RunView
+from .schemas import (
+    CaseRunDetail,
+    CaseRunPage,
+    RunEvent,
+    RunEventPage,
+    RunPage,
+    RunView,
+)
 
 
 class RunRepository(Protocol):
@@ -53,6 +60,15 @@ class RunRepository(Protocol):
     ) -> CaseRunPage: ...
 
     async def get_case_run(self, case_run_id: str) -> CaseRunDetail | None: ...
+
+    async def list_case_run_events(
+        self,
+        case_run_id: str,
+        *,
+        event_types: list[RunEventType] | None,
+        limit: int,
+        offset: int,
+    ) -> RunEventPage: ...
 
     async def set_run_status(
         self,

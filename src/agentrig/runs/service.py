@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..errors import AgentRigError, ErrorCode
 from ..evaluations.schemas import EvaluationResult, ExternalVerdictSubmit
 from ..evaluations.service import EvaluationService
+from .models import RunEventType
 from .planner import RunPlanner
 from .repository import RunRepository
 from .scheduler import RunScheduler
@@ -12,6 +13,7 @@ from .schemas import (
     CaseRunDetail,
     CaseRunPage,
     RunCasesRequest,
+    RunEventPage,
     RunPage,
     RunSubmitResult,
     RunView,
@@ -80,6 +82,22 @@ class RunService:
                 details={"case_run_id": case_run_id},
             )
         return case_run
+
+    async def list_case_run_events(
+        self,
+        case_run_id: str,
+        *,
+        event_types: list[RunEventType] | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> RunEventPage:
+        await self.get_case_run(case_run_id)
+        return await self._repository.list_case_run_events(
+            case_run_id,
+            event_types=event_types,
+            limit=max(1, min(limit, 500)),
+            offset=max(0, offset),
+        )
 
     async def cancel_run(self, run_id: str) -> RunView:
         await self.get_run(run_id)

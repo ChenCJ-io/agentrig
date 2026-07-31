@@ -116,3 +116,22 @@ class AgentDriver(Protocol):
     async def cancel(self, session: DriverSession) -> None: ...
 
     async def close(self, session: DriverSession) -> None: ...
+
+
+@runtime_checkable
+class ConfigurableAgentDriver(Protocol):
+    """可在真正启动 Agent 前校验 Target 配置的 Driver。"""
+
+    def validate_configuration(
+        self,
+        options: dict[str, Any],
+        *,
+        secret_configured: bool,
+    ) -> None: ...
+
+
+@runtime_checkable
+class ProbeableAgentDriver(Protocol):
+    """可执行一次不产生业务对话的真实连通性探针。"""
+
+    async def probe(self, context: DriverPrepareContext) -> None: ...

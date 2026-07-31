@@ -184,6 +184,7 @@ class CaseExecutor:
             await self._runs.set_case_run_status(
                 case_run_id,
                 CaseRunStatus.CANCELLED,
+                evaluation_state=EvaluationOutcome.INCONCLUSIVE,
                 error_code=ErrorCode.CANCELLED.value,
                 error_message="case run cancelled",
             )
@@ -196,6 +197,7 @@ class CaseExecutor:
             await self._runs.set_case_run_status(
                 case_run_id,
                 CaseRunStatus.FAILED,
+                evaluation_state=EvaluationOutcome.EVALUATION_ERROR,
                 error_code=ErrorCode.CASE_TIMEOUT.value,
                 error_message=f"case run exceeded {profile.case_timeout_seconds} seconds",
             )
@@ -204,6 +206,7 @@ class CaseExecutor:
             await self._runs.set_case_run_status(
                 case_run_id,
                 CaseRunStatus.FAILED,
+                evaluation_state=EvaluationOutcome.EVALUATION_ERROR,
                 error_code=exc.detail.code.value,
                 error_message=exc.detail.message,
             )
@@ -212,6 +215,7 @@ class CaseExecutor:
             await self._runs.set_case_run_status(
                 case_run_id,
                 CaseRunStatus.FAILED,
+                evaluation_state=EvaluationOutcome.EVALUATION_ERROR,
                 error_code=ErrorCode.INTERNAL_ERROR.value,
                 error_message=str(exc),
             )

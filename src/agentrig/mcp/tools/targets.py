@@ -25,8 +25,18 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return dump_model(await invoke(services.targets.get(target_id)))
 
     @server.tool()
+    def list_driver_types() -> list[dict[str, Any]]:
+        """列出当前部署支持的 Driver、能力和部署就绪状态；不暴露 allowlist 路径。"""
+        return services.targets.list_driver_types()
+
+    @server.tool()
+    def get_target_schema(driver_type: str | None = None) -> dict[str, Any]:
+        """返回 Target 写入 Schema；传 driver_type 时同时返回其 options Schema。"""
+        return services.targets.schema(driver_type)
+
+    @server.tool()
     async def create_target(value: TargetCreate) -> dict[str, Any]:
-        """创建 Target 并在同一操作中保存版本列表；只保存 env: Secret 引用。"""
+        """创建已通过当前部署预检的 Target；只保存 env: Secret 引用。"""
         return dump_model(await invoke(services.targets.create(value)))
 
     @server.tool()

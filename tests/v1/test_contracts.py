@@ -124,3 +124,37 @@ def test_arbitrary_json_fields_cannot_hide_plaintext_credentials() -> None:
             tool_name="login",
             content={"token": "plaintext"},
         )
+
+
+def test_tool_json_schema_may_describe_token_named_business_fields() -> None:
+    target = TargetCreate(
+        name="schema is not a secret value",
+        driver_type="acp",
+        options={
+            "command": ["/opt/agent/run-acp"],
+            "tool_catalog": [
+                {
+                    "name": "retrieve",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "retrieval_token": {"type": "string"},
+                        },
+                        "required": ["retrieval_token"],
+                    },
+                }
+            ],
+        },
+    )
+    assert (
+        target.options["tool_catalog"][0]["inputSchema"]["properties"][
+            "retrieval_token"
+        ]["type"]
+        == "string"
+    )
+    with pytest.raises(ValidationError, match="secret_ref"):
+        TargetCreate(
+            name="actual value is still rejected",
+            driver_type="http_sse",
+            options={"match_arguments": {"retrieval_token": "plaintext"}},
+        )

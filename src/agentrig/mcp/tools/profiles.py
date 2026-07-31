@@ -30,6 +30,11 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return dump_model(await invoke(services.profiles.get(profile_id)))
 
     @server.tool()
+    def get_execution_profile_schema() -> dict[str, Any]:
+        """返回当前 ExecutionProfile 可写 JSON Schema。"""
+        return ProfileCreate.model_json_schema()
+
+    @server.tool()
     async def create_execution_profile(value: ProfileCreate) -> dict[str, Any]:
         """创建执行方案；模型 Key 只能通过 env: Secret 引用。"""
         return dump_model(await invoke(services.profiles.create(value)))

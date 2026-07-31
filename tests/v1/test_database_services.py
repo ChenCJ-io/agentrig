@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 from sqlalchemy import inspect
@@ -167,6 +169,94 @@ async def test_target_check_reports_driver_capabilities_and_missing_secret(
     assert valid.reachable is True
     assert "tool_result_injection" in valid.capabilities
     assert "tool_proxy_injection" in valid.capabilities
+
+
+async def test_target_write_rejects_unknown_driver_and_invalid_acp_options(
+    database: Database,
+    tmp_path: Path,
+) -> None:
+    registry = DriverRegistry(
+        subprocess_allowlist=[str(tmp_path / "run-acp.sh")]
+    )
+    service = TargetService(
+        SqlTargetRepository(database),
+        drivers=registry,
+        secrets=SecretResolver(),
+    )
+    with pytest.raises(AgentRigError, match="unsupported driver"):
+        await service.create(
+            TargetCreate(
+                id="target_unknown",
+                name="Unknown",
+                driver_type="not_installed",
+            )
+        )
+    with pytest.raises(AgentRigError, match="command"):
+        await service.create(
+            TargetCreate(
+                id="target_bad_acp",
+                name="Bad ACP",
+                driver_type="acp",
+                options={"command": "./run-acp.sh"},
+            )
+        )
+
+
+async def test_target_check_preflights_acp_allowlist_and_secret(
+    database: Database,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = tmp_path / "run-acp.sh"
+    executable.write_text("#!/bin/sh\nexit 0\n")
+    executable.chmod(0o700)
+    repository = SqlTargetRepository(database)
+
+    async def probe_without_starting_process(
+        _driver: object,
+        context: object,
+    ) -> None:
+        assert context is not None
+
+    monkeypatch.setattr(
+        "agentrig.targets.drivers.acp.AcpDriver.probe",
+        probe_without_starting_process,
+    )
+    # 模拟升级前已经保存、但当前部署不允许启动的 Target。
+    await TargetService(repository).create(
+        TargetCreate(
+            id="target_acp_preflight",
+            name="ACP preflight",
+            driver_type="acp",
+            secret_ref="env:ACP_TEST_KEY",
+            options={
+                "command": [str(executable)],
+                "credential_env": "DEEPSEEK_API_KEY",
+            },
+        )
+    )
+    denied_service = TargetService(
+        repository,
+        drivers=DriverRegistry(subprocess_allowlist=[]),
+        secrets=SecretResolver(),
+    )
+    denied = await denied_service.check("target_acp_preflight")
+    assert denied.reachable is False
+    assert "subprocess_allowlist" in denied.message
+
+    allowed_service = TargetService(
+        repository,
+        drivers=DriverRegistry(subprocess_allowlist=[str(executable)]),
+        secrets=SecretResolver(),
+    )
+    missing_secret = await allowed_service.check("target_acp_preflight")
+    assert missing_secret.reachable is False
+    assert "ACP_TEST_KEY" in missing_secret.message
+    monkeypatch.setenv("ACP_TEST_KEY", "test-secret")
+    valid = await allowed_service.check("target_acp_preflight")
+    assert valid.reachable is True
+    assert "tool_proxy_injection" in valid.capabilities
+    assert "initialize/session probe succeeded" in valid.message
 
 
 async def test_target_check_treats_http_error_status_as_unreachable(

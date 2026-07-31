@@ -41,7 +41,13 @@ class ExternalVerdictSubmit(BaseModel):
 
     verdict: Literal["pass", "fail", "inconclusive"]
     summary: str = Field(min_length=1)
-    evidence_refs: list[str] = Field(default_factory=list)
+    evidence_refs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "可选的证据引用；每一项必须是 get_case_run.events[].id 或 "
+            "list_case_run_events.items[].id。"
+        ),
+    )
     submitted_by: str = "external_controller"
 
 

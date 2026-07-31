@@ -11,7 +11,8 @@ description: 使用 AgentRig V1 的异步 run_cases 统一执行单用例、批�
 ## 提交前
 
 1. 用 `list_test_cases` 或明确的 `case_ids` 选择用例。
-2. 用 `get_target` 查看 Target 和版本配置；必要时调用 `check_target`。
+2. 用 `get_target` 查看 Target 和版本配置；先用 `list_driver_types` 确认 Driver 部署就绪，
+   必要时用 `get_target_schema` 核对 options，再调用 `check_target`。
 3. 用 `get_execution_profile` 确认：
    - `tool_mode`；
    - Provider 顺序；
@@ -38,6 +39,7 @@ baseline 和 candidate 两个 Target；普通运行只传 candidate。
 2. 执行过程中可以随时调用 `list_case_runs(run_id)` 查看已完成项。
 3. 父 Run 到达 completed、cancelled 或 failed 后，对需要分析的单项调用
    `get_case_run(case_run_id)`。
+4. 事件很多时改用 `list_case_run_events` 按类型和分页读取；不要为了摘要反复拉取完整快照。
 
 CaseRun 中要分别读取：
 
@@ -54,7 +56,8 @@ CaseRun 中要分别读取：
 
 1. 读取完整 CaseRun 的脱敏事件；
 2. 根据用例 rubric/断言和运行证据形成 pass、fail 或 inconclusive；
-3. 用真实 event ID 填写 `evidence_refs`；
+3. 用 `get_case_run.events[].id` 或 `list_case_run_events.items[].id` 填写
+   `evidence_refs`；
 4. 调用 `submit_external_verdict`，并在 `submitted_by` 标明控制方。
 
 同一 CaseRun 再次提交会覆盖当前 External 记录，但不会修改 Rule、Judge 或原始证据。

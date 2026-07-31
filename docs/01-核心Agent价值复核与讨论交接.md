@@ -184,18 +184,20 @@ Profile 不保存 case IDs、Target 版本、自动重跑规则或明文 Key。�
   get_test_case_schema, create_test_case, update_test_case, delete_test_case
 
 执行:
-  check_target, run_cases, get_run, list_case_runs, get_case_run,
-  cancel_run, submit_external_verdict
+  check_target, get_run_cases_schema, run_cases, get_run, list_case_runs,
+  get_case_run, list_case_run_events, cancel_run, submit_external_verdict
 
 Target:
-  list_targets, get_target, create_target, update_target, delete_target
+  list_targets, get_target, list_driver_types, get_target_schema,
+  create_target, update_target, delete_target
 
 Profile:
-  list_execution_profiles, get_execution_profile,
+  list_execution_profiles, get_execution_profile, get_execution_profile_schema,
   create_execution_profile, update_execution_profile, delete_execution_profile
 
 Sample:
-  list_samples, get_sample, create_sample, update_sample, delete_sample
+  list_samples, get_sample, get_sample_schema,
+  create_sample, update_sample, delete_sample
 ```
 
 没有 `run_single_case`、rerun、comparison 汇总、Judge 重判或审核工具。详尽调用顺序由

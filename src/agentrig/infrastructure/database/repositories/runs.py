@@ -16,6 +16,7 @@ from ....runs.schemas import (
     CaseRunPage,
     CaseRunSummary,
     RunEvent,
+    RunEventPage,
     RunPage,
     RunView,
 )
@@ -166,6 +167,42 @@ class SqlRunRepository:
                 evaluations=[self._evaluation_view(item) for item in row.evaluations],
             )
 
+    async def list_case_run_events(
+        self,
+        case_run_id: str,
+        *,
+        event_types: list[RunEventType] | None,
+        limit: int,
+        offset: int,
+    ) -> RunEventPage:
+        filters = [RunEventORM.case_run_id == case_run_id]
+        if event_types:
+            filters.append(
+                RunEventORM.event_type.in_([item.value for item in event_types])
+            )
+        async with self._database.session() as session:
+            total = int(
+                await session.scalar(
+                    select(func.count(RunEventORM.id)).where(*filters)
+                )
+                or 0
+            )
+            rows = list(
+                await session.scalars(
+                    select(RunEventORM)
+                    .where(*filters)
+                    .order_by(RunEventORM.seq)
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+        return RunEventPage(
+            items=[self._event_view(row) for row in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
     async def set_run_status(
         self,
         run_id: str,
@@ -287,6 +324,9 @@ class SqlRunRepository:
                 run_row.error_message = "service restarted before the run completed"
             for case_run_row in case_runs:
                 case_run_row.status = CaseRunStatus.INTERRUPTED.value
+                case_run_row.evaluation_state = (
+                    EvaluationOutcome.EVALUATION_ERROR.value
+                )
                 case_run_row.finished_at = now
                 case_run_row.error_code = "interrupted"
                 case_run_row.error_message = "service restarted before the case run completed"

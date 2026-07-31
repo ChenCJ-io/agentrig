@@ -27,23 +27,29 @@ EXPECTED_TOOLS = {
     "update_test_case",
     "delete_test_case",
     "check_target",
+    "get_run_cases_schema",
     "run_cases",
     "get_run",
     "list_case_runs",
     "get_case_run",
+    "list_case_run_events",
     "cancel_run",
     "submit_external_verdict",
     "list_targets",
+    "list_driver_types",
+    "get_target_schema",
     "get_target",
     "create_target",
     "update_target",
     "delete_target",
     "list_execution_profiles",
+    "get_execution_profile_schema",
     "get_execution_profile",
     "create_execution_profile",
     "update_execution_profile",
     "delete_execution_profile",
     "list_samples",
+    "get_sample_schema",
     "get_sample",
     "create_sample",
     "update_sample",
@@ -76,6 +82,32 @@ async def test_v1_mcp_tool_set_and_service_projection() -> None:
         assert {tool.name for tool in server._tool_manager.list_tools()} == EXPECTED_TOOLS
         assert "approve_test_case" not in EXPECTED_TOOLS
         assert "run_single_case" not in EXPECTED_TOOLS
+        drivers = await server._tool_manager.call_tool("list_driver_types", {})
+        acp = next(item for item in drivers if item["driver_type"] == "acp")
+        assert acp["deployment_ready"] is False
+        assert "subprocess_allowlist" not in json.dumps(drivers)
+        target_schema = await server._tool_manager.call_tool(
+            "get_target_schema",
+            {"driver_type": "acp"},
+        )
+        assert (
+            target_schema["options_schema"]["properties"]["command"]["type"]
+            == "array"
+        )
+        assert (
+            await server._tool_manager.call_tool(
+                "get_execution_profile_schema",
+                {},
+            )
+        )["title"] == "ProfileCreate"
+        assert (
+            await server._tool_manager.call_tool("get_sample_schema", {})
+        )["title"] == "SampleCreate"
+        run_schema = await server._tool_manager.call_tool(
+            "get_run_cases_schema",
+            {},
+        )
+        assert run_schema["title"] == "RunCasesRequest"
         created = await server._tool_manager.call_tool(
             "create_test_case",
             {

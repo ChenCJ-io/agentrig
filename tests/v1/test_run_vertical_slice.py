@@ -273,6 +273,25 @@ async def test_async_run_persists_events_and_rule_evaluation(
     assert len(detail.evaluations) == 1
     assert detail.evaluations[0].evaluator_type is EvaluatorType.RULE
     assert detail.evaluations[0].verdict == "pass"
+    filtered = await container.runs.list_case_run_events(
+        detail.id,
+        event_types=[RunEventType.TOOL_CALL, RunEventType.TOOL_RESULT],
+        limit=1,
+    )
+    assert filtered.total == 2
+    assert filtered.limit == 1
+    assert [item.event_type for item in filtered.items] == [
+        RunEventType.TOOL_CALL
+    ]
+    second = await container.runs.list_case_run_events(
+        detail.id,
+        event_types=[RunEventType.TOOL_CALL, RunEventType.TOOL_RESULT],
+        limit=1,
+        offset=1,
+    )
+    assert [item.event_type for item in second.items] == [
+        RunEventType.TOOL_RESULT
+    ]
 
 
 async def test_driver_request_session_and_text_order_are_persisted_as_evidence() -> None:
@@ -713,6 +732,10 @@ async def test_case_timeout_fails_item_but_parent_batch_completes() -> None:
         assert run.failed_count == 1
         page = await services.runs.list_case_runs(submitted.run_id)
         assert page.items[0].status is CaseRunStatus.FAILED
+        assert (
+            page.items[0].evaluation_state
+            is EvaluationOutcome.EVALUATION_ERROR
+        )
         assert page.items[0].error_code == "case_timeout"
     finally:
         await services.close()

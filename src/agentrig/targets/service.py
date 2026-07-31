@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from ..errors import AgentRigError, ErrorCode
 from ..identifiers import new_id
 from ..infrastructure.secrets import SecretResolver
-from .drivers import DriverRegistry
+from .drivers import DriverPrepareContext, DriverRegistry
 from .options import merge_target_options
 from .repository import TargetRepository
 from .schemas import TargetCheck, TargetCreate, TargetPage, TargetPatch, TargetView
@@ -33,6 +35,7 @@ class TargetService:
                 f"target already exists: {target_id}",
                 details={"target_id": target_id},
             )
+        self._validate_for_deployment(value)
         return await self._repository.create(target_id, value)
 
     async def get(self, target_id: str) -> TargetView:
@@ -56,11 +59,31 @@ class TargetService:
         data = current.model_dump(exclude={"id", "created_at", "updated_at"})
         merged = {**data, **patch.model_dump(exclude_unset=True), "id": target_id}
         value = TargetCreate.model_validate(merged)
+        self._validate_for_deployment(value)
         return await self._repository.update(target_id, value)
 
     async def delete(self, target_id: str) -> None:
         await self.get(target_id)
         await self._repository.delete(target_id)
+
+    def list_driver_types(self) -> list[dict[str, Any]]:
+        if self._drivers is None:
+            return []
+        return self._drivers.descriptions()
+
+    def schema(self, driver_type: str | None = None) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "target_schema": TargetCreate.model_json_schema(),
+            "driver_type": driver_type,
+            "options_schema": None,
+            "options_example": None,
+        }
+        if driver_type is not None:
+            if self._drivers is None:
+                raise RuntimeError("TargetService Driver registry is not configured")
+            result["options_schema"] = self._drivers.configuration_schema(driver_type)
+            result["options_example"] = self._drivers.configuration_example(driver_type)
+        return result
 
     async def check(
         self,
@@ -86,11 +109,27 @@ class TargetService:
             version_config.options if version_config is not None else {},
         )
         try:
-            capabilities = self._drivers.capabilities(
+            capabilities = self._drivers.validate_configuration(
                 target.driver_type,
-                entrypoint=options.get("entrypoint"),
+                options=options,
+                secret_configured=target.secret_ref is not None,
             )
-            self._secrets.resolve(target.secret_ref)
+            secret = self._secrets.resolve(target.secret_ref)
+            probed = await self._drivers.probe(
+                target.driver_type,
+                DriverPrepareContext(
+                    case_run_id=new_id("targetcheck"),
+                    target={
+                        "id": target.id,
+                        "driver_type": target.driver_type,
+                        "endpoint": endpoint,
+                        "options": options,
+                    },
+                    version=version,
+                    secret_value=secret,
+                    component_timeout_seconds=timeout_seconds,
+                ),
+            )
         except Exception as exc:
             return TargetCheck(
                 reachable=False,
@@ -110,7 +149,11 @@ class TargetService:
                 message = f"HTTP endpoint is unreachable: {exc}"
                 reachable = False
         else:
-            message = "driver configuration is valid; no network endpoint to probe"
+            message = (
+                "driver process initialize/session probe succeeded"
+                if probed
+                else "driver configuration is valid; no network endpoint to probe"
+            )
             reachable = True
         return TargetCheck(
             reachable=reachable,
@@ -120,3 +163,30 @@ class TargetService:
             capabilities=capabilities.names(),
             message=message,
         )
+
+    def _validate_for_deployment(self, value: TargetCreate) -> None:
+        if self._drivers is None:
+            return
+        option_sets = (
+            [
+                merge_target_options(value.options, version.options)
+                for version in value.versions
+            ]
+            if value.versions
+            else [value.options]
+        )
+        for options in option_sets:
+            try:
+                self._drivers.validate_stored_configuration(
+                    value.driver_type,
+                    options=options,
+                    secret_configured=value.secret_ref is not None,
+                )
+            except AgentRigError:
+                raise
+            except (TypeError, ValueError, PermissionError) as exc:
+                raise AgentRigError(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"invalid {value.driver_type} target configuration: {exc}",
+                    details={"driver_type": value.driver_type},
+                ) from exc

@@ -11,6 +11,7 @@ from .cases import CaseSelector, TestCaseCreate, TestCasePatch
 from .cases.models import ReviewStatus
 from .evaluations.schemas import ExternalVerdictSubmit
 from .profiles import ProfileCreate, ProfilePatch
+from .runs.models import RunEventType
 from .runs.schemas import RunCasesRequest
 from .targets import TargetCreate, TargetPatch
 from .tool_results import SampleCreate, SamplePatch
@@ -103,6 +104,19 @@ async def create_target(request: Request, value: TargetCreate) -> object:
     return await services(request).targets.create(value)
 
 
+@router.get("/targets/schema")
+async def get_target_schema(
+    request: Request,
+    driver_type: str | None = None,
+) -> object:
+    return services(request).targets.schema(driver_type)
+
+
+@router.get("/driver-types")
+async def list_driver_types(request: Request) -> object:
+    return services(request).targets.list_driver_types()
+
+
 @router.get("/targets/{target_id}")
 async def get_target(request: Request, target_id: str) -> object:
     return await services(request).targets.get(target_id)
@@ -144,6 +158,11 @@ async def list_execution_profiles(
 @router.post("/execution-profiles", status_code=status.HTTP_201_CREATED)
 async def create_execution_profile(request: Request, value: ProfileCreate) -> object:
     return await services(request).profiles.create(value)
+
+
+@router.get("/execution-profiles/schema")
+async def get_execution_profile_schema() -> dict[str, object]:
+    return ProfileCreate.model_json_schema()
 
 
 @router.get("/execution-profiles/{profile_id}")
@@ -190,6 +209,11 @@ async def create_sample(request: Request, value: SampleCreate) -> object:
     return await services(request).samples.create(value)
 
 
+@router.get("/samples/schema")
+async def get_sample_schema() -> dict[str, object]:
+    return SampleCreate.model_json_schema()
+
+
 @router.get("/samples/{sample_id}")
 async def get_sample(request: Request, sample_id: str) -> object:
     return await services(request).samples.get(sample_id)
@@ -224,6 +248,11 @@ async def run_cases(request: Request, value: RunCasesRequest) -> object:
     return await services(request).runs.run_cases(value)
 
 
+@router.get("/runs/schema")
+async def get_run_cases_schema() -> dict[str, object]:
+    return RunCasesRequest.model_json_schema()
+
+
 @router.get("/runs")
 async def list_runs(
     request: Request,
@@ -255,6 +284,22 @@ async def list_case_runs(
 @router.get("/case-runs/{case_run_id}")
 async def get_case_run(request: Request, case_run_id: str) -> object:
     return await services(request).runs.get_case_run(case_run_id)
+
+
+@router.get("/case-runs/{case_run_id}/events")
+async def list_case_run_events(
+    request: Request,
+    case_run_id: str,
+    event_types: Annotated[list[RunEventType] | None, Query()] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> object:
+    return await services(request).runs.list_case_run_events(
+        case_run_id,
+        event_types=event_types,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.put("/case-runs/{case_run_id}/external-verdict")

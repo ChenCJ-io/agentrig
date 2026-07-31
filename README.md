@@ -89,6 +89,12 @@ subprocess_allowlist = []
 Target 和模型凭据只保存 `env:VARIABLE_NAME` 引用，不接受明文 Key。Real Tool 还需要部署
 allowlist、ExecutionProfile Provider 链和用户授权同时成立。
 
+本地 ACP Target 的启动脚本必须先由部署管理员加入 `subprocess_allowlist`。编码 Agent
+可通过 MCP 的 `list_driver_types` 查看 Driver 是否已部署就绪，再用
+`get_target_schema(driver_type="acp")` 获取完整 options Schema 和无凭据示例。
+`check_target` 会检查 command、cwd、allowlist、Secret 引用和隔离配置，并实际完成一次
+不发送 prompt 的 ACP initialize/session 探针。
+
 如启用访问鉴权，先设置实际 Token，再在配置中引用：
 
 ```bash

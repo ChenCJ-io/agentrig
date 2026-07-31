@@ -38,6 +38,11 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return dump_model(await invoke(services.samples.get(sample_id)))
 
     @server.tool()
+    def get_sample_schema() -> dict[str, Any]:
+        """返回 Sample 草稿写入 JSON Schema；批准/停用仍只能由人工 Web/HTTP 完成。"""
+        return SampleCreate.model_json_schema()
+
+    @server.tool()
     async def create_sample(value: SampleCreate) -> dict[str, Any]:
         """直接创建草稿，或用 Real Tool 的 source_tool_call_id 显式创建草稿。"""
         return dump_model(await invoke(services.samples.create(value)))

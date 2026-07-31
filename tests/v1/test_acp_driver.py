@@ -16,6 +16,13 @@ from agentrig.targets.drivers import (
 )
 
 
+def _make_executable(path: Path) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\nexit 0\n")
+    path.chmod(0o700)
+    return str(path)
+
+
 class _FakeConnection:
     def __init__(self, client: Any) -> None:
         self.client = client
@@ -125,7 +132,8 @@ async def test_acp_driver_injects_proxy_and_normalizes_session_updates(
         "agentrig.targets.drivers.acp.acp.spawn_agent_process",
         spawn,
     )
-    executable = "/opt/goose/run-acp.sh"
+    goose_root = tmp_path / "goose"
+    executable = _make_executable(goose_root / "run-acp.sh")
     isolation_root = tmp_path / "case-runtimes"
     driver = AcpDriver(executable_allowlist=[executable])
     session = await driver.prepare(
@@ -134,7 +142,7 @@ async def test_acp_driver_injects_proxy_and_normalizes_session_updates(
             target={
                 "options": {
                     "command": [executable, "--test"],
-                    "cwd": "/opt/goose",
+                    "cwd": str(goose_root),
                     "session_cwd": "/workspace",
                     "credential_env": "DEEPSEEK_API_KEY",
                     "env": {
@@ -158,7 +166,7 @@ async def test_acp_driver_injects_proxy_and_normalizes_session_updates(
     assert captured["command"] == executable
     assert captured["args"] == ("--test",)
     assert captured["env"]["DEEPSEEK_API_KEY"] == "test-secret"
-    assert captured["cwd"] == "/opt/goose"
+    assert captured["cwd"] == str(goose_root)
     assert Path(captured["env"]["GOOSE_RUNTIME_DIR"]).is_dir()
     assert [event.type for event in events] == [
         DriverEventType.REQUEST_STARTED,
@@ -211,7 +219,7 @@ async def test_acp_driver_removes_isolation_dir_when_spawn_fails(
     monkeypatch: Any,
     tmp_path: Path,
 ) -> None:
-    executable = "/opt/goose/run-acp.sh"
+    executable = _make_executable(tmp_path / "run-acp.sh")
     isolation_root = tmp_path / "case-runtimes"
 
     def spawn(*args: Any, **kwargs: Any) -> Any:
@@ -247,7 +255,7 @@ async def test_acp_driver_removes_isolation_dir_when_shutdown_fails(
     tmp_path: Path,
 ) -> None:
     captured: dict[str, _FakeManager] = {}
-    executable = "/opt/goose/run-acp.sh"
+    executable = _make_executable(tmp_path / "run-acp.sh")
     isolation_root = tmp_path / "case-runtimes"
 
     def spawn(client: Any, *args: Any, **kwargs: Any) -> _FakeManager:

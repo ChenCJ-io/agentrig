@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import re
 import shutil
 import time
 from collections.abc import AsyncIterator
@@ -14,6 +16,7 @@ import acp
 from acp import schema as acp_schema
 
 from ...identifiers import new_id
+from ..driver_schemas import AcpTargetOptions
 from .base import (
     DriverCapabilities,
     DriverEvent,
@@ -106,7 +109,9 @@ class AcpDriver:
     """启动一个 stdio ACP Agent，并把会话更新归一为 AgentRig 事件。"""
 
     def __init__(self, *, executable_allowlist: list[str]) -> None:
-        self._allowlist = set(executable_allowlist)
+        self._allowlist = {
+            Path(value).expanduser().resolve() for value in executable_allowlist
+        }
 
     def capabilities(self) -> DriverCapabilities:
         return DriverCapabilities(
@@ -119,37 +124,72 @@ class AcpDriver:
             tool_proxy_injection=True,
         )
 
-    async def prepare(self, context: DriverPrepareContext) -> DriverSession:
-        options = dict(context.target.get("options") or {})
-        command = options.get("command")
-        if not isinstance(command, list) or not command:
-            raise ValueError("acp target options.command must be a non-empty list")
-        arguments = [str(item) for item in command]
-        executable = arguments[0]
+    def validate_configuration(
+        self,
+        options: dict[str, Any],
+        *,
+        secret_configured: bool,
+    ) -> None:
+        """静态检查 ACP 启动配置，不启动进程或模型。"""
+
+        parsed = AcpTargetOptions.model_validate(options)
+        if any(not item.strip() for item in parsed.command):
+            raise ValueError("acp target options.command items must be non-empty strings")
+
+        cwd = self._resolved_cwd(parsed.cwd)
+        if parsed.cwd is not None and not cwd.is_dir():
+            raise ValueError(f"acp target cwd is not a directory: {cwd}")
+        executable = self._resolved_executable(parsed.command[0], cwd=cwd)
         if executable not in self._allowlist:
             raise PermissionError(
-                "ACP executable is not in the deployment subprocess allowlist"
+                "ACP executable is not permitted by deployment "
+                f"subprocess_allowlist: {executable}"
             )
+        if not executable.is_file():
+            raise ValueError(f"ACP executable does not exist: {executable}")
+        if not os.access(executable, os.X_OK):
+            raise PermissionError(f"ACP executable is not executable: {executable}")
 
-        permission_mode = str(options.get("permission_mode") or "deny")
-        if permission_mode not in {"deny", "allow_once"}:
-            raise ValueError("acp target permission_mode must be deny or allow_once")
+        if parsed.credential_env is not None:
+            self._validate_env_name(parsed.credential_env, field="credential_env")
+            if not secret_configured:
+                raise ValueError(
+                    "acp target credential_env requires target secret_ref"
+                )
+        elif secret_configured:
+            raise ValueError(
+                "acp target secret_ref requires options.credential_env"
+            )
+        for name in parsed.env:
+            self._validate_env_name(name, field="env")
+
+        has_isolation_root = parsed.isolation_root is not None
+        has_isolation_env = parsed.isolation_env is not None
+        if has_isolation_root != has_isolation_env:
+            raise ValueError(
+                "acp target isolation_root and isolation_env must be configured together"
+            )
+        if parsed.isolation_env is not None:
+            self._validate_env_name(parsed.isolation_env, field="isolation_env")
+
+    async def prepare(self, context: DriverPrepareContext) -> DriverSession:
+        options = dict(context.target.get("options") or {})
+        self.validate_configuration(
+            options,
+            secret_configured=context.secret_value is not None,
+        )
+        parsed = AcpTargetOptions.model_validate(options)
+        arguments = parsed.command
+        executable = arguments[0]
+        permission_mode = parsed.permission_mode
         client = _AcpClient(permission_mode=permission_mode)
-        environment = {
-            str(key): str(value)
-            for key, value in dict(options.get("env") or {}).items()
-        }
-        credential_env = options.get("credential_env")
+        environment = dict(parsed.env)
+        credential_env = parsed.credential_env
         if credential_env is not None:
-            if not isinstance(credential_env, str) or not credential_env:
-                raise ValueError("acp target credential_env must be a non-empty string")
-            if context.secret_value is None:
-                raise ValueError("acp target credential_env requires target secret_ref")
+            assert context.secret_value is not None
             environment[credential_env] = context.secret_value
 
         shutdown_timeout = float(options.get("shutdown_timeout_seconds") or 2.0)
-        if shutdown_timeout <= 0:
-            raise ValueError("acp target shutdown_timeout_seconds must be positive")
         isolation_dir = self._prepare_isolation_dir(context, options, environment)
         manager: Any | None = None
         entered = False
@@ -160,7 +200,7 @@ class AcpDriver:
                 executable,
                 *arguments[1:],
                 env=environment,
-                cwd=options.get("cwd"),
+                cwd=parsed.cwd,
                 transport_kwargs={"shutdown_timeout": shutdown_timeout},
             )
             connection, process = await manager.__aenter__()
@@ -236,6 +276,12 @@ class AcpDriver:
                 "shutdown_timeout_seconds": shutdown_timeout,
             },
         )
+
+    async def probe(self, context: DriverPrepareContext) -> None:
+        """完成 ACP initialize/session/new/close，不向模型发送 prompt。"""
+
+        session = await self.prepare(context)
+        await self.close(session)
 
     async def send_user_message(
         self,
@@ -437,6 +483,31 @@ class AcpDriver:
         isolation_dir.mkdir(parents=False, exist_ok=False)
         environment[isolation_env] = str(isolation_dir)
         return isolation_dir
+
+    @staticmethod
+    def _resolved_cwd(value: str | None) -> Path:
+        return (
+            Path(value).expanduser().resolve()
+            if value is not None
+            else Path.cwd().resolve()
+        )
+
+    @staticmethod
+    def _resolved_executable(value: str, *, cwd: Path) -> Path:
+        executable = Path(value).expanduser()
+        return (
+            executable.resolve()
+            if executable.is_absolute()
+            else (cwd / executable).resolve()
+        )
+
+    @staticmethod
+    def _validate_env_name(value: str, *, field: str) -> None:
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) is None:
+            raise ValueError(
+                f"acp target {field} contains an invalid environment variable name: "
+                f"{value}"
+            )
 
     @staticmethod
     def _cleanup_isolation_dir(isolation_dir: Path | None) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from ..evaluations.models import EvaluationOutcome
 from .executor import CaseExecutor
 from .models import CaseRunStatus, RunStatus
 from .repository import RunRepository
@@ -77,6 +78,7 @@ class RunScheduler:
                         await self._runs.set_case_run_status(
                             case_run_id,
                             CaseRunStatus.CANCELLED,
+                            evaluation_state=EvaluationOutcome.INCONCLUSIVE,
                             error_code="cancelled",
                             error_message="run cancelled before case execution started",
                         )

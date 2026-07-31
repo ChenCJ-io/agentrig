@@ -642,7 +642,12 @@ function RunSummary({ run }: { run?: Run }) {
   if (!run) return <Panel><Empty>正在读取 Run…</Empty></Panel>;
   return (
     <div className={styles.stats}>
-      <StatCard label="状态" value={run.status} meta={shortId(run.id)} accent="blue" />
+      <StatCard
+        label="调度状态"
+        value={run.status}
+        meta={run.failed_count ? `${run.failed_count} execution failed` : shortId(run.id)}
+        accent={run.failed_count ? "coral" : "blue"}
+      />
       <StatCard label="已完成" value={run.completed_count} meta={`共 ${run.total_count}`} accent="green" />
       <StatCard label="失败" value={run.failed_count} meta="execution failed" accent="coral" />
       <StatCard label="跳过" value={run.skipped_count} meta={`${run.cancelled_count} cancelled`} accent="amber" />
@@ -785,7 +790,12 @@ function RunTable({
           {runs.map((item) => (
             <tr key={item.id}>
               <td><code>{shortId(item.id)}</code></td>
-              <td><Badge tone={toneForStatus(item.status)}>{item.status}</Badge></td>
+              <td>
+                <Badge tone={toneForRun(item)}>
+                  {item.status}
+                  {item.failed_count ? ` · ${item.failed_count} failed` : ""}
+                </Badge>
+              </td>
               <td>{item.resolved_case_ids.length}</td>
               <td>{item.completed_count + item.failed_count + item.skipped_count + item.cancelled_count} / {item.total_count}</td>
               <td>{formatDate(item.created_at)}</td>
@@ -854,7 +864,12 @@ function formatDate(value: string): string {
 
 function toneForStatus(status: string): Tone {
   if (["approved", "pass", "completed", "reachable"].includes(status)) return "success";
-  if (["failed", "fail", "rejected", "disabled", "cancelled"].includes(status)) return "danger";
+  if (["failed", "fail", "rejected", "disabled", "cancelled", "evaluation_error"].includes(status)) return "danger";
   if (["running", "queued", "draft", "awaiting_verdict", "inconclusive"].includes(status)) return "warning";
   return "neutral";
+}
+
+function toneForRun(run: Run): Tone {
+  if (run.failed_count) return "danger";
+  return toneForStatus(run.status);
 }

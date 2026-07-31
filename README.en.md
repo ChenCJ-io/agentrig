@@ -62,6 +62,13 @@ Codex MCP configuration:
 url = "http://127.0.0.1:8000/mcp/"
 ```
 
+A local ACP launcher must first be included in the deployment
+`subprocess_allowlist`. Coding agents can call `list_driver_types` to check deployment
+readiness and `get_target_schema(driver_type="acp")` for the complete options schema and
+a secret-free example. `check_target` validates command, cwd, allowlist, Secret
+references, and isolation settings, then performs an ACP initialize/session probe without
+sending a prompt.
+
 For a shared deployment, keep the access token in an environment variable and configure only
 its reference:
 

@@ -3,11 +3,13 @@
 from .acp import AcpDriver
 from .base import (
     AgentDriver,
+    ConfigurableAgentDriver,
     DriverCapabilities,
     DriverEvent,
     DriverEventType,
     DriverPrepareContext,
     DriverSession,
+    ProbeableAgentDriver,
     ToolCall,
     ToolResult,
 )
@@ -20,6 +22,7 @@ from .subprocess import SubprocessDriver
 __all__ = [
     "AcpDriver",
     "AgentDriver",
+    "ConfigurableAgentDriver",
     "DriverCapabilities",
     "DriverEvent",
     "DriverEventType",
@@ -29,6 +32,7 @@ __all__ = [
     "HttpSseDriver",
     "OpenAICompatibleDriver",
     "PixcakeHttpSseDriver",
+    "ProbeableAgentDriver",
     "SubprocessDriver",
     "ToolCall",
     "ToolResult",

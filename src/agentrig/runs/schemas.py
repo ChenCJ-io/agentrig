@@ -144,6 +144,13 @@ class RunEvent(BaseModel):
     created_at: datetime
 
 
+class RunEventPage(BaseModel):
+    items: list[RunEvent]
+    total: int
+    limit: int
+    offset: int
+
+
 class CaseRunDetail(CaseRunSummary):
     case_snapshot: dict[str, Any]
     target_snapshot: dict[str, Any]
