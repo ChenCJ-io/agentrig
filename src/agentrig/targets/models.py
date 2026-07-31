@@ -4,6 +4,7 @@ from enum import StrEnum
 
 
 class DriverType(StrEnum):
+    ACP = "acp"
     HTTP_SSE = "http_sse"
     PIXCAKE_HTTP_SSE = "pixcake_http_sse"
     OPENAI_COMPATIBLE = "openai_compatible"

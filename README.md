@@ -20,9 +20,10 @@ CaseRun 后调用 `submit_external_verdict`。
 ## 已实现能力
 
 - 单用例、批量、多版本、重复和双 Target A/B 共用一个异步 `run_cases`。
-- HTTP/SSE、Pixcake HTTP/SSE、OpenAI-compatible、allowlisted Python Driver，
-  以及实验性 JSONL subprocess Driver。
+- stdio ACP（官方 Python SDK）、HTTP/SSE、Pixcake HTTP/SSE、OpenAI-compatible、
+  allowlisted Python Driver，以及实验性 JSONL subprocess Driver。
 - controlled、CaseRun 级 MCP proxy、observe-only 三种工具控制方式。
+- ACP Target 可按 CaseRun 注入 MCP Proxy，并隔离 Agent 的运行目录、会话数据和日志。
 - Fixture → Sample → Simulation Curator → Real Tool 可配置 Provider 顺序。
 - Rule、Evidence Judge、External Controller 分别存档，主评判器决定当前状态。
 - SQLite / PostgreSQL async SQLAlchemy、11 张核心表、Alembic 迁移和运行快照。

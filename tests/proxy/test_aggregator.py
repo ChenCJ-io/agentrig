@@ -103,3 +103,115 @@ async def test_scoped_call_uses_case_provider_and_preserves_output_schema(
 
     assert result.isError is False
     assert result.structuredContent == {"source": "case-scope"}
+
+
+async def test_fixture_only_scope_exposes_tool_without_real_backend(
+    monkeypatch: Any,
+) -> None:
+    class Scope:
+        def declared_tools(self) -> list[dict[str, Any]]:
+            return []
+
+        def all_fixtures(self) -> list[dict[str, Any]]:
+            return [
+                {
+                    "tool_name": "get_weather",
+                    "match_arguments": {"city": "Shanghai"},
+                    "result": {
+                        "city": "Shanghai",
+                        "temperature": 26,
+                    },
+                }
+            ]
+
+        def current_fixture(self, name: str) -> dict[str, Any] | None:
+            return self.all_fixtures()[0] if name == "get_weather" else None
+
+        async def resolve(
+            self,
+            name: str,
+            arguments: dict[str, Any],
+            *,
+            result_schema: dict[str, Any] | None,
+        ) -> ToolResult:
+            assert name == "get_weather"
+            assert arguments == {"city": "Shanghai"}
+            assert result_schema is not None
+            assert result_schema["properties"]["temperature"] == {"type": "integer"}
+            return ToolResult(
+                tool_call_id="call_weather",
+                tool_name=name,
+                result={"city": "Shanghai", "temperature": 26},
+                source="fixture",
+            )
+
+    class Scopes:
+        def get(self, token: str) -> Scope | None:
+            return Scope() if token == "fixture-scope" else None
+
+    proxy = AgentRigProxy(
+        BackendRegistry(),
+        scope_registry=Scopes(),  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(proxy, "_scope_token", lambda: "fixture-scope")
+
+    tools = await proxy.list_tools()
+    result = await proxy.call_tool("get_weather", {"city": "Shanghai"})
+
+    assert len(tools) == 1
+    assert tools[0].name == "get_weather"
+    assert tools[0].inputSchema["required"] == ["city"]
+    assert result.isError is False
+    assert result.structuredContent == {"city": "Shanghai", "temperature": 26}
+
+
+async def test_scope_exposes_target_declared_tool_catalog(
+    monkeypatch: Any,
+) -> None:
+    class Scope:
+        def declared_tools(self) -> list[dict[str, Any]]:
+            return [
+                {
+                    "name": "get_exchange_rate",
+                    "description": "Return a currency exchange rate",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "base": {"type": "string"},
+                            "quote": {"type": "string"},
+                        },
+                        "required": ["base", "quote"],
+                    },
+                    "outputSchema": {
+                        "type": "object",
+                        "properties": {"rate": {"type": "number"}},
+                        "required": ["rate"],
+                    },
+                }
+            ]
+
+        def all_fixtures(self) -> list[dict[str, Any]]:
+            return []
+
+        def current_fixture(self, name: str) -> None:
+            del name
+
+    class Scopes:
+        def get(self, token: str) -> Scope | None:
+            return Scope() if token == "catalog-scope" else None
+
+    proxy = AgentRigProxy(
+        BackendRegistry(),
+        scope_registry=Scopes(),  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(proxy, "_scope_token", lambda: "catalog-scope")
+
+    tools = await proxy.list_tools()
+
+    assert len(tools) == 1
+    assert tools[0].name == "get_exchange_rate"
+    assert tools[0].outputSchema == {
+        "type": "object",
+        "properties": {"rate": {"type": "number"}},
+        "required": ["rate"],
+    }

@@ -36,6 +36,40 @@ class ProxyScope:
     def select_turn(self, position: int) -> None:
         self.turn_position = position
 
+    def all_fixtures(self) -> list[dict[str, Any]]:
+        """返回整条用例的 Fixture，供会话建立时生成工具目录。"""
+
+        return [
+            dict(fixture)
+            for turn in self.detail.case_snapshot["turns"]
+            for fixture in turn.get("fixtures", [])
+        ]
+
+    def declared_tools(self) -> list[dict[str, Any]]:
+        """返回 Target 声明的 MCP-native 工具目录。"""
+
+        value = dict(self.detail.target_snapshot.get("options") or {}).get(
+            "tool_catalog",
+            [],
+        )
+        if not isinstance(value, list):
+            raise RuntimeError("target options.tool_catalog must be a list")
+        if not all(isinstance(item, dict) for item in value):
+            raise RuntimeError("target options.tool_catalog items must be objects")
+        return [dict(item) for item in value]
+
+    def current_fixture(self, tool_name: str) -> dict[str, Any] | None:
+        """返回当前轮第一个同名 Fixture，用于推导工具结果 Schema。"""
+
+        return next(
+            (
+                dict(fixture)
+                for fixture in self._turn().get("fixtures", [])
+                if fixture.get("tool_name") == tool_name
+            ),
+            None,
+        )
+
     async def resolve(
         self,
         tool_name: str,

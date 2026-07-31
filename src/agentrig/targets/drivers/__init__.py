@@ -1,5 +1,6 @@
 """被测 Agent 协议 Driver。"""
 
+from .acp import AcpDriver
 from .base import (
     AgentDriver,
     DriverCapabilities,
@@ -17,6 +18,7 @@ from .registry import DriverRegistry
 from .subprocess import SubprocessDriver
 
 __all__ = [
+    "AcpDriver",
     "AgentDriver",
     "DriverCapabilities",
     "DriverEvent",

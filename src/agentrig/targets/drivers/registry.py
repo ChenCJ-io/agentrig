@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import cast
 
 from ...errors import AgentRigError, ErrorCode
+from .acp import AcpDriver
 from .base import AgentDriver, DriverCapabilities
 from .http_sse import HttpSseDriver
 from .openai_compatible import OpenAICompatibleDriver
@@ -24,12 +25,15 @@ class DriverRegistry:
         subprocess_allowlist: list[str] | None = None,
     ) -> None:
         self._factories: dict[str, DriverFactory] = {
+            "acp": lambda: AcpDriver(
+                executable_allowlist=self._subprocess_allowlist
+            ),
             "http_sse": HttpSseDriver,
             "pixcake_http_sse": PixcakeHttpSseDriver,
             "openai_compatible": OpenAICompatibleDriver,
         }
-        self._python_allowlist = set(python_allowlist or [])
         self._subprocess_allowlist = list(subprocess_allowlist or [])
+        self._python_allowlist = set(python_allowlist or [])
 
     def register(self, driver_type: str, factory: DriverFactory) -> None:
         self._factories[driver_type] = factory

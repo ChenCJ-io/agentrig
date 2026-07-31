@@ -23,9 +23,11 @@ own verdict after inspecting a CaseRun.
 
 - One asynchronous `run_cases` path for single cases, batches, versions, repetitions,
   and two-target A/B runs.
-- HTTP/SSE, Pixcake HTTP/SSE, OpenAI-compatible, allowlisted Python, and experimental
-  JSONL subprocess drivers.
+- Stdio ACP (official Python SDK), HTTP/SSE, Pixcake HTTP/SSE, OpenAI-compatible,
+  allowlisted Python, and experimental JSONL subprocess drivers.
 - Controlled, CaseRun-scoped MCP proxy, and observe-only tool modes.
+- ACP targets can receive a CaseRun-scoped MCP proxy with isolated runtime data,
+  sessions, logs, and workspaces.
 - Configurable Fixture → Sample → Simulation Curator → Real Tool provider order.
 - Separate Rule, Evidence Judge, and External Controller records.
 - Async SQLAlchemy for SQLite/PostgreSQL, an 11-table schema, Alembic migrations, and

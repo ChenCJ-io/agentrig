@@ -57,6 +57,11 @@ class ProxyCallingDriver:
         session: DriverSession,
         message: str,
     ) -> AsyncIterator[DriverEvent]:
+        yield DriverEvent(
+            type=DriverEventType.REQUEST_STARTED,
+            request_id="proxy-request-1",
+            request_kind="prompt",
+        )
         scope = self._scopes().get(str(session.state["scope_token"]))
         assert scope is not None
         result = await scope.resolve(
@@ -71,7 +76,14 @@ class ProxyCallingDriver:
         assert result.result == {"items": [{"id": "fixture-hit"}]}
         yield DriverEvent(
             type=DriverEventType.ASSISTANT_MESSAGE_COMPLETED,
+            request_id="proxy-request-1",
             text="proxy complete",
+        )
+        yield DriverEvent(
+            type=DriverEventType.REQUEST_COMPLETED,
+            request_id="proxy-request-1",
+            request_kind="prompt",
+            request_status="end_turn",
         )
 
     async def send_tool_results(
@@ -182,6 +194,15 @@ async def test_proxy_mode_uses_case_scoped_provider_chain_and_revokes_scope(
         ]
         assert len(proxy_events) == 3
         assert all(event.payload["via"] == "mcp_proxy" for event in proxy_events)
+        request_events = [
+            event
+            for event in detail.events
+            if event.event_type is RunEventType.DRIVER_REQUEST
+        ]
+        assert request_events[0].payload["phase"] == "started"
+        assert request_events[-1].payload["phase"] == "completed"
+        assert request_events[0].seq < proxy_events[0].seq
+        assert proxy_events[-1].seq < request_events[-1].seq
     finally:
         await services.close()
 

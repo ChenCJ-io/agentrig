@@ -323,171 +323,54 @@ class CaseExecutor:
         iterator_had_text_delta = False
         driver_error: AgentRigError | None = None
         iterator_error: Exception | None = None
-        events: list[DriverEvent] = []
         try:
             async for event in iterator:
                 self._check_cancel(cancel_event)
-                events.append(event)
-        except Exception as exc:
-            iterator_error = exc
-
-        for event in events:
-            self._check_cancel(cancel_event)
-            if event.type in {
-                DriverEventType.REQUEST_STARTED,
-                DriverEventType.REQUEST_COMPLETED,
-            }:
-                if event.type is DriverEventType.REQUEST_COMPLETED:
-                    await self._flush_assistant_text(
-                        detail=detail,
-                        turn=turn,
-                        memory_events=memory_events,
-                        pending_text_parts=pending_text_parts,
-                        pending_text_request_ids=pending_text_request_ids,
-                        pending_text_refusals=pending_text_refusals,
-                    )
-                payload: dict[str, Any] = {
-                    "turn_position": int(turn["position"]),
-                    "phase": (
-                        "started"
-                        if event.type is DriverEventType.REQUEST_STARTED
-                        else "completed"
-                    ),
-                    "request_id": event.request_id,
-                    "request_kind": event.request_kind,
-                }
-                if event.request_status is not None:
-                    payload["status"] = event.request_status
-                if event.duration_ms is not None:
-                    payload["duration_ms"] = event.duration_ms
-                if event.ttft_ms is not None:
-                    payload["ttft_ms"] = event.ttft_ms
-                memory_events.append(
-                    await self._recorder.record(
-                        detail.id,
-                        RunEventType.DRIVER_REQUEST,
-                        payload,
-                    )
-                )
-            elif event.type is DriverEventType.SESSION_STARTED:
-                if event.session_id:
+                if event.type in {
+                    DriverEventType.REQUEST_STARTED,
+                    DriverEventType.REQUEST_COMPLETED,
+                }:
+                    if event.type is DriverEventType.REQUEST_COMPLETED:
+                        await self._flush_assistant_text(
+                            detail=detail,
+                            turn=turn,
+                            memory_events=memory_events,
+                            pending_text_parts=pending_text_parts,
+                            pending_text_request_ids=pending_text_request_ids,
+                            pending_text_refusals=pending_text_refusals,
+                        )
+                    payload: dict[str, Any] = {
+                        "turn_position": int(turn["position"]),
+                        "phase": (
+                            "started"
+                            if event.type is DriverEventType.REQUEST_STARTED
+                            else "completed"
+                        ),
+                        "request_id": event.request_id,
+                        "request_kind": event.request_kind,
+                    }
+                    if event.request_status is not None:
+                        payload["status"] = event.request_status
+                    if event.duration_ms is not None:
+                        payload["duration_ms"] = event.duration_ms
+                    if event.ttft_ms is not None:
+                        payload["ttft_ms"] = event.ttft_ms
                     memory_events.append(
                         await self._recorder.record(
                             detail.id,
-                            RunEventType.DRIVER_SESSION,
-                            {
-                                "turn_position": int(turn["position"]),
-                                "session_id": event.session_id,
-                                **(
-                                    {"request_id": event.request_id}
-                                    if event.request_id
-                                    else {}
-                                ),
-                            },
+                            RunEventType.DRIVER_REQUEST,
+                            payload,
                         )
                     )
-            elif event.type is DriverEventType.ASSISTANT_TEXT_DELTA:
-                text = event.text or ""
-                text_parts.append(text)
-                pending_text_parts.append(text)
-                if event.request_id:
-                    pending_text_request_ids.append(event.request_id)
-                iterator_had_text_delta = iterator_had_text_delta or bool(text)
-                if text and not first_action:
-                    first_action.append("text")
-            elif event.type is DriverEventType.ASSISTANT_MESSAGE_COMPLETED:
-                if event.text and not iterator_had_text_delta:
-                    text_parts.append(event.text)
-                    pending_text_parts.append(event.text)
-                    if event.request_id:
-                        pending_text_request_ids.append(event.request_id)
-                if event.refusal:
-                    refused.append(True)
-                    pending_text_refusals.append(True)
-                if (event.text or event.refusal) and not first_action:
-                    first_action.append("refuse" if event.refusal else "text")
-            elif event.type is DriverEventType.USAGE:
-                await self._flush_assistant_text(
-                    detail=detail,
-                    turn=turn,
-                    memory_events=memory_events,
-                    pending_text_parts=pending_text_parts,
-                    pending_text_request_ids=pending_text_request_ids,
-                    pending_text_refusals=pending_text_refusals,
-                )
-                memory_events.append(
-                    await self._recorder.record(
-                        detail.id,
-                        RunEventType.USAGE,
-                        {
-                            "turn_position": int(turn["position"]),
-                            **event.usage,
-                        },
-                    )
-                )
-            elif event.type is DriverEventType.ERROR:
-                await self._flush_assistant_text(
-                    detail=detail,
-                    turn=turn,
-                    memory_events=memory_events,
-                    pending_text_parts=pending_text_parts,
-                    pending_text_request_ids=pending_text_request_ids,
-                    pending_text_refusals=pending_text_refusals,
-                )
-                driver_error = AgentRigError(
-                    ErrorCode.TARGET_UNREACHABLE,
-                    event.error or "driver returned an error",
-                    retryable=True,
-                )
-            elif event.type is DriverEventType.TOOL_CALLS:
-                await self._flush_assistant_text(
-                    detail=detail,
-                    turn=turn,
-                    memory_events=memory_events,
-                    pending_text_parts=pending_text_parts,
-                    pending_text_request_ids=pending_text_request_ids,
-                    pending_text_refusals=pending_text_refusals,
-                )
-                if event.tool_calls and not first_action:
-                    first_action.append("tool")
-                tool_call_count += len(event.tool_calls)
-                if tool_call_count > 50:
-                    raise AgentRigError(
-                        ErrorCode.VALIDATION_ERROR,
-                        "case run exceeded 50 tool calls",
-                    )
-                if tool_mode is ToolMode.CONTROLLED:
-                    for call in event.tool_calls:
-                        call_event = await self._recorder.record(
-                            detail.id,
-                            RunEventType.TOOL_CALL,
-                            {
-                                "turn_position": int(turn["position"]),
-                                "tool_call_id": call.id,
-                                "tool_name": call.name,
-                                "arguments": call.arguments,
-                                "result_schema": call.result_schema,
-                                **(
-                                    {"request_id": event.request_id}
-                                    if event.request_id
-                                    else {}
-                                ),
-                            },
-                        )
-                        memory_events.append(call_event)
-                        recorded_calls_to_resolve.append((call, call_event))
-                else:
-                    for call in event.tool_calls:
+                elif event.type is DriverEventType.SESSION_STARTED:
+                    if event.session_id:
                         memory_events.append(
                             await self._recorder.record(
                                 detail.id,
-                                RunEventType.TOOL_CALL,
+                                RunEventType.DRIVER_SESSION,
                                 {
                                     "turn_position": int(turn["position"]),
-                                    "tool_call_id": call.id,
-                                    "tool_name": call.name,
-                                    "arguments": call.arguments,
-                                    "observed_only": True,
+                                    "session_id": event.session_id,
                                     **(
                                         {"request_id": event.request_id}
                                         if event.request_id
@@ -496,6 +379,118 @@ class CaseExecutor:
                                 },
                             )
                         )
+                elif event.type is DriverEventType.ASSISTANT_TEXT_DELTA:
+                    text = event.text or ""
+                    text_parts.append(text)
+                    pending_text_parts.append(text)
+                    if event.request_id:
+                        pending_text_request_ids.append(event.request_id)
+                    iterator_had_text_delta = iterator_had_text_delta or bool(text)
+                    if text and not first_action:
+                        first_action.append("text")
+                elif event.type is DriverEventType.ASSISTANT_MESSAGE_COMPLETED:
+                    if event.text and not iterator_had_text_delta:
+                        text_parts.append(event.text)
+                        pending_text_parts.append(event.text)
+                        if event.request_id:
+                            pending_text_request_ids.append(event.request_id)
+                    if event.refusal:
+                        refused.append(True)
+                        pending_text_refusals.append(True)
+                    if (event.text or event.refusal) and not first_action:
+                        first_action.append("refuse" if event.refusal else "text")
+                elif event.type is DriverEventType.USAGE:
+                    await self._flush_assistant_text(
+                        detail=detail,
+                        turn=turn,
+                        memory_events=memory_events,
+                        pending_text_parts=pending_text_parts,
+                        pending_text_request_ids=pending_text_request_ids,
+                        pending_text_refusals=pending_text_refusals,
+                    )
+                    memory_events.append(
+                        await self._recorder.record(
+                            detail.id,
+                            RunEventType.USAGE,
+                            {
+                                "turn_position": int(turn["position"]),
+                                **event.usage,
+                            },
+                        )
+                    )
+                elif event.type is DriverEventType.ERROR:
+                    await self._flush_assistant_text(
+                        detail=detail,
+                        turn=turn,
+                        memory_events=memory_events,
+                        pending_text_parts=pending_text_parts,
+                        pending_text_request_ids=pending_text_request_ids,
+                        pending_text_refusals=pending_text_refusals,
+                    )
+                    driver_error = AgentRigError(
+                        ErrorCode.TARGET_UNREACHABLE,
+                        event.error or "driver returned an error",
+                        retryable=True,
+                    )
+                elif event.type is DriverEventType.TOOL_CALLS:
+                    await self._flush_assistant_text(
+                        detail=detail,
+                        turn=turn,
+                        memory_events=memory_events,
+                        pending_text_parts=pending_text_parts,
+                        pending_text_request_ids=pending_text_request_ids,
+                        pending_text_refusals=pending_text_refusals,
+                    )
+                    if event.tool_calls and not first_action:
+                        first_action.append("tool")
+                    tool_call_count += len(event.tool_calls)
+                    if tool_call_count > 50:
+                        raise AgentRigError(
+                            ErrorCode.VALIDATION_ERROR,
+                            "case run exceeded 50 tool calls",
+                        )
+                    if tool_mode is ToolMode.CONTROLLED:
+                        for call in event.tool_calls:
+                            call_event = await self._recorder.record(
+                                detail.id,
+                                RunEventType.TOOL_CALL,
+                                {
+                                    "turn_position": int(turn["position"]),
+                                    "tool_call_id": call.id,
+                                    "tool_name": call.name,
+                                    "arguments": call.arguments,
+                                    "result_schema": call.result_schema,
+                                    **(
+                                        {"request_id": event.request_id}
+                                        if event.request_id
+                                        else {}
+                                    ),
+                                },
+                            )
+                            memory_events.append(call_event)
+                            recorded_calls_to_resolve.append((call, call_event))
+                    elif tool_mode is ToolMode.OBSERVE_ONLY:
+                        for call in event.tool_calls:
+                            memory_events.append(
+                                await self._recorder.record(
+                                    detail.id,
+                                    RunEventType.TOOL_CALL,
+                                    {
+                                        "turn_position": int(turn["position"]),
+                                        "tool_call_id": call.id,
+                                        "tool_name": call.name,
+                                        "arguments": call.arguments,
+                                        "observed_only": True,
+                                        **(
+                                            {"request_id": event.request_id}
+                                            if event.request_id
+                                            else {}
+                                        ),
+                                    },
+                                )
+                            )
+        except Exception as exc:
+            iterator_error = exc
         await self._flush_assistant_text(
             detail=detail,
             turn=turn,
