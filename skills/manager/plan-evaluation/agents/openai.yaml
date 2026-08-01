@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Evaluation"
+  short_description: "Turn user goals into a validated AgentRig plan"
+  default_prompt: "Use $plan-evaluation to prepare a safe AgentRig evaluation plan."

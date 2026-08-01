@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [0.2.0a0] - 2026-08-01
+
+首个 V2 alpha：在保持 V1 Core 兼容的基础上加入智能评测助手和 AgentTeams 三 Agent 协作。
+
+### Added
+
+- 持久化 AssistantSession/Event/Turn、EvaluationPlan 与 AgentInvocation 六张 V2 表。
+- `/api/v2` 会话、事件流、计划状态机、协作健康和 Agent 调用接口，以及智能助手 Web 页面。
+- Manager、Simulation Curator、Evidence Judge 三角色 AgentTeams/Matrix Bridge 集成。
+- 三套最小权限角色 MCP、七项 AgentTeams Skill 和可构建的三角色部署包。
+- Run 终态通知、消息/结果幂等、断线恢复、角色令牌隔离和外部协作故障投影。
+
+### Changed
+
+- RunPlanner 增加无副作用预览与先暂存后调度能力，EvaluationPlan 提交复用同一规划路径。
+- Curator/Judge 通过稳定端口支持本地实现或 AgentTeams Worker，V1 Core 默认行为不变。
+- 数据库扩展为 17 张表，版本升级至 `0.2.0a0`。
+
 ## [0.1.0a1] - 2026-07-31
 
 第二个 V1 alpha：补齐 ACP/Goose 真实接入、部署预检、诊断证据和安全交付闭环。

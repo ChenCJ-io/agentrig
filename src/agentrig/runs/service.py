@@ -6,7 +6,7 @@ from ..errors import AgentRigError, ErrorCode
 from ..evaluations.schemas import EvaluationResult, ExternalVerdictSubmit
 from ..evaluations.service import EvaluationService
 from .models import RunEventType
-from .planner import RunPlanner
+from .planner import RunPlan, RunPlanner
 from .repository import RunRepository
 from .scheduler import RunScheduler
 from .schemas import (
@@ -15,6 +15,7 @@ from .schemas import (
     RunCasesRequest,
     RunEventPage,
     RunPage,
+    RunPreview,
     RunSubmitResult,
     RunView,
 )
@@ -35,13 +36,24 @@ class RunService:
         self._evaluations = evaluations
 
     async def run_cases(self, request: RunCasesRequest) -> RunSubmitResult:
-        plan = await self._planner.plan(request)
+        plan = await self.stage_run_cases(request)
+        self.start_staged_run(plan)
+        return plan.response
+
+    async def stage_run_cases(self, request: RunCasesRequest) -> RunPlan:
+        """落库 Run/CaseRun 但暂不调度，供 V2 先建立 Plan→Run 关联。"""
+
+        return await self._planner.plan(request)
+
+    def start_staged_run(self, plan: RunPlan) -> None:
         self._scheduler.submit(
             plan.response.run_id,
             plan.executable_case_run_ids,
             concurrency=plan.concurrency,
         )
-        return plan.response
+
+    async def preview_run_cases(self, request: RunCasesRequest) -> RunPreview:
+        return await self._planner.preview(request)
 
     async def get_run(self, run_id: str) -> RunView:
         run = await self._repository.get_run(run_id)

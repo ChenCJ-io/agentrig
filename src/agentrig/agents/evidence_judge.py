@@ -13,6 +13,7 @@ from ..infrastructure.secrets import SecretResolver
 from ..profiles.schemas import ModelConfigRef
 from ..runs.schemas import CaseRunDetail
 from .model_client import ModelClient
+from .ports import AgentTaskContext
 from .schemas import JudgeOutput
 
 PROMPT_VERSION = "evidence_judge.v1"
@@ -30,7 +31,9 @@ class EvidenceJudge:
         rule_result: EvaluationResult | None,
         model_config: ModelConfigRef,
         timeout_seconds: float,
+        context: AgentTaskContext | None = None,
     ) -> EvaluationDraft:
+        del context
         valid_event_ids = {event.id for event in detail.events}
         feedback: list[str] = []
         last_metadata: dict[str, Any] = {}

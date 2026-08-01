@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execute Evaluation Plan"
+  short_description: "Confirm and submit an AgentRig evaluation plan"
+  default_prompt: "Use $execute-evaluation-plan to confirm and submit this AgentRig plan."

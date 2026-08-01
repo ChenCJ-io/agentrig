@@ -16,7 +16,7 @@ agentrig.toml 示例::
 """
 from __future__ import annotations
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -90,6 +90,56 @@ class ProxyConfig(BaseSettings):
     public_url: str = ""
 
 
+class AssistantConfig(BaseSettings):
+    """V2 助手事件流与确认策略的部署上限。"""
+
+    sse_poll_interval_seconds: float = 0.5
+    sse_heartbeat_seconds: float = 15.0
+    max_message_chars: int = 100_000
+
+
+class MatrixConfig(BaseSettings):
+    """AgentRig Bridge 使用的 Matrix Client-Server API 配置。"""
+
+    homeserver_url: str = ""
+    access_token_ref: str | None = None
+    bridge_user_id: str = ""
+    manager_user_id: str = ""
+    curator_user_id: str = ""
+    judge_user_id: str = ""
+    default_worker_room_id: str = ""
+    request_timeout_seconds: float = 15.0
+
+    @field_validator("access_token_ref")
+    @classmethod
+    def token_is_an_environment_reference(cls, value: str | None) -> str | None:
+        if value is not None and (not value.startswith("env:") or value == "env:"):
+            raise ValueError("access_token_ref must use env:VARIABLE_NAME")
+        return value
+
+
+class AgentTeamsConfig(BaseSettings):
+    """外部 AgentTeams/Matrix 集成开关；默认关闭以保持 V1 自包含。"""
+
+    enabled: bool = False
+    health_url: str = ""
+    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
+    manager_mcp_token_ref: str | None = None
+    curator_mcp_token_ref: str | None = None
+    judge_mcp_token_ref: str | None = None
+
+    @field_validator(
+        "manager_mcp_token_ref",
+        "curator_mcp_token_ref",
+        "judge_mcp_token_ref",
+    )
+    @classmethod
+    def tokens_are_environment_references(cls, value: str | None) -> str | None:
+        if value is not None and (not value.startswith("env:") or value == "env:"):
+            raise ValueError("role MCP token references must use env:VARIABLE_NAME")
+        return value
+
+
 class Settings(BaseSettings):
     """顶层配置：构造参数 > 环境变量 > TOML > 默认值。
 
@@ -109,6 +159,8 @@ class Settings(BaseSettings):
     execution: ExecutionConfig = ExecutionConfig()
     evidence: EvidenceConfig = EvidenceConfig()
     proxy: ProxyConfig = ProxyConfig()
+    assistant: AssistantConfig = Field(default_factory=AssistantConfig)
+    agentteams: AgentTeamsConfig = Field(default_factory=AgentTeamsConfig)
 
     @classmethod
     def settings_customise_sources(

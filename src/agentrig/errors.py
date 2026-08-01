@@ -24,6 +24,16 @@ class ErrorCode(StrEnum):
     INTERRUPTED = "interrupted"
     EVALUATION_ERROR = "evaluation_error"
     CONFLICT = "conflict"
+    AGENTTEAMS_UNAVAILABLE = "agentteams_unavailable"
+    MATRIX_DELIVERY_FAILED = "matrix_delivery_failed"
+    ASSISTANT_TURN_CONFLICT = "assistant_turn_conflict"
+    PLAN_CONFIRMATION_REQUIRED = "plan_confirmation_required"
+    PLAN_STALE = "plan_stale"
+    PLAN_ALREADY_SUBMITTED = "plan_already_submitted"
+    AGENT_INVOCATION_NOT_READY = "agent_invocation_not_ready"
+    AGENT_INVOCATION_TIMED_OUT = "agent_invocation_timed_out"
+    AGENT_RESULT_INVALID = "agent_result_invalid"
+    AGENT_ROLE_FORBIDDEN = "agent_role_forbidden"
     INTERNAL_ERROR = "internal_error"
 
 

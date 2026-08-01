@@ -4,18 +4,20 @@
 
 > 面向 AI Agent 的 MCP 原生回归测试台。
 
-AgentRig V1 由 Codex、Claude Code 或人工控制评测：控制方通过原子 MCP Tools 选择/构建
-用例、提交异步 Run、读取脱敏证据，并可回写自己的判定。AgentRig 负责确定性执行、
-工具结果控制、证据归档和多评判器存档。
+AgentRig V2 在 V1 确定性评测内核上增加智能评测助手：AgentTeams Manager 把自然语言目标
+整理成可预览、确认和幂等提交的 EvaluationPlan；Simulation Curator 与 Evidence Judge
+作为两个职责隔离的 Worker，在准确的执行节点接受任务。AgentRig 仍负责运行、权限、证据和
+评判事实，AgentTeams 负责多 Agent 协作，不替代 V1 Core。
 
-V1 内置两个可选智能 Agent：
+两个专业 Agent 既可使用 V1 本地模型适配器，也可切换到 AgentTeams Worker：
 
 - **Simulation Curator**：在 Fixture 和 approved Sample 未命中时，根据当前 CaseRun
   上下文生成并校验工具结果。
 - **Evidence Judge**：根据 rubric 和已存档证据输出 pass、fail 或 inconclusive。
 
-两者都不是必需项。Core 模式无需模型 Key；控制方也可以关闭 Evidence Judge，自行读取
-CaseRun 后调用 `submit_external_verdict`。
+AgentTeams 默认关闭，因此原有 V1 HTTP、MCP、Web 和 CLI 行为保持兼容。Core 模式无需模型
+Key；控制方也可以关闭 Evidence Judge，自行读取 CaseRun 后调用
+`submit_external_verdict`。
 
 ## 已实现能力
 
@@ -26,8 +28,10 @@ CaseRun 后调用 `submit_external_verdict`。
 - ACP Target 可按 CaseRun 注入 MCP Proxy，并隔离 Agent 的运行目录、会话数据和日志。
 - Fixture → Sample → Simulation Curator → Real Tool 可配置 Provider 顺序。
 - Rule、Evidence Judge、External Controller 分别存档，主评判器决定当前状态。
-- SQLite / PostgreSQL async SQLAlchemy、11 张核心表、Alembic 迁移和运行快照。
-- HTTP API、Streamable HTTP MCP、React 管理界面和三份 Codex/CC Skill。
+- SQLite / PostgreSQL async SQLAlchemy、17 张表、Alembic 迁移和运行快照。
+- V2 会话事件流、EvaluationPlan 状态机、AgentInvocation 生命周期与断线恢复。
+- Matrix Bridge、AgentTeams 三角色部署包和 Manager/Worker 独立 MCP 权限面。
+- HTTP/SSE API、Streamable HTTP MCP、React 管理界面和 10 份控制/协作 Skill。
 
 ## 快速开始
 
@@ -46,7 +50,10 @@ uv run agentrig serve
 |---|---|
 | Web | `http://127.0.0.1:8000/` |
 | HTTP API | `http://127.0.0.1:8000/api/` |
+| V2 助手 API | `http://127.0.0.1:8000/api/v2/` |
 | 编码 Agent MCP | `http://127.0.0.1:8000/mcp/` |
+| Manager MCP | `http://127.0.0.1:8000/mcp/manager/` |
+| Curator / Judge MCP | `http://127.0.0.1:8000/mcp/curator/`、`/mcp/judge/` |
 | 被测 Agent 工具 Proxy | `http://127.0.0.1:8000/proxy` |
 
 Codex MCP 配置：
@@ -133,12 +140,13 @@ cd web && npm run typecheck && npm run build
 ```
 
 架构、接口边界和模块说明见 [docs](./docs/README.md)，编码 Agent 工作流见
-[skills](./skills/README.md)。
+[skills](./skills/README.md)。AgentTeams 比赛环境配置、三角色包构建和部署步骤见
+[deploy/agentteams](./deploy/agentteams/README.md)。
 
 ## 状态
 
-当前版本为 `0.1.0a1`。V1 核心链路已实现，仍处于 Alpha 阶段，不建议直接作为无人值守的
-生产发布门禁。
+当前版本为 `0.2.0a0`。V2 实现已落地，仍处于 Alpha 阶段；真实 AgentTeams、Matrix 和
+云服务联调需要由部署环境提供凭据，不建议直接作为无人值守的生产发布门禁。
 
 ## License
 

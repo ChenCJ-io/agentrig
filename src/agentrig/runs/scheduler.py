@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Awaitable, Callable
 
 from ..evaluations.models import EvaluationOutcome
 from .executor import CaseExecutor
 from .models import CaseRunStatus, RunStatus
 from .repository import RunRepository
+from .schemas import RunView
+
+logger = logging.getLogger("agentrig.runs.scheduler")
+RunCompletionListener = Callable[[RunView], Awaitable[None]]
 
 
 class RunScheduler:
@@ -16,6 +22,10 @@ class RunScheduler:
         self._executor = executor
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._cancel_events: dict[str, asyncio.Event] = {}
+        self._completion_listeners: list[RunCompletionListener] = []
+
+    def add_completion_listener(self, listener: RunCompletionListener) -> None:
+        self._completion_listeners.append(listener)
 
     def submit(
         self,
@@ -92,6 +102,7 @@ class RunScheduler:
                 run_id,
                 RunStatus.CANCELLED if cancel_event.is_set() else RunStatus.COMPLETED,
             )
+            await self._notify_completion(run_id)
         except Exception as exc:
             await self._runs.set_run_status(
                 run_id,
@@ -99,6 +110,16 @@ class RunScheduler:
                 error_code="internal_error",
                 error_message=str(exc),
             )
+            await self._notify_completion(run_id)
+
+    async def _notify_completion(self, run_id: str) -> None:
+        run = await self._runs.get_run(run_id)
+        assert run is not None
+        for listener in self._completion_listeners:
+            try:
+                await listener(run)
+            except Exception:
+                logger.exception("run completion listener failed for %s", run_id)
 
     def _cleanup(self, run_id: str) -> None:
         self._tasks.pop(run_id, None)

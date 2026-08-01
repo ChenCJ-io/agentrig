@@ -1,0 +1,4 @@
+interface:
+  display_name: "Configure Test Target"
+  short_description: "Configure and validate an AgentRig target safely"
+  default_prompt: "Use $configure-test-target to configure and validate this AgentRig target."

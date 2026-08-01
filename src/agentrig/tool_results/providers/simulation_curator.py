@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from ...agents.ports import AgentTaskContext, SimulationCuratorPort
 from ...agents.schemas import CuratorInput
-from ...agents.simulation_curator import SimulationCurator
 from ...profiles.schemas import ModelConfigRef
 from ..validator import ToolResultValidator
 from .base import ProviderContext, ProviderResponse, ProviderStatus
@@ -14,7 +14,7 @@ class SimulationCuratorProvider:
 
     def __init__(
         self,
-        curator: SimulationCurator,
+        curator: SimulationCuratorPort,
         *,
         model_config: ModelConfigRef,
         timeout_seconds: float,
@@ -43,6 +43,15 @@ class SimulationCuratorProvider:
                     ),
                     model_config=self._model_config,
                     timeout_seconds=self._timeout_seconds,
+                    context=(
+                        AgentTaskContext(
+                            run_id=context.run_id,
+                            case_run_id=context.case_run_id,
+                            tool_call_event_id=context.tool_call_event_id,
+                        )
+                        if context.run_id is not None
+                        else None
+                    ),
                 )
             except Exception as exc:
                 return ProviderResponse(

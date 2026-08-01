@@ -4,6 +4,7 @@ import {
   FileSearch,
   Gauge,
   ListChecks,
+  MessagesSquare,
   Settings2,
   Waypoints,
   TestTube2,
@@ -33,6 +34,7 @@ export interface ShellContext {
 }
 
 const evaluationItems: NavigationItem[] = [
+  { label: "智能评测助手", path: "/assistant", icon: MessagesSquare },
   { label: "评测总览", path: "/evaluation/overview", icon: Gauge },
   { label: "运行记录", path: "/evaluation/batches", icon: ListChecks },
   { label: "测试用例", path: "/evaluation/test-cases", icon: TestTube2 },
@@ -43,6 +45,7 @@ const evaluationItems: NavigationItem[] = [
 ];
 
 const titleMap: Array<[RegExp, Pick<ShellContext, "title" | "subtitle" | "icon">]> = [
+  [/^\/assistant/, { title: "智能评测助手", subtitle: "AgentTeams · V2", icon: MessagesSquare }],
   [/^\/evaluation\/batches\/[^/]+$/, { title: "Run Detail", subtitle: "CaseRun · evidence", icon: ListChecks }],
   [/^\/evaluation\/targets/, { title: "Targets", subtitle: "Driver · versions", icon: Waypoints }],
   [/^\/evaluation\/profiles/, { title: "Execution Profiles", subtitle: "Providers · evaluation", icon: Settings2 }],

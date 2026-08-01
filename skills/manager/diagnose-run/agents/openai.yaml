@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnose Run"
+  short_description: "Explain AgentRig run outcomes from stored evidence"
+  default_prompt: "Use $diagnose-run to explain this AgentRig run and its failures."

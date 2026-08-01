@@ -1,4 +1,4 @@
-"""AgentRig V1 的 11 张核心表。
+"""AgentRig V1 的 11 张核心表与 V2 的 6 张协作表。
 
 领域层只处理 Pydantic 对象；这些 ORM 类型仅由 infrastructure repository 使用。
 """
@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -293,3 +294,168 @@ class EvaluationORM(Base):
     )
 
     case_run: Mapped[CaseRunORM] = relationship(back_populates="evaluations")
+
+
+class AssistantSessionORM(Base):
+    __tablename__ = "assistant_sessions"
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(96), nullable=False, default="default", index=True
+    )
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    matrix_room_id: Mapped[str | None] = mapped_column(String(300), unique=True)
+    active_plan_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    last_event_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by: Mapped[str] = mapped_column(String(300), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class AssistantEventORM(Base):
+    __tablename__ = "assistant_events"
+    __table_args__ = (
+        UniqueConstraint("session_id", "seq"),
+        UniqueConstraint("session_id", "client_message_id"),
+        Index("ix_assistant_events_session_created", "session_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(300), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    turn_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    plan_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    run_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    case_run_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    invocation_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    client_message_id: Mapped[str | None] = mapped_column(String(128))
+    matrix_event_id: Mapped[str | None] = mapped_column(String(300), unique=True)
+    delivery_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    delivery_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class AssistantTurnORM(Base):
+    __tablename__ = "assistant_turns"
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    trigger_event_id: Mapped[str] = mapped_column(String(96), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    matrix_request_event_id: Mapped[str | None] = mapped_column(String(300), unique=True)
+    matrix_response_event_id: Mapped[str | None] = mapped_column(String(300), unique=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    model_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class EvaluationPlanORM(Base):
+    __tablename__ = "evaluation_plans"
+    __table_args__ = (UniqueConstraint("session_id", "revision"),)
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_turn_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    parent_plan_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    goal: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    selection: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    reasoning_summary: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    preview: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    confirmation: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    selection_hash: Mapped[str | None] = mapped_column(String(64))
+    submit_idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True)
+    run_id: Mapped[str | None] = mapped_column(String(96), unique=True, index=True)
+    last_error: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_by: Mapped[str] = mapped_column(String(300), nullable=False)
+    confirmed_by: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AgentInvocationORM(Base):
+    __tablename__ = "agent_invocations"
+    __table_args__ = (
+        UniqueConstraint("agent_role", "idempotency_key"),
+        Index("ix_agent_invocations_run_role", "run_id", "agent_role"),
+    )
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    agent_role: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    session_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    plan_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    run_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    case_run_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    tool_call_event_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    input_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    result_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    result_ref: Mapped[str | None] = mapped_column(String(300))
+    result_hash: Mapped[str | None] = mapped_column(String(64))
+    matrix_room_id: Mapped[str | None] = mapped_column(String(300))
+    request_event_id: Mapped[str | None] = mapped_column(String(300), unique=True)
+    response_event_id: Mapped[str | None] = mapped_column(String(300), unique=True)
+    assigned_agent: Mapped[str | None] = mapped_column(String(300))
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IntegrationCursorORM(Base):
+    __tablename__ = "integration_cursors"
+
+    integration: Mapped[str] = mapped_column(String(128), primary_key=True)
+    cursor: Mapped[str] = mapped_column(Text, nullable=False)
+    cursor_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSON, nullable=False, default=dict
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )

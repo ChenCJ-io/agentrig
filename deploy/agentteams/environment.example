@@ -1,0 +1,10 @@
+# AgentRig secrets. Generate different random values; never commit real values.
+AGENTRIG_ACCESS_TOKEN=replace-with-random-web-token
+AGENTRIG_MANAGER_MCP_TOKEN=replace-with-random-manager-token
+AGENTRIG_CURATOR_MCP_TOKEN=replace-with-random-curator-token
+AGENTRIG_JUDGE_MCP_TOKEN=replace-with-random-judge-token
+AGENTRIG_MATRIX_ACCESS_TOKEN=replace-with-bridge-matrix-token
+
+# AgentTeams/Higress owns the real model credential. This variable is consumed by
+# the official AgentTeams installer or Helm Secret, not by AgentRig Worker payloads.
+DASHSCOPE_API_KEY=replace-at-deploy-time

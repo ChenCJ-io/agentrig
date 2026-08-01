@@ -88,9 +88,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="topbar__utilities">
             <div className="runtime-state" title="当前控制台">
-              <span>V1 控制台</span>
+              <span>{pathname.startsWith("/assistant") ? "V2 协作模式" : "V1 控制台"}</span>
               <i aria-hidden="true" />
-              <strong>local</strong>
+              <strong>{pathname.startsWith("/assistant") ? "AgentTeams" : "local"}</strong>
             </div>
             <span className="topbar__divider" aria-hidden="true" />
             <div className="notification-menu">

@@ -66,7 +66,7 @@ def case_input(
     )
 
 
-async def test_schema_contains_exactly_the_v1_core_tables(database: Database) -> None:
+async def test_schema_contains_v1_core_and_v2_extension_tables(database: Database) -> None:
     async with database.engine.connect() as connection:
         names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
     assert names == {
@@ -81,6 +81,12 @@ async def test_schema_contains_exactly_the_v1_core_tables(database: Database) ->
         "case_runs",
         "run_events",
         "evaluations",
+        "assistant_sessions",
+        "assistant_events",
+        "assistant_turns",
+        "evaluation_plans",
+        "agent_invocations",
+        "integration_cursors",
     }
 
 

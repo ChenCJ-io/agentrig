@@ -7,6 +7,7 @@ import json
 from ..infrastructure.secrets import SecretResolver
 from ..profiles.schemas import ModelConfigRef
 from .model_client import ModelClient
+from .ports import AgentTaskContext
 from .schemas import CuratorCandidate, CuratorGeneration, CuratorInput
 
 PROMPT_VERSION = "simulation_curator.v1"
@@ -23,7 +24,9 @@ class SimulationCurator:
         *,
         model_config: ModelConfigRef,
         timeout_seconds: float,
+        context: AgentTaskContext | None = None,
     ) -> CuratorGeneration:
+        del context
         api_key = self._secrets.resolve(model_config.secret_ref)
         assert api_key is not None
         output = await self._client.generate_json(

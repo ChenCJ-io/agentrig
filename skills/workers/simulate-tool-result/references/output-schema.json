@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CuratorGeneration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidate", "prompt_version"],
+  "properties": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result"],
+      "properties": {
+        "result": {},
+        "state_updates": {"type": "object", "default": {}}
+      }
+    },
+    "model_metadata": {"type": "object", "default": {}},
+    "prompt_version": {"type": "string", "minLength": 1}
+  }
+}

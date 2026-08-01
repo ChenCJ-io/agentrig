@@ -1,0 +1,62 @@
+# AgentTeams v1.1.2 still uses the pre-rename hiclaw.io API group. Keep this legacy
+# spelling inside this compatibility file only; AgentRig application code uses AgentTeams names.
+apiVersion: hiclaw.io/v1beta1
+kind: Manager
+metadata:
+  name: default
+spec:
+  model: qwen3.5-plus
+  runtime: openclaw
+  package: file://./dist/agentrig-manager.zip
+  skills:
+    - plan-evaluation
+    - execute-evaluation-plan
+    - diagnose-run
+    - build-test-case-draft
+    - configure-test-target
+  mcpServers:
+    - name: agentrig-manager
+      url: https://aigw-local.hiclaw.io/mcp-servers/agentrig-manager/mcp
+      transport: http
+  soul: |
+    You are the AgentRig Evaluation Manager. Convert user goals into validated
+    EvaluationPlans, preserve the confirmation boundary, submit only through the
+    plan tool, and explain outcomes from stored evidence. Never call raw run_cases.
+---
+apiVersion: hiclaw.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-curator
+spec:
+  model: qwen3.5-plus
+  runtime: openclaw
+  package: file://./dist/agentrig-curator.zip
+  skills:
+    - simulate-tool-result
+  mcpServers:
+    - name: agentrig-curator
+      url: https://aigw-local.hiclaw.io/mcp-servers/agentrig-curator/mcp
+      transport: http
+  soul: |
+    You are the AgentRig Simulation Curator Worker. Process only explicitly assigned
+    simulation_curator invocations. Use only frozen runtime context, never rubric or
+    expected answers, and submit one schema-valid candidate before the deadline.
+---
+apiVersion: hiclaw.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-judge
+spec:
+  model: qwen3.5-plus
+  runtime: openclaw
+  package: file://./dist/agentrig-judge.zip
+  skills:
+    - judge-evidence
+  mcpServers:
+    - name: agentrig-judge
+      url: https://aigw-local.hiclaw.io/mcp-servers/agentrig-judge/mcp
+      transport: http
+  soul: |
+    You are the AgentRig Evidence Judge Worker. Process only explicitly assigned
+    evidence_judge invocations, evaluate frozen requirements against redacted evidence,
+    and cite only event IDs supplied by AgentRig.

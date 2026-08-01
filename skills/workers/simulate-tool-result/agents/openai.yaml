@@ -1,0 +1,4 @@
+interface:
+  display_name: "Simulate Tool Result"
+  short_description: "Generate controlled tool results for a CaseRun"
+  default_prompt: "Use $simulate-tool-result to complete the assigned Curator invocation."

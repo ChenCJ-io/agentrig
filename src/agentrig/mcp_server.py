@@ -25,9 +25,10 @@ from starlette.types import ASGIApp
 
 from .bootstrap import ServiceContainer
 from .mcp.tools import register_all as register_v1_tools
+from .mcp.v2 import register_curator, register_judge, register_manager_tools
 
 _RESOURCE_ID = re.compile(
-    r"\b(?:case_run|run|case|target|profile|sample|evaluation)_[A-Za-z0-9_.:-]+\b"
+    r"\b(?:asstevt|asstturn|asst|agentinv|plan|case_run|run|case|target|profile|sample|evaluation)_[A-Za-z0-9_.:-]+\b"
 )
 _LOGGER = logging.getLogger("agentrig.mcp.audit")
 
@@ -40,6 +41,10 @@ class AuditedFastMCP(FastMCP):
     因而 ping 和后续新增工具也不会漏记。
     """
 
+    def __init__(self, *args: Any, principal: str, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._principal = principal
+
     async def call_tool(
         self,
         name: str,
@@ -51,7 +56,8 @@ class AuditedFastMCP(FastMCP):
             result = await super().call_tool(name, arguments)
         except Exception as exc:
             _LOGGER.warning(
-                "mcp_tool_call tool=%s status=failed duration_ms=%.2f refs=%s error=%s",
+                "mcp_tool_call principal=%s tool=%s status=failed duration_ms=%.2f refs=%s error=%s",
+                self._principal,
                 name,
                 (perf_counter() - started) * 1000,
                 ",".join(input_refs) or "-",
@@ -60,7 +66,8 @@ class AuditedFastMCP(FastMCP):
             raise
         refs = sorted({*input_refs, *_resource_refs(result)})
         _LOGGER.info(
-            "mcp_tool_call tool=%s status=completed duration_ms=%.2f refs=%s",
+            "mcp_tool_call principal=%s tool=%s status=completed duration_ms=%.2f refs=%s",
+            self._principal,
             name,
             (perf_counter() - started) * 1000,
             ",".join(refs) or "-",
@@ -105,6 +112,7 @@ def create_mcp_server(services: ServiceContainer | None = None) -> FastMCP:
 
     server = AuditedFastMCP(
         "agentrig",
+        principal="external_controller",
         stateless_http=True,
         streamable_http_path="/",
     )
@@ -117,6 +125,27 @@ def create_mcp_server(services: ServiceContainer | None = None) -> FastMCP:
     if services is not None:
         register_v1_tools(server, services)
     return server
+
+
+def create_role_mcp_servers(services: ServiceContainer) -> dict[str, FastMCP]:
+    """每个 Agent 身份拥有独立工具注册表，权限不依赖 Prompt。"""
+
+    registrations = {
+        "manager": register_manager_tools,
+        "curator": register_curator,
+        "judge": register_judge,
+    }
+    servers: dict[str, FastMCP] = {}
+    for role, register in registrations.items():
+        server = AuditedFastMCP(
+            f"agentrig-{role}",
+            principal=f"agentteams_{role}",
+            stateless_http=True,
+            streamable_http_path="/",
+        )
+        register(server, services)
+        servers[role] = server
+    return servers
 
 
 mcp: FastMCP = create_mcp_server()

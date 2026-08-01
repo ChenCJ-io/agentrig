@@ -22,6 +22,8 @@ class ProviderContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     case_run_id: str
+    run_id: str | None = None
+    tool_call_event_id: str | None = None
     turn_position: int
     tool_call: ToolCall
     fixtures: list[Fixture] = Field(default_factory=list)

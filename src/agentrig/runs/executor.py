@@ -6,7 +6,8 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-from ..agents import EvidenceJudge, SimulationCurator
+from ..agents import AgentTaskContext, EvidenceJudgePort, SimulationCuratorPort
+from ..agents.ports import AgentInvocationResultLinker
 from ..errors import AgentRigError, ErrorCode
 from ..evaluations.models import (
     EvaluationOutcome,
@@ -62,8 +63,9 @@ class CaseExecutor:
         secrets: SecretResolver,
         recorder: EventRecorder,
         validator: ToolResultValidator,
-        simulation_curator: SimulationCurator,
-        evidence_judge: EvidenceJudge,
+        simulation_curator: SimulationCuratorPort,
+        evidence_judge: EvidenceJudgePort,
+        invocation_results: AgentInvocationResultLinker | None = None,
         real_tool_client: RealToolClient | None = None,
         real_tool_allowlist: list[str] | None = None,
         rule_evaluator: RuleEvaluator | None = None,
@@ -80,6 +82,7 @@ class CaseExecutor:
         self._validator = validator
         self._simulation_curator = simulation_curator
         self._evidence_judge = evidence_judge
+        self._invocation_results = invocation_results
         self._real_tool_client = real_tool_client
         self._real_tool_allowlist = real_tool_allowlist or []
         self._rule_evaluator = rule_evaluator or RuleEvaluator()
@@ -585,6 +588,8 @@ class CaseExecutor:
         for call, call_event in calls:
             context = ProviderContext(
                 case_run_id=detail.id,
+                run_id=detail.run_id,
+                tool_call_event_id=call_event.id,
                 turn_position=int(turn["position"]),
                 tool_call=call,
                 fixtures=turn.get("fixtures", []),
@@ -655,16 +660,21 @@ class CaseExecutor:
         memory_events: list[RunEvent],
     ) -> None:
         for attempt in attempts:
-            memory_events.append(
-                await self._recorder.record(
-                    case_run_id,
-                    RunEventType.PROVIDER_ATTEMPT,
-                    {
-                        "tool_call_id": call.id,
-                        **attempt.model_dump(mode="json"),
-                    },
-                )
+            recorded = await self._recorder.record(
+                case_run_id,
+                RunEventType.PROVIDER_ATTEMPT,
+                {
+                    "tool_call_id": call.id,
+                    **attempt.model_dump(mode="json"),
+                },
             )
+            memory_events.append(recorded)
+            if self._invocation_results is not None:
+                for invocation_id in self._invocation_ids(attempt.metadata):
+                    await self._invocation_results.attach_result_ref(
+                        invocation_id,
+                        recorded.id,
+                    )
 
     async def _evaluate_and_complete(
         self,
@@ -711,6 +721,10 @@ class CaseExecutor:
                     rule_result=rule_result,
                     model_config=profile.judge_model,
                     timeout_seconds=profile.component_timeouts.judge,
+                    context=AgentTaskContext(
+                        run_id=detail.run_id,
+                        case_run_id=detail.id,
+                    ),
                 )
             else:
                 judge_draft = EvaluationDraft(
@@ -718,7 +732,7 @@ class CaseExecutor:
                     verdict=None,
                     summary="Evidence Judge model is not configured",
                 )
-            await self._evaluations.upsert(
+            judge_result = await self._evaluations.upsert(
                 case_run_id=detail.id,
                 evaluator_type=EvaluatorType.EVIDENCE_JUDGE,
                 evaluator_source="agentrig.evidence_judge.v1",
@@ -730,6 +744,12 @@ class CaseExecutor:
                 config_snapshot=judge_draft.config_snapshot,
                 model_metadata=judge_draft.model_metadata,
             )
+            if self._invocation_results is not None:
+                for invocation_id in self._invocation_ids(judge_draft.model_metadata):
+                    await self._invocation_results.attach_result_ref(
+                        invocation_id,
+                        judge_result.id,
+                    )
             outcome = (
                 EvaluationOutcome(judge_draft.verdict)
                 if judge_draft.verdict is not None
@@ -744,6 +764,26 @@ class CaseExecutor:
                 "tool_call_count": tool_call_count,
             },
         )
+
+    @staticmethod
+    def _invocation_ids(value: object) -> list[str]:
+        found: set[str] = set()
+
+        def collect(item: object, key: str | None = None) -> None:
+            if isinstance(item, dict):
+                for nested_key, nested in item.items():
+                    collect(nested, str(nested_key))
+            elif isinstance(item, list):
+                for nested in item:
+                    collect(nested, key)
+            elif isinstance(item, str) and key in {
+                "agent_invocation_id",
+                "agent_invocation_ids",
+            }:
+                found.add(item)
+
+        collect(value)
+        return sorted(found)
 
     async def _record_error(self, case_run_id: str, code: str, message: str) -> None:
         await self._recorder.record(

@@ -21,6 +21,7 @@ from .models import CaseRunStatus, RunStatus
 from .repository import RunRepository
 from .schemas import (
     RunCasesRequest,
+    RunPreview,
     RunSubmitResult,
     RunTargetInput,
     SkippedItem,
@@ -46,6 +47,18 @@ class _Candidate:
     primary_evaluator: EvaluatorType
 
 
+@dataclass(frozen=True)
+class PreparedRun:
+    """同一份请求经 V1 规则解析后的只读结果。"""
+
+    request: RunCasesRequest
+    cases: list[TestCaseView]
+    targets: list[tuple[RunTargetInput, TargetView]]
+    profile: ExecutionProfileConfig
+    candidates: list[_Candidate]
+    skipped: list[SkippedItem]
+
+
 class RunPlanner:
     def __init__(
         self,
@@ -65,35 +78,12 @@ class RunPlanner:
         self._runs = runs
 
     async def plan(self, request: RunCasesRequest) -> RunPlan:
-        cases = await self._resolve_cases(request)
-        targets = [
-            (item, await self._resolve_target(item))
-            for item in request.targets
-        ]
-        profile = await self._resolve_profile(request.profile_id)
-        resolved_profile = self._profile_resolver.resolve(
-            profile,
-            request.overrides.model_dump(mode="json", exclude_none=True),
-            repeat_count=request.repeat_count,
-        )
-        candidates, skipped = self._expand(cases, targets, resolved_profile)
-        valid: list[_Candidate] = []
-        for candidate in candidates:
-            reason = self._preflight(candidate)
-            if reason is None:
-                valid.append(candidate)
-            else:
-                skipped.append(reason)
-
-        if not valid:
-            raise AgentRigError(
-                ErrorCode.VALIDATION_ERROR,
-                "run request has no executable case runs",
-                details={
-                    "resolved_case_ids": [case.id for case in cases],
-                    "skipped_items": [item.model_dump(mode="json") for item in skipped],
-                },
-            )
+        prepared = await self.prepare(request)
+        cases = prepared.cases
+        targets = prepared.targets
+        resolved_profile = prepared.profile
+        valid = prepared.candidates
+        skipped = prepared.skipped
 
         run_id = new_id("run")
         profile_snapshot = resolved_profile.model_dump(mode="json")
@@ -169,6 +159,61 @@ class RunPlanner:
             ),
             executable_case_run_ids=executable_ids,
             concurrency=resolved_profile.concurrency,
+        )
+
+    async def prepare(self, request: RunCasesRequest) -> PreparedRun:
+        """复用正式运行的全部解析和预检规则，但不创建任何数据库事实。"""
+
+        cases = await self._resolve_cases(request)
+        targets = [(item, await self._resolve_target(item)) for item in request.targets]
+        profile = await self._resolve_profile(request.profile_id)
+        resolved_profile = self._profile_resolver.resolve(
+            profile,
+            request.overrides.model_dump(mode="json", exclude_none=True),
+            repeat_count=request.repeat_count,
+        )
+        candidates, skipped = self._expand(cases, targets, resolved_profile)
+        valid: list[_Candidate] = []
+        for candidate in candidates:
+            reason = self._preflight(candidate)
+            if reason is None:
+                valid.append(candidate)
+            else:
+                skipped.append(reason)
+        if not valid:
+            raise AgentRigError(
+                ErrorCode.VALIDATION_ERROR,
+                "run request has no executable case runs",
+                details={
+                    "resolved_case_ids": [case.id for case in cases],
+                    "skipped_items": [item.model_dump(mode="json") for item in skipped],
+                },
+            )
+        return PreparedRun(
+            request=request,
+            cases=cases,
+            targets=targets,
+            profile=resolved_profile,
+            candidates=valid,
+            skipped=skipped,
+        )
+
+    async def preview(self, request: RunCasesRequest) -> RunPreview:
+        prepared = await self.prepare(request)
+        return RunPreview(
+            resolved_case_ids=[case.id for case in prepared.cases],
+            planned_case_runs=len(prepared.candidates),
+            skipped_items=prepared.skipped,
+            profile_snapshot=prepared.profile.model_dump(mode="json"),
+            target_snapshots=[
+                self._target_snapshot(target, item.version)
+                for item, target in prepared.targets
+            ],
+            primary_evaluators=sorted(
+                {item.primary_evaluator for item in prepared.candidates},
+                key=lambda item: item.value,
+            ),
+            providers=[item.name.value for item in prepared.profile.provider_chain],
         )
 
     async def _resolve_cases(self, request: RunCasesRequest) -> list[TestCaseView]:

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Test Case Draft"
+  short_description: "Create reviewable test-case drafts from evidence"
+  default_prompt: "Use $build-test-case-draft to create a reviewable AgentRig case draft."

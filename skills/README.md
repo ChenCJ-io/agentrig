@@ -1,4 +1,4 @@
-# AgentRig V1 编码 Agent Skills
+# AgentRig Agent Skills
 
 这组 Skill 指导 Codex、Claude Code 等外部编码 Agent 使用 AgentRig MCP。V1 中外部编码
 Agent 是执行控制方：负责选案、提交运行、读取原子证据，并可在关闭 Evidence Judge 时
@@ -9,6 +9,18 @@ Agent 是执行控制方：负责选案、提交运行、读取原子证据，�
 | [`build-test-case`](./core/build-test-case/) | 查重后创建或修改 draft/rejected 多轮用例 |
 | [`run-test-cases`](./core/run-test-cases/) | 异步执行单个、批量、多版本、重复和 A/B 测试 |
 | [`harvest-tool-samples`](./core/harvest-tool-samples/) | 从已存档 Real Tool 证据显式创建 Sample 草稿 |
+
+V2 还提供七项 AgentTeams Skill：
+
+| 角色 | Skill | 用途 |
+|---|---|---|
+| Manager | [`plan-evaluation`](./manager/plan-evaluation/) | 将自然语言目标整理为 EvaluationPlan |
+| Manager | [`execute-evaluation-plan`](./manager/execute-evaluation-plan/) | 校验确认并幂等提交计划 |
+| Manager | [`diagnose-run`](./manager/diagnose-run/) | 基于持久化证据诊断 Run |
+| Manager | [`build-test-case-draft`](./manager/build-test-case-draft/) | 创建用例草稿，不绕过审核 |
+| Manager | [`configure-test-target`](./manager/configure-test-target/) | 配置并预检 Target |
+| Curator | [`simulate-tool-result`](./workers/simulate-tool-result/) | 生成结构化工具模拟结果 |
+| Judge | [`judge-evidence`](./workers/judge-evidence/) | 只根据可引用证据评判 |
 
 ## 前置条件
 

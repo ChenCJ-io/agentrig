@@ -1,0 +1,37 @@
+environment = "competition"
+
+[server]
+host = "0.0.0.0"
+port = 8000
+api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
+
+[database]
+url = "postgresql+asyncpg://agentrig:change-me@postgres:5432/agentrig"
+
+[agentteams]
+enabled = true
+health_url = "http://agentteams-controller:8080/healthz"
+manager_mcp_token_ref = "env:AGENTRIG_MANAGER_MCP_TOKEN"
+curator_mcp_token_ref = "env:AGENTRIG_CURATOR_MCP_TOKEN"
+judge_mcp_token_ref = "env:AGENTRIG_JUDGE_MCP_TOKEN"
+
+[agentteams.matrix]
+homeserver_url = "https://matrix.example.com"
+access_token_ref = "env:AGENTRIG_MATRIX_ACCESS_TOKEN"
+bridge_user_id = "@agentrig-bridge:example.com"
+manager_user_id = "@agentrig-manager:example.com"
+curator_user_id = "@agentrig-curator:example.com"
+judge_user_id = "@agentrig-judge:example.com"
+# 供不属于 AssistantSession 的 V1 Core Run 调用专业 Worker；需预先邀请两个 Worker。
+default_worker_room_id = "!agentrig-workers:example.com"
+request_timeout_seconds = 15
+
+[execution]
+default_concurrency = 4
+max_concurrency = 20
+real_tool_allowlist = []
+python_driver_allowlist = []
+subprocess_allowlist = []
+
+[proxy]
+public_url = "https://agentrig.example.com/proxy"

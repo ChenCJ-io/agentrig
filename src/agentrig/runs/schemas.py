@@ -84,6 +84,18 @@ class RunSubmitResult(BaseModel):
     skipped_items: list[SkippedItem] = Field(default_factory=list)
 
 
+class RunPreview(BaseModel):
+    """不创建 Run 的只读展开结果，供 EvaluationPlan 预览和提交复核。"""
+
+    resolved_case_ids: list[str]
+    planned_case_runs: int
+    skipped_items: list[SkippedItem] = Field(default_factory=list)
+    profile_snapshot: dict[str, Any]
+    target_snapshots: list[dict[str, Any]]
+    primary_evaluators: list[EvaluatorType] = Field(default_factory=list)
+    providers: list[str] = Field(default_factory=list)
+
+
 class RunView(BaseModel):
     id: str
     status: RunStatus

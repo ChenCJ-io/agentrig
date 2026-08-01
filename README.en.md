@@ -4,22 +4,24 @@ English | [中文](./README.md)
 
 > The MCP-native regression test rig for AI agents.
 
-AgentRig V1 is controlled by Codex, Claude Code, or a human operator. The controller
-uses atomic MCP tools to select or author cases, submit asynchronous runs, inspect
-redacted evidence, and optionally write an external verdict. AgentRig owns deterministic
-execution, tool-result control, evidence persistence, and evaluator archives.
+AgentRig V2 adds an intelligent evaluation assistant to the deterministic V1 core.
+An AgentTeams Manager turns natural-language goals into previewable, confirmable, and
+idempotently submitted EvaluationPlans. Simulation Curator and Evidence Judge run as
+role-isolated Workers. AgentRig remains authoritative for execution, permissions,
+evidence, and verdict records; AgentTeams owns multi-agent collaboration.
 
-V1 includes two optional intelligent agents:
+The two specialist agents can use either the V1 local adapters or AgentTeams Workers:
 
 - **Simulation Curator** generates and validates context-aware tool results after
   fixtures and approved samples miss.
 - **Evidence Judge** returns pass, fail, or inconclusive from a rubric and persisted
   evidence.
 
+AgentTeams is disabled by default, preserving all V1 HTTP, MCP, Web, and CLI behavior.
 Core mode needs no model API key. A controller may disable Evidence Judge and submit its
 own verdict after inspecting a CaseRun.
 
-## Implemented in V1
+## Implemented
 
 - One asynchronous `run_cases` path for single cases, batches, versions, repetitions,
   and two-target A/B runs.
@@ -30,9 +32,12 @@ own verdict after inspecting a CaseRun.
   sessions, logs, and workspaces.
 - Configurable Fixture → Sample → Simulation Curator → Real Tool provider order.
 - Separate Rule, Evidence Judge, and External Controller records.
-- Async SQLAlchemy for SQLite/PostgreSQL, an 11-table schema, Alembic migrations, and
+- Async SQLAlchemy for SQLite/PostgreSQL, a 17-table schema, Alembic migrations, and
   immutable run snapshots.
-- HTTP API, Streamable HTTP MCP, a React administration UI, and Codex/Claude Code skills.
+- Durable assistant events, an EvaluationPlan state machine, AgentInvocation lifecycle,
+  Matrix bridge, and reconnect-safe run notifications.
+- Three AgentTeams role packages, isolated role MCP surfaces, HTTP/SSE APIs, a React UI,
+  and ten controller/collaboration skills.
 
 ## Quick start
 
@@ -52,7 +57,10 @@ Default endpoints:
 |---|---|
 | Web | `http://127.0.0.1:8000/` |
 | HTTP API | `http://127.0.0.1:8000/api/` |
+| V2 assistant API | `http://127.0.0.1:8000/api/v2/` |
 | Controller MCP | `http://127.0.0.1:8000/mcp/` |
+| Manager MCP | `http://127.0.0.1:8000/mcp/manager/` |
+| Curator / Judge MCP | `http://127.0.0.1:8000/mcp/curator/`, `/mcp/judge/` |
 | Tested-agent tool proxy | `http://127.0.0.1:8000/proxy` |
 
 Codex MCP configuration:
@@ -107,7 +115,8 @@ uv run agentrig demo
 ```
 
 See [docs](./docs/README.md) for architecture and module boundaries, and
-[skills](./skills/README.md) for controller workflows.
+[skills](./skills/README.md) for controller workflows. AgentTeams packaging and deployment
+instructions live in [deploy/agentteams](./deploy/agentteams/README.md).
 
 ## Validation
 
@@ -120,8 +129,9 @@ cd web && npm run typecheck && npm run build
 
 ## Status
 
-The current version is `0.1.0a1`. The V1 core is implemented but remains Alpha and
-should not yet be used as an unattended production release gate.
+The current version is `0.2.0a0`. V2 is implemented but remains Alpha. A live
+AgentTeams/Matrix/cloud integration requires deployment-provided credentials and should
+not yet be used as an unattended production release gate.
 
 ## License
 

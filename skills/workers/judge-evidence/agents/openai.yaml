@@ -1,0 +1,4 @@
+interface:
+  display_name: "Judge Evidence"
+  short_description: "Judge frozen CaseRun evidence against its rubric"
+  default_prompt: "Use $judge-evidence to complete the assigned Judge invocation."
