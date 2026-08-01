@@ -1,0 +1,51 @@
+environment = "local-agentteams"
+
+[server]
+host = "0.0.0.0"
+port = 8010
+log_level = "INFO"
+
+[database]
+url = "sqlite+aiosqlite:///./.agentrig/local-demo.db"
+
+[execution]
+default_concurrency = 1
+max_concurrency = 4
+default_case_timeout_seconds = 600
+default_component_timeout_seconds = 180
+real_tool_allowlist = []
+python_driver_allowlist = []
+subprocess_allowlist = []
+
+[assistant]
+sse_poll_interval_seconds = 0.5
+sse_heartbeat_seconds = 15
+max_message_chars = 100000
+
+[agentteams]
+enabled = true
+# Matrix 连通性已覆盖本机运行时探测；本地模式无需额外暴露 Controller 健康端点。
+health_url = ""
+manager_mcp_token_ref = "env:AGENTRIG_MANAGER_MCP_TOKEN"
+curator_mcp_token_ref = "env:AGENTRIG_CURATOR_MCP_TOKEN"
+judge_mcp_token_ref = "env:AGENTRIG_JUDGE_MCP_TOKEN"
+mcp_allowed_hosts = [
+  "aigw-local.hiclaw.io",
+  "aigw-local.hiclaw.io:*",
+  "host.docker.internal:*",
+]
+
+[agentteams.matrix]
+homeserver_url = "http://matrix-local.hiclaw.io:18080"
+access_token_ref = "env:AGENTRIG_MATRIX_ACCESS_TOKEN"
+# 这些 ID 与 default_worker_room_id 由 scripts/local_demo.sh 从实际 AgentTeams
+# 资源中发现并通过 AGENTRIG_AGENTTEAMS__MATRIX__* 环境变量覆盖。
+bridge_user_id = ""
+manager_user_id = ""
+curator_user_id = ""
+judge_user_id = ""
+default_worker_room_id = ""
+request_timeout_seconds = 30
+
+[proxy]
+public_url = "http://host.docker.internal:8010/proxy"

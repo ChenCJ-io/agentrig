@@ -40,6 +40,19 @@ def test_env_overrides_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     assert s.environment == "from-env"
 
 
+def test_config_file_env_overrides_default_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    toml = tmp_path / "local-demo.toml"
+    toml.write_text('environment = "local-demo"\n[server]\nport = 8010\n')
+    monkeypatch.setenv("AGENTRIG_CONFIG_FILE", str(toml))
+
+    settings = Settings()
+
+    assert settings.environment == "local-demo"
+    assert settings.server.port == 8010
+
+
 def test_no_toml_file_falls_back_to_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """无 toml 文件 → 用默认值（不报错）。"""
     monkeypatch.delenv("AGENTRIG_ENVIRONMENT", raising=False)

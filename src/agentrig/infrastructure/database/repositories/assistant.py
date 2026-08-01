@@ -327,6 +327,27 @@ class SqlAssistantRepository:
             row = await session.get(AssistantTurnORM, turn_id)
         return self._turn_view(row) if row is not None else None
 
+    async def get_latest_open_turn(
+        self,
+        session_id: str,
+    ) -> AssistantTurnView | None:
+        open_statuses = (
+            AssistantTurnStatus.QUEUED.value,
+            AssistantTurnStatus.DISPATCHED.value,
+            AssistantTurnStatus.RUNNING.value,
+        )
+        async with self._database.session() as session:
+            row = await session.scalar(
+                select(AssistantTurnORM)
+                .where(
+                    AssistantTurnORM.session_id == session_id,
+                    AssistantTurnORM.status.in_(open_statuses),
+                )
+                .order_by(AssistantTurnORM.created_at.desc())
+                .limit(1)
+            )
+        return self._turn_view(row) if row is not None else None
+
     async def create_turn(
         self,
         *,

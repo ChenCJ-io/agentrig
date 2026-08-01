@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
+import re
 from contextlib import suppress
 from typing import Any
 
@@ -23,6 +25,7 @@ from ...errors import AgentRigError, ErrorCode
 from .matrix_client import MatrixClient
 
 logger = logging.getLogger("agentrig.agentteams")
+_TURN_MARKER = re.compile(r"^\s*\[agentrig-turn:([^\]]+)\]\s*", re.IGNORECASE)
 
 
 class AgentTeamsHealth(BaseModel):
@@ -165,17 +168,45 @@ class AgentTeamsBridge:
         assert session.matrix_room_id is not None
         client = self._require_client()
         try:
+            active_plan_id = event.payload.get("active_plan_id")
+            envelope = (
+                f"{self._manager_user_id} AgentRig Manager request.\n\n"
+                "[AgentRig request envelope — trusted routing metadata]\n"
+                f"assistant_session_id: {event.session_id}\n"
+                f"assistant_turn_id: {turn.id}\n"
+                f"user_event_id: {event.id}\n"
+                f"active_plan_id: {active_plan_id or 'none'}\n"
+                "[/AgentRig request envelope]\n\n"
+                "Use the AgentRig Manager MCP and the matching Skill. "
+                f"Begin the final room reply with [agentrig-turn:{turn.id}] so the "
+                "Web turn can be correlated.\n\n"
+                f"User request:\n{event.payload['content']}"
+            )
+            formatted_envelope = html.escape(envelope).replace("\n", "<br>")
+            manager_label = html.escape(
+                self._manager_user_id.split(":", 1)[0].removeprefix("@")
+                or "manager"
+            )
+            visible_id = html.escape(self._manager_user_id)
+            formatted_envelope = formatted_envelope.replace(
+                visible_id,
+                f'<a href="https://matrix.to/#/{visible_id}">{manager_label}</a>',
+                1,
+            )
             matrix_event_id = await client.send_message(
                 session.matrix_room_id,
                 f"assistant-turn-{turn.id}",
                 {
                     "msgtype": "m.text",
-                    "body": str(event.payload["content"]),
+                    "body": envelope,
+                    "format": "org.matrix.custom.html",
+                    "formatted_body": formatted_envelope,
                     "org.agentrig.kind": event.event_type.value,
                     "org.agentrig.session_id": event.session_id,
                     "org.agentrig.turn_id": turn.id,
                     "org.agentrig.event_id": event.id,
                     "org.agentrig.active_plan_id": event.payload.get("active_plan_id"),
+                    "m.mentions": {"user_ids": [self._manager_user_id]},
                 },
             )
         except Exception as exc:
@@ -274,8 +305,26 @@ class AgentTeamsBridge:
         turn_id_value = content.get("org.agentrig.turn_id")
         turn_id = turn_id_value if isinstance(turn_id_value, str) else None
         body = content.get("body")
+        projected_body = body if isinstance(body, str) else ""
+        if sender == self._manager_user_id:
+            marker = _TURN_MARKER.match(projected_body)
+            if marker is not None:
+                turn_id = marker.group(1)
+                projected_body = projected_body[marker.end() :]
+            referenced_turn = (
+                await self._repository.get_turn(turn_id)
+                if turn_id is not None
+                else None
+            )
+            if referenced_turn is None or referenced_turn.session_id != session.id:
+                open_turn = await self._repository.get_latest_open_turn(session.id)
+                turn_id = open_turn.id if open_turn is not None else None
+        elif turn_id is not None:
+            referenced_turn = await self._repository.get_turn(turn_id)
+            if referenced_turn is None or referenced_turn.session_id != session.id:
+                turn_id = None
         payload = {
-            "content": body if isinstance(body, str) else "",
+            "content": projected_body,
             "source": "agentteams_matrix",
         }
         if sender == self._manager_user_id:

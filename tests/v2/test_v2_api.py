@@ -51,6 +51,8 @@ def test_role_mcp_surfaces_require_distinct_tokens(
     )
     with TestClient(create_app(container)) as client:
         assert client.post("/mcp/manager/").status_code == 401
+        gateway_path = "/mcp-servers/mcp-agentrig-manager/mcp"
+        assert client.post(gateway_path).status_code == 401
         assert (
             client.post(
                 "/mcp/manager/",
@@ -61,6 +63,20 @@ def test_role_mcp_surfaces_require_distinct_tokens(
         assert (
             client.post(
                 "/mcp/manager/",
+                headers={"Authorization": "Bearer manager-token"},
+            ).status_code
+            != 401
+        )
+        assert (
+            client.post(
+                gateway_path,
+                headers={"Authorization": "Bearer judge-token"},
+            ).status_code
+            == 401
+        )
+        assert (
+            client.post(
+                gateway_path,
                 headers={"Authorization": "Bearer manager-token"},
             ).status_code
             != 401

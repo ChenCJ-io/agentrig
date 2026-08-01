@@ -1,0 +1,40 @@
+# Local Docker/embedded overlay for AgentTeams v1.1.2.
+# The official MCP proxy helper prefixes route resources with `mcp-`.
+apiVersion: hiclaw.io/v1beta1
+kind: Manager
+metadata:
+  name: default
+spec:
+  model: deepseek-v4-flash
+  runtime: openclaw
+  package: file://agentrig-manager.zip
+  mcpServers:
+    - name: agentrig-manager
+      url: http://aigw-local.hiclaw.io:8080/mcp-servers/mcp-agentrig-manager/mcp
+      transport: http
+---
+apiVersion: hiclaw.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-curator
+spec:
+  model: deepseek-v4-flash
+  runtime: openclaw
+  package: file://agentrig-curator.zip
+  mcpServers:
+    - name: agentrig-curator
+      url: http://aigw-local.hiclaw.io:8080/mcp-servers/mcp-agentrig-curator/mcp
+      transport: http
+---
+apiVersion: hiclaw.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-judge
+spec:
+  model: deepseek-v4-flash
+  runtime: openclaw
+  package: file://agentrig-judge.zip
+  mcpServers:
+    - name: agentrig-judge
+      url: http://aigw-local.hiclaw.io:8080/mcp-servers/mcp-agentrig-judge/mcp
+      transport: http

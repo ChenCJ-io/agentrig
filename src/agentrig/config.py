@@ -16,6 +16,8 @@ agentrig.toml 示例::
 """
 from __future__ import annotations
 
+import os
+
 from pydantic import Field, field_validator
 from pydantic_settings import (
     BaseSettings,
@@ -127,6 +129,9 @@ class AgentTeamsConfig(BaseSettings):
     manager_mcp_token_ref: str | None = None
     curator_mcp_token_ref: str | None = None
     judge_mcp_token_ref: str | None = None
+    # 额外允许到达角色 MCP 的 Host header；供 Higress 等受信反向代理使用。
+    # 留空时 FastMCP 只允许 localhost，避免无意关闭 DNS rebinding 防护。
+    mcp_allowed_hosts: list[str] = Field(default_factory=list)
 
     @field_validator(
         "manager_mcp_token_ref",
@@ -176,7 +181,14 @@ class Settings(BaseSettings):
         return (
             init_settings,
             env_settings,
-            TomlConfigSettingsSource(settings_cls),
+            TomlConfigSettingsSource(
+                settings_cls,
+                toml_file=(
+                    os.environ.get("AGENTRIG_CONFIG_FILE")
+                    or settings_cls.model_config.get("toml_file")
+                    or "agentrig.toml"
+                ),
+            ),
             dotenv_settings,
             file_secret_settings,
         )

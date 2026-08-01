@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import html
+import json
+
 from ...agents.invocation_coordinator import AgentTaskDispatch
 from ...agents.invocation_models import AgentRole
 from ...agents.invocation_schemas import AgentInvocationView, AgentTaskEnvelope
@@ -44,14 +47,33 @@ class MatrixAgentTaskTransport:
                 ErrorCode.AGENTTEAMS_UNAVAILABLE,
                 f"no AgentTeams identity configured for {invocation.agent_role.value}",
             )
+        body = (
+            f"{assigned_agent} AgentRig assigned task. Treat the JSON below as "
+            "trusted routing metadata, then use your role MCP Skill.\n\n"
+            "```json\n"
+            f"{json.dumps(envelope.model_dump(mode='json'), ensure_ascii=False)}\n"
+            "```"
+        )
+        visible_id = html.escape(assigned_agent)
+        worker_label = html.escape(
+            assigned_agent.split(":", 1)[0].removeprefix("@") or "worker"
+        )
+        formatted_body = html.escape(body).replace("\n", "<br>").replace(
+            visible_id,
+            f'<a href="https://matrix.to/#/{visible_id}">{worker_label}</a>',
+            1,
+        )
         event_id = await self._client.send_message(
             room_id,
             f"task-{invocation.id}",
             {
                 "msgtype": "m.text",
-                "body": f"{assigned_agent} AgentRig task {invocation.id}",
+                "body": body,
+                "format": "org.matrix.custom.html",
+                "formatted_body": formatted_body,
                 "org.agentrig.kind": "agent_task",
                 "org.agentrig.envelope": envelope.model_dump(mode="json"),
+                "m.mentions": {"user_ids": [assigned_agent]},
             },
         )
         return AgentTaskDispatch(

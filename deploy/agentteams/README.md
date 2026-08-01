@@ -9,6 +9,34 @@ The official repository documents the stable installer, Manager/Worker architect
 Matrix, Higress, MinIO, and declarative `Manager`/`Worker` resources:
 https://github.com/agentscope-ai/AgentTeams/tree/v1.1.2
 
+## Local lassist reference deployment
+
+For this repository's macOS reference environment, the complete repeatable path is:
+
+```bash
+cp deploy/agentteams/local.env.example .env.local-agentteams
+# Fill the local-only secret values, then:
+chmod 600 .env.local-agentteams
+scripts/local_demo.sh all
+```
+
+The script installs the pinned AgentTeams version, creates Manager/Curator/Judge,
+discovers their Matrix identities, creates three role-isolated Higress MCP routes,
+builds the Web UI, upgrades a local SQLite database, starts lassist and AgentRig, and
+seeds the approved acceptance assets. The final UI is
+`http://127.0.0.1:8010/assistant`. Runtime state is under the Git-ignored `.agentrig/`
+directory and Docker volume `agentrig-hiclaw-data`; `stop` preserves both.
+
+```bash
+scripts/local_demo.sh status
+scripts/local_demo.sh verify
+scripts/local_demo.sh stop
+scripts/local_demo.sh start
+```
+
+See [`docs/04-本机演示与验收.md`](../../docs/04-本机演示与验收.md) for the
+interactive acceptance flow and troubleshooting boundary.
+
 ## 1. Build the three packages
 
 ```bash

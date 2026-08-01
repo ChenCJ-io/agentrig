@@ -39,6 +39,24 @@ from .proxy.backend import connect_backend
 from .v1_api import router as v1_api_router
 from .v2_api import router as v2_api_router
 
+_AGENTTEAMS_MCP_PATHS = {
+    role: f"/mcp-servers/mcp-agentrig-{role}/mcp"
+    for role in ("manager", "curator", "judge")
+}
+
+
+class _RootPathASGI:
+    """把精确 Route 别名改写为 FastMCP streamable HTTP 的根路径。"""
+
+    def __init__(self, app: Any) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        rewritten = dict(scope)
+        rewritten["path"] = "/"
+        rewritten["raw_path"] = b"/"
+        await self._app(rewritten, receive, send)
+
 
 def create_app(services: ServiceContainer | None = None) -> FastAPI:
     settings = services.settings if services is not None else get_settings()
@@ -77,7 +95,14 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     app.include_router(v2_api_router)
     _add_error_handlers(app)
     for role, role_server in role_mcp_servers.items():
-        app.mount(f"/mcp/{role}", build_mcp_app(role_server))
+        role_app = build_mcp_app(role_server)
+        app.mount(f"/mcp/{role}", role_app)
+        # AgentTeams v1.1.2 的 Higress mcp-proxy 在本地 DNS upstream 下会保留
+        # `/mcp-servers/<name>/mcp` 原路径。用同一个角色 ASGI app 提供精确别名，
+        # 仍由下方 middleware 校验该角色的独立 upstream token。
+        app.routes.append(
+            Route(_AGENTTEAMS_MCP_PATHS[role], endpoint=_RootPathASGI(role_app))
+        )
     app.mount("/mcp", build_mcp_app(mcp_server))
     # proxy 用 Route 挂 StreamableHTTPASGIApp（参考 FastMCP.streamable_http_app 的挂法）：
     # Mount 会剥前缀使 ASGI 收到 / 而非 /proxy，POST 被 StreamableHTTPASGIApp 拒（405）。
@@ -142,6 +167,7 @@ def _add_security(app: FastAPI, settings: Settings) -> None:
                 item
                 for item in ("manager", "curator", "judge")
                 if request.url.path.startswith(f"/mcp/{item}")
+                or request.url.path == _AGENTTEAMS_MCP_PATHS[item]
             ),
             None,
         )

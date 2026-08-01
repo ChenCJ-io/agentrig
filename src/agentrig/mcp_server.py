@@ -19,6 +19,7 @@ from time import perf_counter
 from typing import Any, cast
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ContentBlock
 from pydantic import BaseModel
 from starlette.types import ASGIApp
@@ -136,12 +137,32 @@ def create_role_mcp_servers(services: ServiceContainer) -> dict[str, FastMCP]:
         "judge": register_judge,
     }
     servers: dict[str, FastMCP] = {}
+    configured_hosts = services.settings.agentteams.mcp_allowed_hosts
+    transport_security = (
+        TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=[
+                "127.0.0.1:*",
+                "localhost:*",
+                "[::1]:*",
+                *configured_hosts,
+            ],
+            allowed_origins=[
+                "http://127.0.0.1:*",
+                "http://localhost:*",
+                "http://[::1]:*",
+            ],
+        )
+        if configured_hosts
+        else None
+    )
     for role, register in registrations.items():
         server = AuditedFastMCP(
             f"agentrig-{role}",
             principal=f"agentteams_{role}",
             stateless_http=True,
             streamable_http_path="/",
+            transport_security=transport_security,
         )
         register(server, services)
         servers[role] = server

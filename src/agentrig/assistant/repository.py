@@ -116,6 +116,11 @@ class AssistantRepository(Protocol):
 
     async def get_turn(self, turn_id: str) -> AssistantTurnView | None: ...
 
+    async def get_latest_open_turn(
+        self,
+        session_id: str,
+    ) -> AssistantTurnView | None: ...
+
     async def create_turn(
         self,
         *,

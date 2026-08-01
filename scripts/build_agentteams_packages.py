@@ -35,7 +35,10 @@ def build(root: Path, output: Path) -> list[Path]:
         package = root / "deploy" / "agentteams" / "packages" / role
         with ZipFile(destination, "w") as archive:
             for name in ("SOUL.md", "AGENTS.md"):
-                add_file(archive, package / name, name)
+                # AgentTeams v1.1.2 imports role configuration from config/.
+                # Root-level SOUL.md is only a compatibility fallback and root-level
+                # AGENTS.md is not imported by the controller package resolver.
+                add_file(archive, package / name, str(Path("config") / name))
             skill_root = root / "skills" / ("manager" if role == "manager" else "workers")
             for skill_name in skill_names:
                 skill = skill_root / skill_name

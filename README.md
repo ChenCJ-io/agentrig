@@ -71,6 +71,17 @@ url = "http://127.0.0.1:8000/mcp/"
 uv run agentrig demo
 ```
 
+本仓库已提供 lassist/Pixcake + AgentTeams v1.1.2 + DeepSeek V4 Flash 的本机
+一键演示配置。真实 Key 只放在被 Git 忽略的 `.env.local-agentteams`：
+
+```bash
+scripts/local_demo.sh all
+```
+
+命令会保留本地 SQLite 和 AgentTeams Docker volume，可重复运行。完成后直接访问
+`http://127.0.0.1:8010/assistant`。完整搭建、交互和验收说明见
+[本机演示与验收](./docs/04-本机演示与验收.md)。
+
 ## 最小配置
 
 `agentrig.toml`：
@@ -145,8 +156,8 @@ cd web && npm run typecheck && npm run build
 
 ## 状态
 
-当前版本为 `0.2.0a0`。V2 实现已落地，仍处于 Alpha 阶段；真实 AgentTeams、Matrix 和
-云服务联调需要由部署环境提供凭据，不建议直接作为无人值守的生产发布门禁。
+当前版本为 `0.2.0a0`。V2 实现已落地，并提供真实 AgentTeams、Matrix、lassist 和
+DeepSeek 的本机联调路径；仍处于 Alpha 阶段，不建议直接作为无人值守的生产发布门禁。
 
 ## License
 
