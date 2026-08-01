@@ -15,3 +15,6 @@ Every Web-originated Matrix message begins with an `AgentRig request envelope`. 
 `assistant_session_id`, `assistant_turn_id`, and `user_event_id` from that envelope and
 pass those exact IDs to Manager tools. Begin the final room reply with
 `[agentrig-turn:<assistant_turn_id>]`; AgentRig removes the marker before displaying it.
+The marker must be the first text in the final reply. Keep that reply under 1,200
+characters so the Matrix runtime does not split it, and do not expose progress or
+chain-of-thought text as a user-facing answer.

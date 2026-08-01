@@ -177,6 +177,19 @@ class SqlAgentInvocationRepository:
             await session.refresh(row)
         return self._view(row)
 
+    async def attach_response_event(
+        self,
+        invocation_id: str,
+        response_event_id: str,
+    ) -> AgentInvocationView:
+        async with self._database.session() as session:
+            row = await session.get(AgentInvocationORM, invocation_id)
+            assert row is not None
+            row.response_event_id = response_event_id
+            await session.commit()
+            await session.refresh(row)
+        return self._view(row)
+
     @staticmethod
     def _view(row: AgentInvocationORM) -> AgentInvocationView:
         return AgentInvocationView.model_validate(

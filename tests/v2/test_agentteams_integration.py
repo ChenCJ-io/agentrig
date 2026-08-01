@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -13,7 +13,11 @@ from agentrig.agents.invocation_coordinator import (
     AgentTaskDispatch,
 )
 from agentrig.agents.invocation_models import AgentRole
-from agentrig.agents.invocation_schemas import AgentResultSubmit, AgentTaskEnvelope
+from agentrig.agents.invocation_schemas import (
+    AgentInvocationCreate,
+    AgentResultSubmit,
+    AgentTaskEnvelope,
+)
 from agentrig.agents.ports import AgentTaskContext
 from agentrig.agents.schemas import CuratorInput
 from agentrig.assistant import (
@@ -279,6 +283,7 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
         enabled=True,
         assistant=services.assistant,
         repository=repository,
+        invocations=services.agent_invocations,
         client=matrix,
         bridge_user_id="@bridge:test",
         manager_user_id="@manager:test",
@@ -382,5 +387,119 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
         assert final_events.items[-1].payload["content"] == (
             "Evidence supports the result."
         )
+
+        before_live = len(final_events.items)
+        await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
+            session.matrix_room_id or "",
+            {
+                "type": "m.room.message",
+                "event_id": "$manager-live-edit",
+                "sender": "@manager:test",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": "* partial answer",
+                    "org.matrix.msc4357.live": {},
+                },
+            },
+        )
+        assert len((await services.assistant.list_events(session.id)).items) == before_live
+
+        third_receipt = await services.assistant.send_message(
+            session.id,
+            AssistantMessageCreate(
+                client_message_id="message-3",
+                content="summarize it",
+            ),
+            actor_id="user-1",
+        )
+        await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
+            session.matrix_room_id or "",
+            {
+                "type": "m.room.message",
+                "event_id": "$manager-stable-edit",
+                "sender": "@manager:test",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": "* replacement fallback",
+                    "m.new_content": {
+                        "msgtype": "m.text",
+                        "body": (
+                            "Preface that should be hidden.\n\n"
+                            f"[agentrig-turn:{third_receipt.turn_id}] Final summary."
+                        ),
+                    },
+                    "m.relates_to": {
+                        "rel_type": "m.replace",
+                        "event_id": "$manager-live-base",
+                    },
+                },
+            },
+        )
+        stable_events = await services.assistant.list_events(session.id)
+        assert stable_events.items[-1].turn_id == third_receipt.turn_id
+        assert stable_events.items[-1].payload["content"] == "Final summary."
+
+        invocation = await services.agent_invocations.create_or_get(
+            AgentInvocationCreate(
+                role=AgentRole.SIMULATION_CURATOR,
+                context=AgentTaskContext(
+                    run_id="run-matrix-receipt",
+                    case_run_id="case-run-matrix-receipt",
+                    session_id=session.id,
+                ),
+                input_snapshot={"tool_name": "search"},
+                deadline=datetime.now(timezone.utc) + timedelta(seconds=30),
+                idempotency_key="matrix-receipt",
+                matrix_room_id=session.matrix_room_id,
+            )
+        )
+        await services.agent_invocations.mark_dispatched(
+            invocation.id,
+            matrix_room_id=session.matrix_room_id or "",
+            request_event_id="$worker-request",
+            assigned_agent="@curator:test",
+        )
+        await services.agent_invocations.claim(
+            invocation.id,
+            role=AgentRole.SIMULATION_CURATOR,
+            assigned_agent="agentteams_curator",
+        )
+        await services.agent_invocations.submit_result(
+            invocation.id,
+            AgentResultSubmit(
+                idempotency_key="matrix-receipt",
+                result={"candidate": {"result": {"items": []}}},
+            ),
+            role=AgentRole.SIMULATION_CURATOR,
+        )
+        await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
+            session.matrix_room_id or "",
+            {
+                "type": "m.room.message",
+                "event_id": "$worker-progress",
+                "sender": "@curator:test",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": "Submission accepted; preparing the final receipt.",
+                },
+            },
+        )
+        assert (
+            await services.agent_invocations.get(invocation.id)
+        ).response_event_id is None
+        await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
+            session.matrix_room_id or "",
+            {
+                "type": "m.room.message",
+                "event_id": "$worker-response",
+                "sender": "@curator:test",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": f"TASK_COMPLETED: {invocation.id}",
+                },
+            },
+        )
+        completed = await services.agent_invocations.get(invocation.id)
+        assert completed.response_event_id == "$worker-response"
     finally:
         await services.close()

@@ -46,8 +46,10 @@ unzip -l deploy/agentteams/dist/agentrig-curator.zip
 unzip -l deploy/agentteams/dist/agentrig-judge.zip
 ```
 
-The builder copies the current repository Skills, SOUL, and AGENTS contracts. It omits
-Codex-only `agents/openai.yaml` metadata and emits deterministic archives.
+The builder copies the current repository Skills, SOUL, and AGENTS contracts. Every
+archive includes the v1.1.2 `manifest.json` required by the
+`hiclaw apply worker --zip` importer. It omits Codex-only `agents/openai.yaml`
+metadata and emits deterministic archives.
 
 ## 2. Install the pinned external runtime
 
@@ -94,6 +96,14 @@ hiclaw apply -f resources-v1.1.2.yaml
 The official CLI processes multi-document YAML in order. This overlay declares one
 Manager and two standalone Workers. AgentRig creates one private Matrix room per Web
 assistant session and invites those identities.
+
+The embedded macOS profile uses a built-in Manager named `default`, whose live files
+are synchronized through the canonical MinIO `manager/` prefix. The local setup script
+therefore merges the AgentRig Manager contract and five Skills into that workspace
+after resource reconciliation, uploads the merged files, and verifies that they
+survive a Manager restart. Curator and Judge archives are explicitly imported with
+`hiclaw apply worker --zip`; the script waits for both Skills inside the live Worker
+containers before continuing.
 
 ## 5. Start and verify AgentRig
 

@@ -168,6 +168,7 @@ class ServiceContainer:
             enabled=resolved_settings.agentteams.enabled,
             assistant=assistant,
             repository=assistant_repository,
+            invocations=agent_invocations,
             client=matrix_client,
             bridge_user_id=matrix_config.bridge_user_id,
             manager_user_id=matrix_config.manager_user_id,

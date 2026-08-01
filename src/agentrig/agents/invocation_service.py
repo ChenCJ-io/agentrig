@@ -212,6 +212,29 @@ class AgentInvocationService:
             self._raise_conflict(invocation)
         return await self._repository.attach_result_ref(invocation_id, result_ref)
 
+    async def attach_response_event(
+        self,
+        invocation_id: str,
+        response_event_id: str,
+        *,
+        role: AgentRole,
+    ) -> AgentInvocationView:
+        """Attach the stable Matrix receipt emitted after a Worker finishes."""
+        invocation = await self._for_role(invocation_id, role)
+        if not invocation.status.terminal:
+            self._raise_conflict(invocation)
+        if invocation.response_event_id is not None:
+            if invocation.response_event_id == response_event_id:
+                return invocation
+            raise AgentRigError(
+                ErrorCode.CONFLICT,
+                "agent invocation already has a different response event",
+            )
+        return await self._repository.attach_response_event(
+            invocation_id,
+            response_event_id,
+        )
+
     async def cancel_in_progress(self) -> None:
         await self._repository.cancel_non_terminal()
 

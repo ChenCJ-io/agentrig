@@ -12,6 +12,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
+from ...agents.invocation_models import AgentInvocationStatus, AgentRole
+from ...agents.invocation_service import AgentInvocationService
 from ...assistant.models import (
     ActorType,
     AssistantEventType,
@@ -25,7 +27,8 @@ from ...errors import AgentRigError, ErrorCode
 from .matrix_client import MatrixClient
 
 logger = logging.getLogger("agentrig.agentteams")
-_TURN_MARKER = re.compile(r"^\s*\[agentrig-turn:([^\]]+)\]\s*", re.IGNORECASE)
+_TURN_MARKER = re.compile(r"\[agentrig-turn:([^\]]+)\]\s*", re.IGNORECASE)
+_INVOCATION_ID = re.compile(r"\bagentinv_[A-Za-z0-9]+\b")
 
 
 class AgentTeamsHealth(BaseModel):
@@ -45,6 +48,7 @@ class AgentTeamsBridge:
         enabled: bool,
         assistant: AssistantService,
         repository: AssistantRepository,
+        invocations: AgentInvocationService | None = None,
         client: MatrixClient | None,
         bridge_user_id: str,
         manager_user_id: str,
@@ -56,6 +60,7 @@ class AgentTeamsBridge:
         self._enabled = enabled
         self._assistant = assistant
         self._repository = repository
+        self._invocations = invocations
         self._client = client
         self._bridge_user_id = bridge_user_id
         self._manager_user_id = manager_user_id
@@ -302,12 +307,29 @@ class AgentTeamsBridge:
         session = await self._repository.get_session_by_matrix_room(room_id)
         if session is None:
             return
+        # OpenClaw streams one logical reply as an MSC4357 live event followed by
+        # m.replace edits. Persisting those transient snapshots produces dozens of
+        # duplicate chat bubbles, so only project the stable replacement event.
+        if "org.matrix.msc4357.live" in content:
+            return
+        relation = content.get("m.relates_to")
+        is_replacement = (
+            isinstance(relation, dict) and relation.get("rel_type") == "m.replace"
+        )
+        new_content = content.get("m.new_content")
+        effective_content = new_content if isinstance(new_content, dict) else content
         turn_id_value = content.get("org.agentrig.turn_id")
         turn_id = turn_id_value if isinstance(turn_id_value, str) else None
-        body = content.get("body")
+        body = effective_content.get("body")
         projected_body = body if isinstance(body, str) else ""
         if sender == self._manager_user_id:
-            marker = _TURN_MARKER.match(projected_body)
+            marker = _TURN_MARKER.search(projected_body)
+            # OpenClaw also emits stable progress/reasoning messages. A replacement
+            # is user-facing only when it carries the turn marker required by the
+            # Manager package contract. Plain non-streaming Matrix clients retain
+            # the legacy open-turn fallback below.
+            if is_replacement and marker is None:
+                return
             if marker is not None:
                 turn_id = marker.group(1)
                 projected_body = projected_body[marker.end() :]
@@ -336,6 +358,14 @@ class AgentTeamsBridge:
         else:
             event_type = AssistantEventType.COLLABORATION_INTERVENTION
             actor_type = ActorType.USER
+        if actor_type is ActorType.WORKER:
+            await self._attach_worker_response(
+                session.id,
+                room_id,
+                sender,
+                matrix_event_id,
+                projected_body,
+            )
         await self._assistant.append_event(
             session.id,
             event_type,
@@ -361,6 +391,50 @@ class AgentTeamsBridge:
                     else {}
                 ),
             )
+
+    async def _attach_worker_response(
+        self,
+        session_id: str,
+        room_id: str,
+        sender: str,
+        matrix_event_id: str,
+        body: str,
+    ) -> None:
+        """Correlate an explicit stable Worker receipt to its invocation."""
+        if self._invocations is None:
+            return
+        match = _INVOCATION_ID.search(body)
+        if match is None:
+            return
+        role = (
+            AgentRole.SIMULATION_CURATOR
+            if sender == self._curator_user_id
+            else AgentRole.EVIDENCE_JUDGE
+        )
+        page = await self._invocations.list_for_session(session_id, limit=50)
+        candidate = next(
+            (
+                item
+                for item in page.items
+                if item.id == match.group(0)
+                and item.agent_role is role
+                and item.matrix_room_id == room_id
+                and item.status
+                in {
+                    AgentInvocationStatus.COMPLETED,
+                    AgentInvocationStatus.FAILED,
+                }
+                and item.response_event_id is None
+            ),
+            None,
+        )
+        if candidate is None:
+            return
+        await self._invocations.attach_response_event(
+            candidate.id,
+            matrix_event_id,
+            role=role,
+        )
 
     def _require_client(self) -> MatrixClient:
         if not self._enabled or self._client is None:

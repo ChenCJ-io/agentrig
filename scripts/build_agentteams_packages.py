@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
@@ -21,10 +22,14 @@ ROLES = {
 
 
 def add_file(archive: ZipFile, source: Path, destination: str) -> None:
+    add_bytes(archive, source.read_bytes(), destination)
+
+
+def add_bytes(archive: ZipFile, content: bytes, destination: str) -> None:
     info = ZipInfo(destination, date_time=(2026, 8, 1, 0, 0, 0))
     info.compress_type = ZIP_DEFLATED
     info.external_attr = 0o100644 << 16
-    archive.writestr(info, source.read_bytes())
+    archive.writestr(info, content)
 
 
 def build(root: Path, output: Path) -> list[Path]:
@@ -34,6 +39,22 @@ def build(root: Path, output: Path) -> list[Path]:
         destination = output / f"agentrig-{role}.zip"
         package = root / "deploy" / "agentteams" / "packages" / role
         with ZipFile(destination, "w") as archive:
+            manifest = {
+                "version": "1.0",
+                "source": {"hostname": "agentrig-build"},
+                "worker": {
+                    "suggested_name": f"agentrig-{role}",
+                    "runtime": "openclaw",
+                    "apt_packages": [],
+                    "pip_packages": [],
+                    "npm_packages": [],
+                },
+            }
+            add_bytes(
+                archive,
+                (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode(),
+                "manifest.json",
+            )
             for name in ("SOUL.md", "AGENTS.md"):
                 # AgentTeams v1.1.2 imports role configuration from config/.
                 # Root-level SOUL.md is only a compatibility fallback and root-level

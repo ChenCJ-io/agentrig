@@ -151,14 +151,59 @@ apply_resources() {
       "hiclaw-controller:/tmp/import/agentrig-$role_name.zip" >/dev/null
   done
   docker exec hiclaw-controller hiclaw apply -f /tmp/import/resources.yaml
+  for role_name in curator judge; do
+    docker exec hiclaw-controller hiclaw apply worker \
+      --name "agentrig-$role_name" \
+      --zip "/tmp/import/agentrig-$role_name.zip" \
+      --runtime openclaw
+  done
   for attempt in $(seq 1 180); do
     if test "$(docker exec hiclaw-controller hiclaw get workers -o json \
-      2>/dev/null | jq '[.workers[] | select(.phase == "Running")] | length')" -eq 2; then
-      return
+      2>/dev/null | jq '[.workers[] | select(.phase == "Running")] | length')" -eq 2 \
+      && docker exec hiclaw-worker-agentrig-curator \
+        test -f /root/hiclaw-fs/agents/agentrig-curator/skills/simulate-tool-result/SKILL.md \
+        2>/dev/null \
+      && docker exec hiclaw-worker-agentrig-judge \
+        test -f /root/hiclaw-fs/agents/agentrig-judge/skills/judge-evidence/SKILL.md \
+        2>/dev/null; then
+      break
+    fi
+    sleep 1
+    test "$attempt" -lt 180 || die "AgentTeams Worker packages did not converge"
+  done
+
+  # The embedded v1.1.2 Manager named `default` pulls its live workspace from the
+  # `manager/` object-storage prefix. Install the overlay after CR reconciliation,
+  # publish it to that canonical prefix, and only then restart the runtime.
+  (cd "$ROOT_DIR" && uv run python scripts/sync_agentteams_manager_workspace.py \
+    --workspace "$HICLAW_WORKSPACE_DIR")
+  for role_name in AGENTS.md SOUL.md; do
+    docker exec hiclaw-manager mc cp \
+      "/root/manager-workspace/$role_name" \
+      "hiclaw/hiclaw-storage/manager/$role_name" >/dev/null
+  done
+  for role_name in \
+    plan-evaluation \
+    execute-evaluation-plan \
+    diagnose-run \
+    build-test-case-draft \
+    configure-test-target; do
+    docker exec hiclaw-manager mc mirror \
+      "/root/manager-workspace/skills/$role_name/" \
+      "hiclaw/hiclaw-storage/manager/skills/$role_name/" --overwrite >/dev/null
+  done
+  docker restart hiclaw-manager \
+    hiclaw-worker-agentrig-curator \
+    hiclaw-worker-agentrig-judge >/dev/null
+  for attempt in $(seq 1 60); do
+    if docker exec hiclaw-manager \
+      grep -q 'AgentRig request envelope' /root/manager-workspace/AGENTS.md \
+      2>/dev/null; then
+      return 0
     fi
     sleep 1
   done
-  die "AgentTeams Workers did not reach Running"
+  die "AgentRig Manager overlay did not survive runtime restart"
 }
 
 configure_matrix() {
@@ -337,7 +382,7 @@ stop_listener() {
   kill -TERM "$process_id"
   local attempt
   for attempt in $(seq 1 40); do
-    kill -0 "$process_id" 2>/dev/null || return
+    kill -0 "$process_id" 2>/dev/null || return 0
     sleep 0.25
   done
   die "process on port $port_number did not stop"
@@ -454,6 +499,18 @@ verify_demo() {
   test "$(docker exec hiclaw-controller hiclaw get workers -o json \
     | jq '[.workers[] | select(.phase == "Running")] | length')" -eq 2 \
     || die "AgentTeams Workers are not running"
+  docker exec hiclaw-manager \
+    grep -q 'AgentRig request envelope' /root/manager-workspace/AGENTS.md \
+    || die "AgentRig Manager contract is not installed"
+  docker exec hiclaw-manager \
+    test -f /root/manager-workspace/skills/plan-evaluation/SKILL.md \
+    || die "AgentRig Manager Skills are not installed"
+  docker exec hiclaw-worker-agentrig-curator \
+    test -f /root/hiclaw-fs/agents/agentrig-curator/skills/simulate-tool-result/SKILL.md \
+    || die "Simulation Curator Skill is not installed"
+  docker exec hiclaw-worker-agentrig-judge \
+    test -f /root/hiclaw-fs/agents/agentrig-judge/skills/judge-evidence/SKILL.md \
+    || die "Evidence Judge Skill is not installed"
   verify_mcp_route manager \
     "$AGENTRIG_MANAGER_MCP_TOKEN" "$AGENTRIG_JUDGE_MCP_TOKEN"
   verify_mcp_route curator \

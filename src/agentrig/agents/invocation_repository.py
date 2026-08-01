@@ -60,4 +60,10 @@ class AgentInvocationRepository(Protocol):
         result_ref: str,
     ) -> AgentInvocationView: ...
 
+    async def attach_response_event(
+        self,
+        invocation_id: str,
+        response_event_id: str,
+    ) -> AgentInvocationView: ...
+
     async def cancel_non_terminal(self) -> None: ...
