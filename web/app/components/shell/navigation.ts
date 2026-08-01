@@ -33,12 +33,18 @@ export interface ShellContext {
   groups: NavigationGroup[];
 }
 
-const evaluationItems: NavigationItem[] = [
+const workspaceItems: NavigationItem[] = [
   { label: "智能评测助手", path: "/assistant", icon: MessagesSquare },
   { label: "评测总览", path: "/evaluation/overview", icon: Gauge },
+];
+
+const runtimeItems: NavigationItem[] = [
   { label: "运行记录", path: "/evaluation/batches", icon: ListChecks },
-  { label: "测试用例", path: "/evaluation/test-cases", icon: TestTube2 },
   { label: "用例审核", path: "/evaluation/cases/review", icon: FileSearch, match: "/evaluation/cases" },
+];
+
+const assetItems: NavigationItem[] = [
+  { label: "测试用例", path: "/evaluation/test-cases", icon: TestTube2 },
   { label: "Targets", path: "/evaluation/targets", icon: Waypoints },
   { label: "Profiles", path: "/evaluation/profiles", icon: Settings2 },
   { label: "Samples", path: "/evaluation/samples", icon: Database },
@@ -70,7 +76,11 @@ export function getShellContext(pathname: string): ShellContext {
     area: "agentrig",
     eyebrow: "AGENTRIG",
     code: "EVALUATION / CONTROL",
-    groups: [{ items: evaluationItems }],
+    groups: [
+      { label: "WORKSPACE", items: workspaceItems },
+      { label: "OPERATIONS", items: runtimeItems },
+      { label: "ASSETS", items: assetItems },
+    ],
   };
 }
 

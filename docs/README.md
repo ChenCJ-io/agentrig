@@ -10,6 +10,7 @@
 | [02-V1验收](./02-V1验收.md) | 自动化、数据库、wheel、Demo 与真实 Pixcake 协议验收记录 |
 | [03-V2-智能评测助手与AgentTeams-开发设计](./03-V2-智能评测助手与AgentTeams-开发设计.md) | V2 三 Agent、AgentTeams 集成、会话、计划、接口、数据、安全、部署和验收开发基线 |
 | [04-本机演示与验收](./04-本机演示与验收.md) | lassist + AgentTeams + DeepSeek 本机一键搭建、操作与验收手册 |
+| [competition/](./competition/) | GOAI 2026 作品简介、Agent Identity、PPT、Demo、答辩与提交清单 |
 
 当前仓库的权威设计结论、实现边界和可执行接入方式只维护在以上文档中。V1 实现事实以
 00-02 为准；V2 新增能力以 03 为准，且不得改变 00-02 已冻结的 V1 兼容边界；04 是

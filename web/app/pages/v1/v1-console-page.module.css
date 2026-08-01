@@ -105,8 +105,8 @@
   flex: 1;
   resize: vertical;
   padding: 16px;
-  background: #171717;
-  color: #dce4df;
+  background: #f8faf9;
+  color: var(--oc-graphite);
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.65;
@@ -273,8 +273,8 @@
   margin: 0;
   overflow-x: auto;
   padding: 12px;
-  background: #171717;
-  color: #cdd8d1;
+  background: #f7f9f8;
+  color: var(--oc-graphite);
   font-family: var(--font-mono);
   font-size: 9px;
   line-height: 1.6;

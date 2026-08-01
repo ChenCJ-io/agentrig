@@ -344,20 +344,14 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
         assert projected.items[-1].matrix_event_id == "$manager-response"
         assert (await services.assistant.get_turn(receipt.turn_id)).status.value == "completed"
         assert any("createRoom" in request.url.path for request in requests)
-        sent = next(
-            request
-            for request in requests
-            if "/send/m.room.message/" in request.url.path
-        )
+        sent = next(request for request in requests if "/send/m.room.message/" in request.url.path)
         sent_content = json.loads(sent.content)
         sent_body = sent_content["body"]
         assert f"assistant_session_id: {session.id}" in sent_body
         assert f"assistant_turn_id: {receipt.turn_id}" in sent_body
         assert "User request:\nevaluate this" in sent_body
         assert sent_content["m.mentions"] == {"user_ids": ["@manager:test"]}
-        assert 'href="https://matrix.to/#/@manager:test"' in sent_content[
-            "formatted_body"
-        ]
+        assert 'href="https://matrix.to/#/@manager:test"' in sent_content["formatted_body"]
 
         next_receipt = await services.assistant.send_message(
             session.id,
@@ -376,17 +370,14 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
                 "content": {
                     "msgtype": "m.text",
                     "body": (
-                        f"[agentrig-turn:{next_receipt.turn_id}] "
-                        "Evidence supports the result."
+                        f"[agentrig-turn:{next_receipt.turn_id}] Evidence supports the result."
                     ),
                 },
             },
         )
         final_events = await services.assistant.list_events(session.id)
         assert final_events.items[-1].turn_id == next_receipt.turn_id
-        assert final_events.items[-1].payload["content"] == (
-            "Evidence supports the result."
-        )
+        assert final_events.items[-1].payload["content"] == ("Evidence supports the result.")
 
         before_live = len(final_events.items)
         await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
@@ -484,9 +475,10 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
                 },
             },
         )
-        assert (
-            await services.agent_invocations.get(invocation.id)
-        ).response_event_id is None
+        assert (await services.agent_invocations.get(invocation.id)).response_event_id is None
+        assert len((await services.assistant.list_events(session.id)).items) == len(
+            stable_events.items
+        )
         await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
             session.matrix_room_id or "",
             {
@@ -501,5 +493,17 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
         )
         completed = await services.agent_invocations.get(invocation.id)
         assert completed.response_event_id == "$worker-response"
+        receipt_event = (await services.assistant.list_events(session.id)).items[-1]
+        assert receipt_event.event_type.value == "assistant_activity"
+        assert receipt_event.invocation_id == invocation.id
+        assert receipt_event.run_id == "run-matrix-receipt"
+        assert receipt_event.case_run_id == "case-run-matrix-receipt"
+        assert receipt_event.payload == {
+            "content": "simulation_curator finished: completed",
+            "source": "agentteams_matrix",
+            "status": "completed",
+            "agent_role": "simulation_curator",
+        }
+        assert "TASK_COMPLETED" not in str(receipt_event.payload)
     finally:
         await services.close()

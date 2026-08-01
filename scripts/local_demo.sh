@@ -381,11 +381,23 @@ stop_listener() {
   esac
   kill -TERM "$process_id"
   local attempt
-  for attempt in $(seq 1 40); do
+  # Matrix sync uses a 20-second long poll. Allow the application shutdown hook
+  # to drain it and close repositories instead of treating a normal drain as a
+  # hung process after only ten seconds.
+  for attempt in $(seq 1 120); do
     kill -0 "$process_id" 2>/dev/null || return 0
     sleep 0.25
   done
-  die "process on port $port_number did not stop"
+  # A browser can keep the assistant SSE connection open after uvicorn starts
+  # graceful shutdown. The target PID and command were validated above, so use a
+  # bounded fallback instead of leaving a second Matrix sync process behind.
+  log "process on port $port_number did not drain in 30s; forcing the validated PID to stop"
+  kill -KILL "$process_id"
+  for attempt in $(seq 1 20); do
+    kill -0 "$process_id" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  die "process on port $port_number did not stop after SIGKILL"
 }
 
 start_lassist() {
@@ -395,7 +407,9 @@ start_lassist() {
   screen -S agentrig-local-demo-lassist -X quit >/dev/null 2>&1 || true
   screen -dmS agentrig-local-demo-lassist bash -lc \
     "exec '$ROOT_DIR/scripts/run_lassist_local.sh' >> '$LOG_DIR/lassist.log' 2>&1"
-  wait_http "$LASSIST_URL/health" lassist
+  # lassist initializes its external PostgreSQL-backed state during startup and
+  # can exceed one minute after a cold restart.
+  wait_http "$LASSIST_URL/health" lassist 240
 }
 
 start_agentrig() {
@@ -494,6 +508,12 @@ verify_demo() {
   curl -fsS "$AGENTRIG_URL/api/targets/target_lassist_local" \
     | jq -e '.driver_type == "pixcake_http_sse"' >/dev/null \
     || die "local lassist Target is missing"
+  curl -fsS "$AGENTRIG_URL/api/test-cases/case_lassist_three_agent_demo" \
+    | jq -e '.review_status == "approved"' >/dev/null \
+    || die "positive demo Case is missing or not approved"
+  curl -fsS "$AGENTRIG_URL/api/test-cases/case_lassist_confirmation_gate_failure" \
+    | jq -e '.review_status == "approved"' >/dev/null \
+    || die "negative security Case is missing or not approved"
   curl -fsS "$AGENTRIG_URL/assistant" | grep -qi '<!doctype html' \
     || die "assistant Web UI is unavailable"
   test "$(docker exec hiclaw-controller hiclaw get workers -o json \
@@ -580,6 +600,7 @@ Usage: scripts/local_demo.sh <command>
 
   setup    Install/configure AgentTeams, start services, seed and verify everything
   start    Start the existing AgentTeams installation, lassist and AgentRig
+  restart  Rebuild and restart lassist/AgentRig, then seed and verify
   seed     Idempotently create the local Target, approved Case and Profile
   verify   Run local health and contract acceptance checks
   open     Open the assistant conversation window
@@ -593,6 +614,7 @@ command_name=${1:-status}
 case "$command_name" in
   setup) setup_all ;;
   start) start_existing_stack ;;
+  restart) restart_services; seed_demo; verify_demo ;;
   seed) seed_demo ;;
   verify) verify_demo ;;
   open) open_demo ;;

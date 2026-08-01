@@ -1,34 +1,37 @@
 :root {
-  /* 全深色主题（对齐 .pen V1：页面 #1E1E1E / sidebar #121212 / 卡片 #2D2D2D / 边框 #333333）。
-     分层：sidebar #121212（最暗）< hero #171918 < canvas #1E1E1E < card #2D2D2D。 */
-  --oc-canvas: #1e1e1e;        /* 页面背景 */
-  --oc-cobalt: #2563eb;        /* 主色 */
-  --oc-cobalt-soft: #1e2a4a;   /* 主色软底（深） */
-  --oc-cobalt-hover: #1d4ed7;  /* 主色 hover */
-  --oc-ink: #121212;           /* 最暗层（sidebar/hero 背景，不作文字色） */
-  --oc-fg: #e8ebe9;            /* 主文字（浅色，深底可读） */
-  --oc-graphite: #3a3a3a;      /* 深灰强调 */
-  --oc-muted: #b0b0b0;         /* 次要文字 */
-  --oc-faint: #6b6b6b;         /* 弱文字 */
-  --oc-line: #333333;          /* 标准边框 */
-  --oc-line-strong: #404040;   /* 强边框 */
-  --oc-white: #2d2d2d;         /* 卡片/面板背景（深） */
-  --oc-surface-2: #252525;     /* 次级表面（介于 canvas 与 card） */
-  --oc-canvas-hover: #383838;  /* hover 表面 */
-  --oc-green: #4ade80;
-  --oc-green-soft: #1f3d2e;
-  --oc-amber: #f59e0b;
-  --oc-amber-soft: #3d2f12;
-  --oc-coral: #f87171;
-  --oc-coral-soft: #3d2020;
-  --oc-sidebar-line: #262626;
-  --oc-sidebar-muted: #b0b0b0;
-  --oc-sidebar-faint: #6b6b6b;
+  /* AgentRig native control-room palette. The layout language is inspired by
+     AgentScope's dense operator UI, while all tokens and components are original. */
+  --oc-canvas: #f1f3f2;
+  --oc-canvas-hover: #eef1ef;
+  --oc-cobalt: #2457f5;
+  --oc-cobalt-soft: #e9eeff;
+  --oc-cobalt-hover: #1744d9;
+  --oc-ink: #151719;
+  --oc-fg: #151719;
+  --oc-graphite: #252927;
+  --oc-muted: #59615d;
+  --oc-fg-muted: #59615d;
+  --oc-faint: #737b77;
+  --oc-line: #d7ddd9;
+  --oc-line-strong: #b7c0ba;
+  --oc-white: #ffffff;
+  --oc-surface-1: #f7f8f7;
+  --oc-surface-2: #fbfcfb;
+  --oc-green: #237a59;
+  --oc-green-soft: #e8f5ef;
+  --oc-amber: #955900;
+  --oc-amber-soft: #fff4d8;
+  --oc-coral: #b8403a;
+  --oc-coral-soft: #fcebea;
+  --oc-sidebar-line: #2b2f2d;
+  --oc-sidebar-muted: #bfc5c1;
+  --oc-sidebar-faint: #737a76;
   --font-display: "Funnel Sans", "Noto Sans SC", system-ui, sans-serif;
   --font-sans: "Geist", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
   --radius: 3px;
-  --shadow-focus: 0 0 0 3px rgb(37 99 235 / 40%);
-  --shell-topbar: 60px;
-  --shell-sidebar: 232px;
+  --shadow-focus: 0 0 0 3px rgb(36 87 245 / 18%);
+  --shadow-panel: 0 1px 2px rgb(21 23 25 / 5%);
+  --shell-topbar: 64px;
+  --shell-sidebar: 216px;
 }

@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel
 
 from ...agents.invocation_models import AgentInvocationStatus, AgentRole
+from ...agents.invocation_schemas import AgentInvocationView
 from ...agents.invocation_service import AgentInvocationService
 from ...assistant.models import (
     ActorType,
@@ -91,12 +92,16 @@ class AgentTeamsBridge:
             self._task = None
 
     async def health(self) -> AgentTeamsHealth:
-        configured = self._client is not None and self._role_mcp_configured and all(
-            (
-                self._bridge_user_id,
-                self._manager_user_id,
-                self._curator_user_id,
-                self._judge_user_id,
+        configured = (
+            self._client is not None
+            and self._role_mcp_configured
+            and all(
+                (
+                    self._bridge_user_id,
+                    self._manager_user_id,
+                    self._curator_user_id,
+                    self._judge_user_id,
+                )
             )
         )
         if not self._enabled:
@@ -189,8 +194,7 @@ class AgentTeamsBridge:
             )
             formatted_envelope = html.escape(envelope).replace("\n", "<br>")
             manager_label = html.escape(
-                self._manager_user_id.split(":", 1)[0].removeprefix("@")
-                or "manager"
+                self._manager_user_id.split(":", 1)[0].removeprefix("@") or "manager"
             )
             visible_id = html.escape(self._manager_user_id)
             formatted_envelope = formatted_envelope.replace(
@@ -313,9 +317,7 @@ class AgentTeamsBridge:
         if "org.matrix.msc4357.live" in content:
             return
         relation = content.get("m.relates_to")
-        is_replacement = (
-            isinstance(relation, dict) and relation.get("rel_type") == "m.replace"
-        )
+        is_replacement = isinstance(relation, dict) and relation.get("rel_type") == "m.replace"
         new_content = content.get("m.new_content")
         effective_content = new_content if isinstance(new_content, dict) else content
         turn_id_value = content.get("org.agentrig.turn_id")
@@ -334,9 +336,7 @@ class AgentTeamsBridge:
                 turn_id = marker.group(1)
                 projected_body = projected_body[marker.end() :]
             referenced_turn = (
-                await self._repository.get_turn(turn_id)
-                if turn_id is not None
-                else None
+                await self._repository.get_turn(turn_id) if turn_id is not None else None
             )
             if referenced_turn is None or referenced_turn.session_id != session.id:
                 open_turn = await self._repository.get_latest_open_turn(session.id)
@@ -345,10 +345,6 @@ class AgentTeamsBridge:
             referenced_turn = await self._repository.get_turn(turn_id)
             if referenced_turn is None or referenced_turn.session_id != session.id:
                 turn_id = None
-        payload = {
-            "content": projected_body,
-            "source": "agentteams_matrix",
-        }
         if sender == self._manager_user_id:
             event_type = AssistantEventType.ASSISTANT_MESSAGE
             actor_type = ActorType.MANAGER
@@ -358,14 +354,35 @@ class AgentTeamsBridge:
         else:
             event_type = AssistantEventType.COLLABORATION_INTERVENTION
             actor_type = ActorType.USER
+        invocation: AgentInvocationView | None = None
         if actor_type is ActorType.WORKER:
-            await self._attach_worker_response(
+            invocation = await self._attach_worker_response(
                 session.id,
                 room_id,
                 sender,
                 matrix_event_id,
                 projected_body,
             )
+            # AgentTeams runtimes may emit stable progress/reasoning messages before
+            # the explicit task receipt. They are not part of the public assistant
+            # transcript and can contain internal reasoning, so only project a
+            # validated terminal receipt correlated to an exact invocation.
+            if invocation is None:
+                return
+            payload = {
+                "content": (
+                    f"{invocation.agent_role.value} finished: "
+                    f"{invocation.status.value}"
+                ),
+                "source": "agentteams_matrix",
+                "status": invocation.status.value,
+                "agent_role": invocation.agent_role.value,
+            }
+        else:
+            payload = {
+                "content": projected_body,
+                "source": "agentteams_matrix",
+            }
         await self._assistant.append_event(
             session.id,
             event_type,
@@ -373,6 +390,9 @@ class AgentTeamsBridge:
             actor_id=sender,
             payload=payload,
             turn_id=turn_id,
+            run_id=invocation.run_id if invocation is not None else None,
+            case_run_id=invocation.case_run_id if invocation is not None else None,
+            invocation_id=invocation.id if invocation is not None else None,
             matrix_event_id=matrix_event_id,
             delivery_status=DeliveryStatus.DELIVERED,
         )
@@ -399,13 +419,13 @@ class AgentTeamsBridge:
         sender: str,
         matrix_event_id: str,
         body: str,
-    ) -> None:
+    ) -> AgentInvocationView | None:
         """Correlate an explicit stable Worker receipt to its invocation."""
         if self._invocations is None:
-            return
+            return None
         match = _INVOCATION_ID.search(body)
         if match is None:
-            return
+            return None
         role = (
             AgentRole.SIMULATION_CURATOR
             if sender == self._curator_user_id
@@ -429,8 +449,8 @@ class AgentTeamsBridge:
             None,
         )
         if candidate is None:
-            return
-        await self._invocations.attach_response_event(
+            return None
+        return await self._invocations.attach_response_event(
             candidate.id,
             matrix_event_id,
             role=role,

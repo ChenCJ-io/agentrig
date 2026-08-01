@@ -38,7 +38,9 @@ export interface AssistantEvent {
   turn_id: string | null;
   plan_id: string | null;
   run_id: string | null;
+  case_run_id: string | null;
   invocation_id: string | null;
+  matrix_event_id: string | null;
   delivery_status: "local" | "pending" | "delivered" | "failed";
   last_error: string | null;
   created_at: string;
@@ -84,11 +86,23 @@ export interface AgentInvocation {
   id: string;
   agent_role: "simulation_curator" | "evidence_judge";
   status: string;
+  session_id: string | null;
+  plan_id: string | null;
   run_id: string;
   case_run_id: string;
+  tool_call_event_id: string | null;
+  input_hash: string;
+  result_ref: string | null;
+  result_hash: string | null;
+  matrix_room_id: string | null;
+  request_event_id: string | null;
+  response_event_id: string | null;
   assigned_agent: string | null;
+  deadline: string;
   error_message: string | null;
   created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface AgentInvocationPage {

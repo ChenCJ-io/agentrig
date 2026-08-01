@@ -18,8 +18,10 @@ import {
   UsersRound,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
 import { Link } from "react-router";
+import remarkGfm from "remark-gfm";
 
 import {
   cancelEvaluationPlan,
@@ -54,6 +56,7 @@ export function AssistantPage() {
   const [goalDraft, setGoalDraft] = useState("");
   const [selectionDraft, setSelectionDraft] = useState("");
   const [reasoningDraft, setReasoningDraft] = useState("");
+  const messageEndRef = useRef<HTMLDivElement>(null);
 
   const sessions = useQuery({
     queryKey: ["v2", "sessions"],
@@ -242,6 +245,10 @@ export function AssistantPage() {
     () => summarizeAgents(invocations.data?.items ?? []),
     [invocations.data],
   );
+  const latestEventId = events.data?.items.at(-1)?.id;
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [latestEventId, send.isPending]);
 
   return (
     <div className={styles.workspace}>
@@ -298,14 +305,15 @@ export function AssistantPage() {
       <main className={styles.conversation}>
         <header className={styles.conversationHeader}>
           <div>
-            <span className="eyebrow">MANAGED EVALUATION</span>
+            <span className="eyebrow">AGENTTEAMS / CONTROL ROOM</span>
             <h1>{session.data?.title ?? "智能评测助手"}</h1>
+            <p>自然语言规划 · 人工确认 · 可审计执行</p>
           </div>
           <div className={styles.roomState}>
             <Badge tone={session.data?.matrix_room_id ? "success" : "warning"}>
               {session.data?.matrix_room_id ? "Matrix room ready" : "room pending"}
             </Badge>
-            <code>{session.data?.matrix_room_id ?? "—"}</code>
+            <code>{session.data?.matrix_room_id ? shortId(session.data.matrix_room_id) : "—"}</code>
           </div>
         </header>
 
@@ -329,37 +337,53 @@ export function AssistantPage() {
           ) : null}
           {selectedId && !events.data?.items.length ? (
             <div className={styles.welcome}>
-              <Sparkles size={24} />
-              <h2>告诉我你想验证什么</h2>
-              <p>例如：用项目打开相关用例，对比两个 Agent 版本，并解释失败证据。</p>
+              <span><Sparkles size={22} /></span>
+              <small>MANAGED EVALUATION</small>
+              <h2>从一句评测目标开始</h2>
+              <p>Manager 会查询正式资产并生成结构化计划；只有你确认后才会提交运行。</p>
+              <div className={styles.promptGrid}>
+                {QUICK_PROMPTS.map((prompt) => (
+                  <button key={prompt.label} onClick={() => setMessage(prompt.value)} type="button">
+                    <strong>{prompt.label}</strong>
+                    <small>{prompt.description}</small>
+                    <ChevronRight size={13} />
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
+          <div ref={messageEndRef} />
         </div>
 
         <form className={styles.composer} onSubmit={submitMessage}>
-          <textarea
-            disabled={!selectedId || !health.data?.enabled || send.isPending}
-            onChange={(event) => setMessage(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
+          <div className={styles.composerBox}>
+            <textarea
+              disabled={!selectedId || !health.data?.enabled || send.isPending}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={
+                health.data?.enabled
+                  ? "描述评测目标、范围或你想追查的问题…"
+                  : "当前为 Core 模式；启用 AgentTeams 后可使用智能助手"
               }
-            }}
-            placeholder={
-              health.data?.enabled
-                ? "描述评测目标、范围或你想追查的问题…"
-                : "当前为 Core 模式；启用 AgentTeams 后可使用智能助手"
-            }
-            value={message}
-          />
-          <Button
-            disabled={!message.trim() || !selectedId || !health.data?.enabled || send.isPending}
-            type="submit"
-            variant="primary"
-          >
-            <Send size={14} /> 发送
-          </Button>
+              value={message}
+            />
+            <footer>
+              <span>ENTER 发送 · SHIFT + ENTER 换行</span>
+              <Button
+                disabled={!message.trim() || !selectedId || !health.data?.enabled || send.isPending}
+                type="submit"
+                variant="primary"
+              >
+                <Send size={14} /> 发送
+              </Button>
+            </footer>
+          </div>
         </form>
       </main>
 
@@ -458,13 +482,24 @@ export function AssistantPage() {
         </section>
 
         <section className={styles.invocations}>
-          <header><span className="eyebrow">RECENT INVOCATIONS</span><strong>{invocations.data?.total ?? 0}</strong></header>
+          <header>
+            <div><span className="eyebrow">EVIDENCE TRAIL</span><strong>Worker 调用证据</strong></div>
+            <Badge tone={invocations.data?.total ? "accent" : "neutral"}>{invocations.data?.total ?? 0}</Badge>
+          </header>
           {(invocations.data?.items ?? []).slice(0, 6).map((item) => (
-            <div key={item.id}>
-              <span>{item.agent_role === "simulation_curator" ? <GitBranch size={12} /> : <ShieldCheck size={12} />}</span>
-              <p><strong>{item.agent_role}</strong><small>{shortId(item.case_run_id)}</small></p>
-              <Badge tone={tone(item.status)}>{item.status}</Badge>
-            </div>
+            <article className={styles.invocationCard} key={item.id}>
+              <div className={styles.invocationTitle}>
+                <span>{item.agent_role === "simulation_curator" ? <GitBranch size={12} /> : <ShieldCheck size={12} />}</span>
+                <p><strong>{roleName(item.agent_role)}</strong><small>{shortId(item.id)}</small></p>
+                <Badge tone={tone(item.status)}>{item.status}</Badge>
+              </div>
+              <dl className={styles.evidenceGrid}>
+                <div><dt>REQUEST</dt><dd title={item.request_event_id ?? ""}>{item.request_event_id ? shortId(item.request_event_id) : "pending"}</dd></div>
+                <div><dt>RESPONSE</dt><dd title={item.response_event_id ?? ""}>{item.response_event_id ? shortId(item.response_event_id) : "pending"}</dd></div>
+                <div><dt>RESULT REF</dt><dd title={item.result_ref ?? ""}>{item.result_ref ? shortId(item.result_ref) : "pending"}</dd></div>
+              </dl>
+              <footer><span>CASE RUN</span><code>{shortId(item.case_run_id)}</code></footer>
+            </article>
           ))}
           {!invocations.data?.items.length ? <p className={styles.empty}>尚无 Worker 调用。</p> : null}
         </section>
@@ -478,8 +513,8 @@ function EventMessage({ event }: { event: AssistantEvent }) {
     return (
       <div className={styles.activity}>
         <Clock3 size={12} />
-        <span>{event.event_type.replaceAll("_", " ")}</span>
-        <code>{event.plan_id ? shortId(event.plan_id) : event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
+        <span>{activityName(event)}</span>
+        <code>{event.invocation_id ? shortId(event.invocation_id) : event.plan_id ? shortId(event.plan_id) : event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
       </div>
     );
   }
@@ -490,7 +525,9 @@ function EventMessage({ event }: { event: AssistantEvent }) {
       <span className={styles.avatar}>{user ? <UserRound size={14} /> : <Bot size={14} />}</span>
       <div>
         <small>{user ? "YOU" : event.actor_id}</small>
-        <p>{content}</p>
+        <div className={styles.messageBody}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        </div>
         <footer>
           <time>{new Date(event.created_at).toLocaleTimeString()}</time>
           <span>#{event.seq}</span>
@@ -499,6 +536,42 @@ function EventMessage({ event }: { event: AssistantEvent }) {
       </div>
     </div>
   );
+}
+
+const QUICK_PROMPTS = [
+  {
+    label: "运行成功样例",
+    description: "lassist 背景增强全链路",
+    value: "使用 target_lassist_local、profile_lassist_agentteams 和已批准用例 case_lassist_three_agent_demo，生成一次评测计划。不要扩大范围。",
+  },
+  {
+    label: "验证安全策略",
+    description: "图片编辑二次确认门禁",
+    value: "只运行已批准用例 case_lassist_confirmation_gate_failure，使用本机 lassist 和当前 AgentTeams Profile，验证图片编辑前的二次确认策略。",
+  },
+  {
+    label: "解释最近结果",
+    description: "只引用本次 Run 证据",
+    value: "解释最近一次运行的结果，只引用本次 Run 的证据，并区分执行错误与评测失败。",
+  },
+] as const;
+
+function roleName(role: AgentInvocation["agent_role"]) {
+  return role === "simulation_curator" ? "Simulation Curator" : "Evidence Judge";
+}
+
+function activityName(event: AssistantEvent) {
+  if (event.event_type === "assistant_activity" && event.invocation_id) {
+    return `${String(event.payload.agent_role ?? "Worker")} 已提交可验证回执`;
+  }
+  const labels: Record<string, string> = {
+    plan_created: "Manager 已生成评测计划",
+    plan_updated: "评测计划已更新",
+    plan_confirmed: "用户确认已绑定计划",
+    plan_submitted: "计划已提交运行",
+    collaboration_intervention: "协作成员消息",
+  };
+  return labels[event.event_type] ?? event.event_type.replaceAll("_", " ");
 }
 
 function AgentRow({ icon, label, status }: { icon: ReactNode; label: string; status: string }) {
