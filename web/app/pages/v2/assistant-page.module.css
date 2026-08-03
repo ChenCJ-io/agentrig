@@ -542,7 +542,87 @@
   .promptGrid button { min-height: 58px; }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1250px) {
+  .sessions { display: none; }
+  .workspace { grid-template-columns: minmax(440px, 1fr) 310px; }
+}
+
+/* Chinese-first visual pass: preserve the three-pane control room without tiny text. */
+.workspace { grid-template-columns: 276px minmax(540px, 1fr) 380px; }
+.sessions > header,
+.agentTeam > header,
+.planCard > header,
+.invocations > header { min-height: 68px; padding: 12px 16px; }
+.sessions header strong,
+.agentTeam header strong,
+.planCard header strong,
+.invocations header strong { font-size: 13px; }
+.newSession { gap: 8px; padding: 12px; }
+.newSession input { height: 36px; border-radius: 6px; font-size: 11px; }
+.sessionList > button { min-height: 76px; gap: 8px; padding: 12px 15px; }
+.sessionList button strong { font-size: 12px; }
+.sessionList button small { font-size: 9px; }
+.sessions > footer { min-height: 78px; padding: 12px 15px; }
+.sessions > footer span { font-size: 11px; }
+.sessions > footer small { font-size: 9px; line-height: 1.55; }
+.conversationHeader { min-height: 84px; padding: 13px 24px; }
+.conversationHeader h1 { font-size: 22px; }
+.conversationHeader > div:first-child > p { font-size: 11px; }
+.roomState code { font-size: 9px; }
+.notice { min-height: 44px; padding: 9px 17px; font-size: 11px; }
+.messages { gap: 23px; padding: 30px max(26px, 7%); }
+.message { max-width: 92%; }
+.avatar { width: 34px; height: 34px; flex-basis: 34px; border-radius: 6px; }
+.message > div > small { margin-bottom: 7px; font-family: var(--font-sans); font-size: 9px; font-weight: 650; text-transform: none; }
+.messageBody,
+.managerMessage > div > p { border-radius: 7px; padding: 14px 16px; font-size: 12px; line-height: 1.75; }
+.message footer { font-size: 9px; }
+.activity { padding: 6px 11px; font-size: 9px; }
+.welcome { width: min(620px, 94%); }
+.welcome > span { width: 52px; height: 52px; border-radius: 8px; }
+.welcome > small { font-family: var(--font-sans); font-size: 9px; font-weight: 650; }
+.welcome h2 { font-size: 25px; }
+.welcome > p { max-width: 500px; font-size: 12px; }
+.promptGrid { gap: 10px; margin-top: 22px; }
+.promptGrid button { min-height: 94px; border-radius: 7px; padding: 14px 30px 12px 13px; }
+.promptGrid button strong { font-size: 12px; }
+.promptGrid button small { font-size: 10px; line-height: 1.5; }
+.composer { min-height: 132px; padding: 14px 21px 16px; }
+.composerBox { border-radius: 7px; }
+.composer textarea { min-height: 68px; padding: 13px 14px 6px; font-size: 12px; }
+.composerBox > footer { min-height: 42px; padding: 4px 7px 7px 13px; }
+.composerBox > footer > span { font-family: var(--font-sans); font-size: 9px; }
+.agentRow { min-height: 60px; padding: 10px 15px; }
+.agentRow strong,
+.invocationTitle strong { font-size: 11px; }
+.agentRow small,
+.invocationTitle small { font-size: 9px; }
+.planGoal,
+.planMeta,
+.planActions { padding: 15px 17px; }
+.planGoal small,
+.planMeta span { font-family: var(--font-sans); font-size: 9px; font-weight: 650; }
+.planGoal p { font-size: 12px; line-height: 1.65; }
+.planStats > div { padding: 13px; }
+.planStats dt { font-family: var(--font-sans); font-size: 9px; text-transform: none; }
+.planStats dd { font-size: 21px; }
+.planMeta { grid-template-columns: 88px 1fr; }
+.planMeta p { font-size: 10px; }
+.confirmation { padding: 11px 15px; font-size: 10px; }
+.planEditor label { font-family: var(--font-sans); font-size: 9px; text-transform: none; }
+.planEditor textarea { font-size: 9px; }
+.runLink { font-size: 10px; }
+.invocationCard { padding: 12px 14px 13px; }
+.evidenceGrid dt { font-size: 8px; }
+.evidenceGrid dd { font-size: 9px; }
+.invocationCard > footer { font-size: 9px; }
+.empty { font-size: 10px; line-height: 1.65; }
+
+@media (max-width: 1360px) {
+  .workspace { grid-template-columns: 238px minmax(480px, 1fr) 340px; }
+}
+
+@media (max-width: 1250px) {
   .sessions { display: none; }
   .workspace { grid-template-columns: minmax(440px, 1fr) 310px; }
 }

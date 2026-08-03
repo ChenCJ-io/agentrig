@@ -119,7 +119,9 @@ export function AssistantPage() {
           activeRequest.signal,
         );
       } catch (error) {
-        if (!activeRequest.signal.aborted) console.warn("assistant event stream disconnected", error);
+        if (!stopped && !activeRequest.signal.aborted && !(error instanceof TypeError)) {
+          console.warn("assistant event stream disconnected", error);
+        }
       }
       if (!stopped) reconnectTimer = setTimeout(() => void connect(), 1_500);
     };
@@ -255,7 +257,7 @@ export function AssistantPage() {
       <aside className={styles.sessions}>
         <header>
           <div>
-            <span className="eyebrow">ASSISTANT SESSIONS</span>
+            <span className="eyebrow">智能评测会话</span>
             <strong>评测会话</strong>
           </div>
           <MessageSquarePlus size={16} />
@@ -288,7 +290,7 @@ export function AssistantPage() {
                 {item.status === "archived" ? <Archive size={13} /> : <Sparkles size={13} />}
                 <strong>{item.title}</strong>
               </span>
-              <small>{item.last_event_seq} events · {shortId(item.id)}</small>
+              <small>{item.last_event_seq} 个事件 · {shortId(item.id)}</small>
             </button>
           ))}
           {!sessions.data?.items.length ? (
@@ -297,21 +299,21 @@ export function AssistantPage() {
         </div>
         <footer>
           <i className={health.data?.matrix_reachable ? styles.online : ""} />
-          <span>{health.data?.enabled ? "AgentTeams" : "Core only"}</span>
-          <small>{health.data?.message ?? "正在检查协作运行时"}</small>
+          <span>{health.data?.enabled ? "AgentTeams 已启用" : "仅核心模式"}</span>
+          <small>{health.data?.matrix_reachable ? "Matrix 与协作角色运行正常" : "正在检查协作运行时"}</small>
         </footer>
       </aside>
 
       <main className={styles.conversation}>
         <header className={styles.conversationHeader}>
           <div>
-            <span className="eyebrow">AGENTTEAMS / CONTROL ROOM</span>
+            <span className="eyebrow">AgentTeams · 智能评测控制室</span>
             <h1>{session.data?.title ?? "智能评测助手"}</h1>
             <p>自然语言规划 · 人工确认 · 可审计执行</p>
           </div>
           <div className={styles.roomState}>
             <Badge tone={session.data?.matrix_room_id ? "success" : "warning"}>
-              {session.data?.matrix_room_id ? "Matrix room ready" : "room pending"}
+              {session.data?.matrix_room_id ? "Matrix 房间已就绪" : "等待协作房间"}
             </Badge>
             <code>{session.data?.matrix_room_id ? shortId(session.data.matrix_room_id) : "—"}</code>
           </div>
@@ -332,13 +334,13 @@ export function AssistantPage() {
           {send.isPending ? (
             <div className={`${styles.message} ${styles.managerMessage}`}>
               <span className={styles.avatar}><Bot size={14} /></span>
-              <div><small>AGENTTEAMS MANAGER</small><p><LoaderCircle className={styles.spin} size={14} /> 正在投递…</p></div>
+              <div><small>评测主控 Manager</small><p><LoaderCircle className={styles.spin} size={14} /> 正在投递…</p></div>
             </div>
           ) : null}
           {selectedId && !events.data?.items.length ? (
             <div className={styles.welcome}>
               <span><Sparkles size={22} /></span>
-              <small>MANAGED EVALUATION</small>
+              <small>智能协作评测</small>
               <h2>从一句评测目标开始</h2>
               <p>Manager 会查询正式资产并生成结构化计划；只有你确认后才会提交运行。</p>
               <div className={styles.promptGrid}>
@@ -374,7 +376,7 @@ export function AssistantPage() {
               value={message}
             />
             <footer>
-              <span>ENTER 发送 · SHIFT + ENTER 换行</span>
+              <span>Enter 发送 · Shift + Enter 换行</span>
               <Button
                 disabled={!message.trim() || !selectedId || !health.data?.enabled || send.isPending}
                 type="submit"
@@ -390,41 +392,41 @@ export function AssistantPage() {
       <aside className={styles.context}>
         <section className={styles.agentTeam}>
           <header>
-            <div><span className="eyebrow">AGENT TEAM</span><strong>协作角色</strong></div>
+            <div><span className="eyebrow">评测团队</span><strong>协作角色</strong></div>
             <UsersRound size={16} />
           </header>
-          <AgentRow icon={<Bot size={14} />} label="Manager" status={health.data?.enabled ? "ready" : "offline"} />
-          <AgentRow icon={<GitBranch size={14} />} label="Simulation Curator" status={groupedAgents.curator} />
-          <AgentRow icon={<ShieldCheck size={14} />} label="Evidence Judge" status={groupedAgents.judge} />
+          <AgentRow icon={<Bot size={14} />} label="评测主控 Manager" status={health.data?.enabled ? "ready" : "offline"} />
+          <AgentRow icon={<GitBranch size={14} />} label="结果模拟 Curator" status={groupedAgents.curator} />
+          <AgentRow icon={<ShieldCheck size={14} />} label="证据裁决 Judge" status={groupedAgents.judge} />
         </section>
 
         <section className={styles.planCard}>
           <header>
-            <div><span className="eyebrow">EVALUATION PLAN</span><strong>当前计划</strong></div>
-            {plan.data ? <Badge tone={tone(plan.data.status)}>{plan.data.status}</Badge> : null}
+            <div><span className="eyebrow">评测计划</span><strong>当前计划</strong></div>
+            {plan.data ? <Badge tone={tone(plan.data.status)}>{statusLabel(plan.data.status)}</Badge> : null}
           </header>
           {plan.data ? (
             <>
               <div className={styles.planGoal}>
-                <small>GOAL · REVISION {plan.data.revision}</small>
+                <small>评测目标 · 修订版本 {plan.data.revision}</small>
                 <p>{planGoal(plan.data.goal)}</p>
               </div>
               <dl className={styles.planStats}>
-                <div><dt>Cases</dt><dd>{plan.data.preview.resolved_case_ids?.length ?? 0}</dd></div>
-                <div><dt>CaseRuns</dt><dd>{plan.data.preview.planned_case_runs ?? 0}</dd></div>
-                <div><dt>Skipped</dt><dd>{plan.data.preview.skipped_items?.length ?? 0}</dd></div>
+                <div><dt>用例</dt><dd>{plan.data.preview.resolved_case_ids?.length ?? 0}</dd></div>
+                <div><dt>用例运行</dt><dd>{plan.data.preview.planned_case_runs ?? 0}</dd></div>
+                <div><dt>跳过</dt><dd>{plan.data.preview.skipped_items?.length ?? 0}</dd></div>
               </dl>
               <div className={styles.planMeta}>
-                <span>Providers</span>
+                <span>结果提供链</span>
                 <p>{plan.data.preview.providers?.join(" → ") || "—"}</p>
-                <span>Evaluators</span>
+                <span>评判器</span>
                 <p>{plan.data.preview.primary_evaluators?.join(", ") || "—"}</p>
               </div>
               {editingPlan ? (
                 <div className={styles.planEditor}>
-                  <label>Goal JSON<textarea onChange={(event) => setGoalDraft(event.target.value)} value={goalDraft} /></label>
-                  <label>Selection JSON<textarea onChange={(event) => setSelectionDraft(event.target.value)} value={selectionDraft} /></label>
-                  <label>Reasoning JSON<textarea onChange={(event) => setReasoningDraft(event.target.value)} value={reasoningDraft} /></label>
+                  <label>评测目标 JSON<textarea onChange={(event) => setGoalDraft(event.target.value)} value={goalDraft} /></label>
+                  <label>执行选择 JSON<textarea onChange={(event) => setSelectionDraft(event.target.value)} value={selectionDraft} /></label>
+                  <label>理由摘要 JSON<textarea onChange={(event) => setReasoningDraft(event.target.value)} value={reasoningDraft} /></label>
                   <div>
                     <Button disabled={editPlan.isPending} onClick={() => editPlan.mutate()} size="sm" variant="primary">保存并预览</Button>
                     <Button disabled={editPlan.isPending} onClick={() => setEditingPlan(false)} size="sm">放弃</Button>
@@ -483,7 +485,7 @@ export function AssistantPage() {
 
         <section className={styles.invocations}>
           <header>
-            <div><span className="eyebrow">EVIDENCE TRAIL</span><strong>Worker 调用证据</strong></div>
+            <div><span className="eyebrow">协作证据链</span><strong>Worker 调用证据</strong></div>
             <Badge tone={invocations.data?.total ? "accent" : "neutral"}>{invocations.data?.total ?? 0}</Badge>
           </header>
           {(invocations.data?.items ?? []).slice(0, 6).map((item) => (
@@ -491,14 +493,14 @@ export function AssistantPage() {
               <div className={styles.invocationTitle}>
                 <span>{item.agent_role === "simulation_curator" ? <GitBranch size={12} /> : <ShieldCheck size={12} />}</span>
                 <p><strong>{roleName(item.agent_role)}</strong><small>{shortId(item.id)}</small></p>
-                <Badge tone={tone(item.status)}>{item.status}</Badge>
+                <Badge tone={tone(item.status)}>{statusLabel(item.status)}</Badge>
               </div>
               <dl className={styles.evidenceGrid}>
-                <div><dt>REQUEST</dt><dd title={item.request_event_id ?? ""}>{item.request_event_id ? shortId(item.request_event_id) : "pending"}</dd></div>
-                <div><dt>RESPONSE</dt><dd title={item.response_event_id ?? ""}>{item.response_event_id ? shortId(item.response_event_id) : "pending"}</dd></div>
-                <div><dt>RESULT REF</dt><dd title={item.result_ref ?? ""}>{item.result_ref ? shortId(item.result_ref) : "pending"}</dd></div>
+                <div><dt>请求事件</dt><dd title={item.request_event_id ?? ""}>{item.request_event_id ? shortId(item.request_event_id) : "待生成"}</dd></div>
+                <div><dt>响应事件</dt><dd title={item.response_event_id ?? ""}>{item.response_event_id ? shortId(item.response_event_id) : "待生成"}</dd></div>
+                <div><dt>结果引用</dt><dd title={item.result_ref ?? ""}>{item.result_ref ? shortId(item.result_ref) : "待生成"}</dd></div>
               </dl>
-              <footer><span>CASE RUN</span><code>{shortId(item.case_run_id)}</code></footer>
+              <footer><span>用例运行</span><code>{shortId(item.case_run_id)}</code></footer>
             </article>
           ))}
           {!invocations.data?.items.length ? <p className={styles.empty}>尚无 Worker 调用。</p> : null}
@@ -524,7 +526,7 @@ function EventMessage({ event }: { event: AssistantEvent }) {
     <div className={`${styles.message} ${user ? styles.userMessage : styles.managerMessage}`}>
       <span className={styles.avatar}>{user ? <UserRound size={14} /> : <Bot size={14} />}</span>
       <div>
-        <small>{user ? "YOU" : event.actor_id}</small>
+        <small>{user ? "你" : event.actor_id}</small>
         <div className={styles.messageBody}>
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
@@ -557,7 +559,7 @@ const QUICK_PROMPTS = [
 ] as const;
 
 function roleName(role: AgentInvocation["agent_role"]) {
-  return role === "simulation_curator" ? "Simulation Curator" : "Evidence Judge";
+  return role === "simulation_curator" ? "结果模拟 Curator" : "证据裁决 Judge";
 }
 
 function activityName(event: AssistantEvent) {
@@ -579,7 +581,7 @@ function AgentRow({ icon, label, status }: { icon: ReactNode; label: string; sta
     <div className={styles.agentRow}>
       <span>{icon}</span>
       <p><strong>{label}</strong><small>AgentTeams</small></p>
-      <Badge tone={tone(status)}>{status}</Badge>
+      <Badge tone={tone(status)}>{statusLabel(status)}</Badge>
     </div>
   );
 }
@@ -607,6 +609,28 @@ function tone(value: string): "neutral" | "accent" | "success" | "warning" | "da
   if (["running", "dispatched", "confirmed"].includes(value)) return "accent";
   if (["queued", "created", "draft", "pending"].includes(value)) return "warning";
   return "neutral";
+}
+
+function statusLabel(value: string) {
+  const labels: Record<string, string> = {
+    cancelled: "已取消",
+    completed: "已完成",
+    confirmed: "已确认",
+    created: "已创建",
+    delivered: "已送达",
+    dispatched: "已派发",
+    draft: "草稿",
+    failed: "失败",
+    idle: "空闲",
+    offline: "离线",
+    pending: "待处理",
+    queued: "排队中",
+    ready: "就绪",
+    running: "运行中",
+    submitted: "已提交",
+    timed_out: "已超时",
+  };
+  return labels[value] ?? value.replaceAll("_", " ");
 }
 
 function shortId(value: string) {

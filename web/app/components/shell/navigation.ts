@@ -61,7 +61,7 @@ function targetGroups(pathname: string, targetId: string): NavigationGroup[] {
   let section: NavigationGroup;
   if (pathname.includes("/evaluation/")) {
     section = {
-      label: "EVALUATION INDEX",
+      label: "评测管理",
       items: [
         { label: "运行记录", path: targetPath(targetId, "/evaluation/runs"), icon: ListChecks },
         { label: "测试用例", path: targetPath(targetId, "/evaluation/test-cases"), icon: TestTube2 },
@@ -72,16 +72,16 @@ function targetGroups(pathname: string, targetId: string): NavigationGroup[] {
     };
   } else if (pathname.includes("/assets")) {
     section = {
-      label: "ASSET INDEX",
+      label: "资产管理",
       items: [
         { label: "资产总览", path: targetPath(targetId, "/assets"), icon: Boxes },
         { label: "工具结果资产", path: targetPath(targetId, "/assets/tool-results"), icon: FileSearch },
-        { label: "Execution Profiles", path: targetPath(targetId, "/assets/profiles"), icon: Settings2 },
+        { label: "执行配置", path: targetPath(targetId, "/assets/profiles"), icon: Settings2 },
       ],
     };
   } else if (pathname.includes("/observability")) {
     section = {
-      label: "OBSERVABILITY INDEX",
+      label: "观测与分析",
       items: [
         { label: "观测总览", path: targetPath(targetId, "/observability"), icon: Activity },
         { label: "指标目录", path: targetPath(targetId, "/observability/metrics"), icon: BarChart3 },
@@ -91,7 +91,7 @@ function targetGroups(pathname: string, targetId: string): NavigationGroup[] {
     };
   } else {
     section = {
-      label: "WORKSPACE INDEX",
+      label: "工作区导航",
       items: [
         { label: "评测总览", path: targetPath(targetId, "/overview"), icon: Gauge },
         { label: "对话验证", path: targetPath(targetId, "/conversation"), icon: MessageSquare },
@@ -104,22 +104,22 @@ function targetGroups(pathname: string, targetId: string): NavigationGroup[] {
 
 function pageTitle(pathname: string) {
   const pages: Array<[RegExp, string, string, LucideIcon]> = [
-    [/\/conversation$/, "对话验证", "Target · direct session", MessageSquare],
-    [/\/assistant$/, "智能评测助手", "AgentTeams · managed evaluation", MessagesSquare],
-    [/\/overview$/, "评测总览", "Quality · operations", Gauge],
-    [/\/evaluation\/runs\/[^/]+$/, "Run Evidence", "CaseRun · auditable trace", ListChecks],
-    [/\/evaluation\/runs$/, "运行记录", "Runs · CaseRuns", ListChecks],
-    [/\/evaluation\/test-cases/, "测试用例", "Cases · turns · rubric", TestTube2],
-    [/\/evaluation\/case-review$/, "用例审核", "Human review · immutable", FileSearch],
-    [/\/evaluation\/comparisons$/, "版本对比", "Baseline · candidate", History],
-    [/\/evaluation\/reports$/, "评测报告", "Frozen · shareable", ClipboardCheck],
-    [/\/assets\/tool-results$/, "工具结果资产", "Samples · provider chain", FileSearch],
-    [/\/assets\/profiles$/, "Execution Profiles", "Mode · providers · evaluator", Settings2],
-    [/\/assets$/, "资产总览", "Coverage · governance", Boxes],
-    [/\/observability\/metrics$/, "指标目录", "Formula · source · dimensions", BarChart3],
-    [/\/observability\/problems$/, "问题中心", "Evidence · recurring failures", FileSearch],
-    [/\/observability\/export$/, "数据导出", "Scoped · redacted", ClipboardCheck],
-    [/\/observability$/, "观测总览", "Quality · reliability", Activity],
+    [/\/conversation$/, "对话验证", "直接连接被测 Agent", MessageSquare],
+    [/\/assistant$/, "智能评测助手", "AgentTeams 协作评测", MessagesSquare],
+    [/\/overview$/, "评测总览", "质量与运行概况", Gauge],
+    [/\/evaluation\/runs\/[^/]+$/, "运行证据", "用例运行可审计链路", ListChecks],
+    [/\/evaluation\/runs$/, "运行记录", "运行与用例运行", ListChecks],
+    [/\/evaluation\/test-cases/, "测试用例", "多轮脚本与评判规则", TestTube2],
+    [/\/evaluation\/case-review$/, "用例审核", "人工审核与不可变资产", FileSearch],
+    [/\/evaluation\/comparisons$/, "版本对比", "基线版本与候选版本", History],
+    [/\/evaluation\/reports$/, "评测报告", "冻结、分享与导出", ClipboardCheck],
+    [/\/assets\/tool-results$/, "工具结果资产", "结果样本与结果提供链", FileSearch],
+    [/\/assets\/profiles$/, "执行配置", "工具模式、结果提供与评判器", Settings2],
+    [/\/assets$/, "资产总览", "覆盖范围与治理状态", Boxes],
+    [/\/observability\/metrics$/, "指标目录", "公式、来源与统计维度", BarChart3],
+    [/\/observability\/problems$/, "问题中心", "证据归并与重复失败", FileSearch],
+    [/\/observability\/export$/, "数据导出", "范围控制与安全脱敏", ClipboardCheck],
+    [/\/observability$/, "观测总览", "质量与可靠性趋势", Activity],
   ];
   return pages.find(([matcher]) => matcher.test(pathname))?.slice(1) as [string, string, LucideIcon] | undefined;
 }
@@ -127,11 +127,11 @@ function pageTitle(pathname: string) {
 export function getShellContext(pathname: string): ShellContext {
   const targetId = targetFromPath(pathname);
   if (targetId) {
-    const [title, subtitle, icon] = pageTitle(pathname) ?? ["Target Workspace", "Evaluation control plane", Bot];
+    const [title, subtitle, icon] = pageTitle(pathname) ?? ["被测 Agent 工作区", "统一评测控制面", Bot];
     return {
       area: "target",
-      eyebrow: "TARGET WORKSPACE",
-      code: "EVALUATION / CONTROL",
+      eyebrow: "被测 Agent 工作区",
+      code: "评测控制台",
       title,
       subtitle,
       icon,
@@ -140,23 +140,23 @@ export function getShellContext(pathname: string): ShellContext {
     };
   }
   const title = pathname.startsWith("/evaluator-teams")
-    ? ["Evaluator Teams", "AgentTeams · identities", UsersRound] as const
+    ? ["评测团队", "AgentTeams 身份与协作", UsersRound] as const
     : pathname.startsWith("/audit")
-      ? ["审计日志", "Actors · resources · outcomes", ShieldCheck] as const
+      ? ["审计日志", "操作者、资源与结果", ShieldCheck] as const
       : pathname.startsWith("/settings")
-        ? ["系统设置", "Runtime · access · models", Settings2] as const
-        : ["被测 Agent", "Target directory · control plane", LayoutGrid] as const;
+        ? ["系统设置", "运行时、访问控制与模型", Settings2] as const
+        : ["被测 Agent", "接入目录与评测入口", LayoutGrid] as const;
   return {
     area: "platform",
-    eyebrow: "AGENTRIG PLATFORM",
-    code: "CONTROL / DIRECTORY",
+    eyebrow: "AGENTRIG 评测平台",
+    code: "平台控制台",
     title: title[0],
     subtitle: title[1],
     icon: title[2],
     groups: [{
       items: [
         { label: "被测 Agent", path: "/targets", icon: Waypoints },
-        { label: "Evaluator Teams", path: "/evaluator-teams", icon: UsersRound },
+        { label: "评测团队", path: "/evaluator-teams", icon: UsersRound },
         { label: "审计日志", path: "/audit", icon: ShieldCheck },
         { label: "系统设置", path: "/settings", icon: Settings2 },
       ],

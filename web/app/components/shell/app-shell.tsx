@@ -98,15 +98,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="topbar__utilities">
             {context.area === "target" ? (
-              <div className="target-runtime" title={target?.endpoint ?? "当前 Target"}>
+              <div className="target-runtime" title={target?.endpoint ?? "当前被测 Agent"}>
                 <span className="target-runtime__identity"><i aria-hidden="true" />{target?.name ?? context.targetId}</span>
-                <span>LOCAL</span>
-                <span>{target?.versions?.[0]?.version ?? "CURRENT"}</span>
-                <strong>{target?.driver_type ?? "TARGET"}</strong>
+                <span>本机</span>
+                <span>{target?.versions?.[0]?.version ?? "当前"}</span>
+                <strong>{target?.driver_type ?? "被测 Agent"}</strong>
               </div>
             ) : (
               <div className="runtime-state" title="平台运行状态">
-                <span>平台状态</span><i aria-hidden="true" /><strong>ready</strong>
+                <span>平台状态</span><i aria-hidden="true" /><strong>就绪</strong>
               </div>
             )}
             <span className="topbar__divider" aria-hidden="true" />
@@ -191,7 +191,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <header>
               <div>
-                <span>ACCESS CONTROL</span>
+                <span>访问控制</span>
                 <strong id="auth-dialog-title">设置访问令牌</strong>
               </div>
               <button
@@ -271,7 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="sidebar__footer">
             <Link className="sidebar__utility-link" to="/targets">
               <LayoutGrid size={15} />
-              <span>{context.area === "target" ? "返回被测 Agent" : "AgentRig Platform"}</span>
+              <span>{context.area === "target" ? "返回被测 Agent" : "AgentRig 评测平台"}</span>
             </Link>
           </div>
         </aside>

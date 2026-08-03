@@ -18,6 +18,7 @@ body {
 body {
   min-height: 100vh;
   overflow: hidden;
+  font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -93,11 +94,11 @@ svg {
 
 .eyebrow {
   color: var(--oc-faint);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
   line-height: 1.4;
-  text-transform: uppercase;
 }
 
 .fatal-state {
