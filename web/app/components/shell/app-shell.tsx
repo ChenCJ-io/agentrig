@@ -1,4 +1,5 @@
-import { Bell, ChevronDown, CircleHelp, KeyRound, LogOut, X } from "lucide-react";
+import { Bell, ChevronDown, CircleHelp, KeyRound, LayoutGrid, LogOut, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 
@@ -8,6 +9,7 @@ import {
   hasStoredAuthToken,
   storeAuthToken,
 } from "~/api/client";
+import { getPage, type Target } from "~/api/v1";
 
 import { getShellContext, isNavigationActive } from "./navigation";
 
@@ -22,6 +24,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [accessToken, setAccessToken] = useState("");
   const [hasLocalToken, setHasLocalToken] = useState(false);
+  const targets = useQuery({
+    queryKey: ["shell", "targets"],
+    queryFn: () => getPage<Target>("/api/targets?limit=100"),
+    staleTime: 60_000,
+  });
+  const target = context.targetId
+    ? targets.data?.items.find((item) => item.id === context.targetId)
+    : undefined;
 
   useEffect(() => {
     setHasLocalToken(hasStoredAuthToken());
@@ -72,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link className="topbar__brand" to="/evaluation/overview" aria-label="AgentRig 评测控制台">
+        <Link className="topbar__brand" to="/targets" aria-label="AgentRig 评测平台">
           <span className="topbar__brand-mark" aria-hidden="true">A</span>
           <span>AgentRig</span>
         </Link>
@@ -87,11 +97,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </div>
           <div className="topbar__utilities">
-            <div className="runtime-state" title="当前控制台">
-              <span>{pathname.startsWith("/assistant") ? "V2 协作模式" : "V1 控制台"}</span>
-              <i aria-hidden="true" />
-              <strong>{pathname.startsWith("/assistant") ? "AgentTeams" : "local"}</strong>
-            </div>
+            {context.area === "target" ? (
+              <div className="target-runtime" title={target?.endpoint ?? "当前 Target"}>
+                <span className="target-runtime__identity"><i aria-hidden="true" />{target?.name ?? context.targetId}</span>
+                <span>LOCAL</span>
+                <span>{target?.versions?.[0]?.version ?? "CURRENT"}</span>
+                <strong>{target?.driver_type ?? "TARGET"}</strong>
+              </div>
+            ) : (
+              <div className="runtime-state" title="平台运行状态">
+                <span>平台状态</span><i aria-hidden="true" /><strong>ready</strong>
+              </div>
+            )}
             <span className="topbar__divider" aria-hidden="true" />
             <div className="notification-menu">
               <button
@@ -252,9 +269,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="sidebar__footer">
-            <Link className="sidebar__utility-link" to="/evaluation/overview">
-              <ContextIcon size={15} />
-              <span>返回评测总览</span>
+            <Link className="sidebar__utility-link" to="/targets">
+              <LayoutGrid size={15} />
+              <span>{context.area === "target" ? "返回被测 Agent" : "AgentRig Platform"}</span>
             </Link>
           </div>
         </aside>

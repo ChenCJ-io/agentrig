@@ -7,6 +7,7 @@ from .evaluations import SqlEvaluationRepository
 from .profiles import SqlProfileRepository
 from .runs import SqlRunRepository
 from .samples import SqlSampleRepository
+from .target_chats import SqlTargetChatRepository
 from .targets import SqlTargetRepository
 from .tool_evidence import SqlToolCallEvidenceReader
 
@@ -19,5 +20,6 @@ __all__ = [
     "SqlRunRepository",
     "SqlSampleRepository",
     "SqlTargetRepository",
+    "SqlTargetChatRepository",
     "SqlToolCallEvidenceReader",
 ]

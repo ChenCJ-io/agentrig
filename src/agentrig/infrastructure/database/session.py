@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
@@ -45,13 +47,25 @@ class Database:
         self.url = prepare_database_url(url)
         engine_options: dict[str, object] = {"echo": echo, "pool_pre_ping": True}
         self._session_lock: asyncio.Lock | None = None
+        self._sqlite_memory_anchor: sqlite3.Connection | None = None
+        engine_url = self.url
         if self.url == "sqlite+aiosqlite:///:memory:":
+            # A cancelled aiosqlite operation can invalidate the pooled connection.
+            # A plain ``:memory:`` database would then disappear with that connection,
+            # so keep a private shared-memory database alive for this Database instance.
+            memory_name = f"file:agentrig_{uuid4().hex}?mode=memory&cache=shared"
+            self._sqlite_memory_anchor = sqlite3.connect(
+                memory_name,
+                uri=True,
+                check_same_thread=False,
+            )
+            engine_url = f"sqlite+aiosqlite:///{memory_name}&uri=true"
             engine_options["poolclass"] = StaticPool
             # SQLite 内存库只能复用同一连接；并发 AsyncSession 会让一个请求的
             # rollback/commit 干扰另一个请求。串行化数据库临界区只用于该测试/
             # Demo 形态，文件 SQLite 与 PostgreSQL 仍保持正常连接池并发。
             self._session_lock = asyncio.Lock()
-        self.engine: AsyncEngine = create_async_engine(self.url, **engine_options)
+        self.engine: AsyncEngine = create_async_engine(engine_url, **engine_options)
         self.sessions = async_sessionmaker(
             self.engine,
             expire_on_commit=False,
@@ -96,3 +110,6 @@ class Database:
 
     async def dispose(self) -> None:
         await self.engine.dispose()
+        if self._sqlite_memory_anchor is not None:
+            self._sqlite_memory_anchor.close()
+            self._sqlite_memory_anchor = None

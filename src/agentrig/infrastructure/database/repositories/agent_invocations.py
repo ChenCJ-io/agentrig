@@ -100,6 +100,34 @@ class SqlAgentInvocationRepository:
             offset=offset,
         )
 
+    async def list_all(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> AgentInvocationPage:
+        async with self._database.session() as session:
+            total = int(
+                await session.scalar(select(func.count(AgentInvocationORM.id))) or 0
+            )
+            rows = list(
+                await session.scalars(
+                    select(AgentInvocationORM)
+                    .order_by(
+                        AgentInvocationORM.created_at.desc(),
+                        AgentInvocationORM.id.desc(),
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+        return AgentInvocationPage(
+            items=[self._view(row) for row in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
     async def set_status(
         self,
         invocation_id: str,

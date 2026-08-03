@@ -155,6 +155,29 @@ async def test_curator_receives_runtime_context_and_corrects_once(
     assert "expected" not in correction_prompt
 
 
+async def test_curator_accepts_valid_unwrapped_json_without_schema_mode(
+    model_config: ModelConfigRef,
+) -> None:
+    client = FakeModelClient([{"items": [], "available": True}])
+    provider = SimulationCuratorProvider(
+        SimulationCurator(client, SecretResolver()),
+        model_config=model_config.model_copy(
+            update={"options": {"structured_output": False}}
+        ),
+        timeout_seconds=10,
+        validator=ToolResultValidator(),
+    )
+    response = await provider.resolve(
+        ProviderContext(
+            case_run_id="cr",
+            turn_position=1,
+            tool_call=ToolCall(id="call", name="search"),
+        )
+    )
+    assert response.status is ProviderStatus.HIT
+    assert response.result == {"items": [], "available": True}
+
+
 async def test_curator_model_failure_is_provider_error_without_invalid_injection(
     model_config: ModelConfigRef,
 ) -> None:

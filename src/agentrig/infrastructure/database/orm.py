@@ -459,3 +459,19 @@ class IntegrationCursorORM(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
+
+
+class TargetChatSessionORM(Base):
+    """人工探索 Target 的可恢复历史；不属于权威 Evaluation 事实。"""
+
+    __tablename__ = "target_chat_sessions"
+    __table_args__ = (Index("ix_target_chat_sessions_target_updated", "target_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    target_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    profile_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    version: Mapped[str | None] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    events: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

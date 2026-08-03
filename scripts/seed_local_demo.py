@@ -13,9 +13,12 @@ from agentrig.profiles import ProfileCreate
 from agentrig.profiles.schemas import ProfilePatch
 from agentrig.targets import TargetCreate
 from agentrig.targets.schemas import TargetPatch
+from agentrig.tool_results import SampleCreate, SampleStatus
 
 TARGET_ID = "target_lassist_local"
 PROFILE_ID = "profile_lassist_agentteams"
+REPLAY_PROFILE_ID = "profile_lassist_replay"
+OBSERVE_PROFILE_ID = "profile_lassist_observe"
 CASE_ID = "case_lassist_three_agent_demo"
 FAILURE_CASE_ID = "case_lassist_confirmation_gate_failure"
 
@@ -40,6 +43,18 @@ def target_value() -> TargetCreate:
             "device_info": device_info,
             "chat_channel": "pixcake_client",
             "healthcheck_url": "http://127.0.0.1:8000/health",
+            "conversation_initial_state": {
+                "pixcake_request": {
+                    "attachments": [
+                        {
+                            "type": "image",
+                            "image_id": "1",
+                            "file_path": "seed://scene_bg.jpg",
+                        }
+                    ],
+                    "metadata": {"project_id": "1698494"},
+                }
+            },
         },
         versions=[
             {
@@ -60,6 +75,9 @@ def profile_value() -> ProfileCreate:
         "base_url": "https://api.deepseek.com",
         "model": "deepseek-v4-flash",
         "secret_ref": "env:DEEPSEEK_API_KEY",
+        # DeepSeek 当前 Chat Completions 端点不接受 OpenAI json_schema；
+        # 仍由 Prompt 约束 JSON，并在 AgentRig 内用 Pydantic/JSON Schema 校验。
+        "options": {"structured_output": False},
     }
     return ProfileCreate(
         id=PROFILE_ID,
@@ -88,6 +106,94 @@ def profile_value() -> ProfileCreate:
             "judge_model": model,
         },
     )
+
+
+def replay_profile_value() -> ProfileCreate:
+    return ProfileCreate(
+        id=REPLAY_PROFILE_ID,
+        name="lassist · Approved Sample 回放",
+        description="优先使用已审核工具结果，适合低成本、确定性的日常回归。",
+        config={
+            "tool_mode": "controlled",
+            "provider_chain": [{"name": "sample"}],
+            "primary_evaluator": "rule",
+            "concurrency": 2,
+            "case_timeout_seconds": 300,
+        },
+    )
+
+
+def observe_profile_value() -> ProfileCreate:
+    return ProfileCreate(
+        id=OBSERVE_PROFILE_ID,
+        name="lassist · Observe Only",
+        description="Target 自行执行工具，AgentRig 只采集协议和运行证据。",
+        config={
+            "tool_mode": "observe_only",
+            "provider_chain": [],
+            "primary_evaluator": "evidence_judge",
+            "concurrency": 1,
+            "case_timeout_seconds": 600,
+        },
+    )
+
+
+def sample_values() -> list[tuple[SampleCreate, SampleStatus]]:
+    return [
+        (
+            SampleCreate(
+                id="sample_lassist_background_materials",
+                name="背景素材目录 · 黄昏海边",
+                tool_name="get_material_list",
+                match_arguments={"material_type": "background"},
+                supported_versions=["9.2.0"],
+                content={
+                    "code": 0,
+                    "message": "success",
+                    "data": {
+                        "materials": [
+                            {"id": "bg_1001", "name": "柔和夕照"},
+                            {"id": "bg_1002", "name": "黄昏海边"},
+                            {"id": "bg_1003", "name": "城市夜景"},
+                        ]
+                    },
+                },
+            ),
+            SampleStatus.APPROVED,
+        ),
+        (
+            SampleCreate(
+                id="sample_lassist_apply_material",
+                name="应用背景素材 · 成功回放",
+                tool_name="apply_material",
+                match_arguments={"material_id": "bg_1002"},
+                ignored_argument_paths=["image_id"],
+                supported_versions=["9.2.0"],
+                content={
+                    "code": 0,
+                    "message": "success",
+                    "data": {"applied": True, "material_id": "bg_1002"},
+                },
+            ),
+            SampleStatus.APPROVED,
+        ),
+        (
+            SampleCreate(
+                id="sample_lassist_image_prompt_draft",
+                name="图像提示词编辑 · 待审核候选",
+                tool_name="apply_image_prompt",
+                match_arguments={"image_id": "1"},
+                ignored_argument_paths=["prompt"],
+                supported_versions=["9.2.0"],
+                content={
+                    "success": True,
+                    "image_id": "1",
+                    "record_id": "draft-preview",
+                },
+            ),
+            SampleStatus.DRAFT,
+        ),
+    ]
 
 
 def case_value() -> TestCaseCreate:
@@ -211,6 +317,37 @@ async def ensure_approved_case(services: ServiceContainer, case: TestCaseCreate)
     await services.cases.review(case.id, ReviewStatus.APPROVED)
 
 
+async def upsert_profile(services: ServiceContainer, profile: ProfileCreate) -> None:
+    assert profile.id is not None
+    try:
+        await services.profiles.get(profile.id)
+    except AgentRigError as exc:
+        if exc.detail.code is not ErrorCode.NOT_FOUND:
+            raise
+        await services.profiles.create(profile)
+        return
+    await services.profiles.update(
+        profile.id,
+        ProfilePatch.model_validate(profile.model_dump(exclude={"id"}, mode="json")),
+    )
+
+
+async def ensure_sample(
+    services: ServiceContainer,
+    sample: SampleCreate,
+    expected_status: SampleStatus,
+) -> None:
+    assert sample.id is not None
+    try:
+        current = await services.samples.get(sample.id)
+    except AgentRigError as exc:
+        if exc.detail.code is not ErrorCode.NOT_FOUND:
+            raise
+        current = await services.samples.create(sample)
+    if expected_status is SampleStatus.APPROVED and current.status is SampleStatus.DRAFT:
+        await services.samples.review(sample.id, SampleStatus.APPROVED)
+
+
 async def upsert_assets() -> None:
     services = ServiceContainer.build()
     await services.initialize()
@@ -228,18 +365,15 @@ async def upsert_assets() -> None:
                 TargetPatch.model_validate(target.model_dump(exclude={"id"}, mode="json")),
             )
 
-        profile = profile_value()
-        try:
-            await services.profiles.get(PROFILE_ID)
-        except AgentRigError as exc:
-            if exc.detail.code is not ErrorCode.NOT_FOUND:
-                raise
-            await services.profiles.create(profile)
-        else:
-            await services.profiles.update(
-                PROFILE_ID,
-                ProfilePatch.model_validate(profile.model_dump(exclude={"id"}, mode="json")),
-            )
+        for profile in (
+            profile_value(),
+            replay_profile_value(),
+            observe_profile_value(),
+        ):
+            await upsert_profile(services, profile)
+
+        for sample, expected_status in sample_values():
+            await ensure_sample(services, sample, expected_status)
 
         await ensure_approved_case(services, case_value())
         await ensure_approved_case(services, failure_case_value())
@@ -249,6 +383,8 @@ async def upsert_assets() -> None:
             raise RuntimeError(f"lassist target check failed: {check.message}")
         print(f"target={TARGET_ID}")
         print(f"profile={PROFILE_ID}")
+        print(f"profiles={PROFILE_ID},{REPLAY_PROFILE_ID},{OBSERVE_PROFILE_ID}")
+        print("samples=" + ",".join(sample.id or "" for sample, _ in sample_values()))
         print(f"case={CASE_ID}")
         print(f"failure_case={FAILURE_CASE_ID}")
         print(f"target_check={check.message}")

@@ -31,6 +31,7 @@ from .infrastructure.database.repositories import (
     SqlProfileRepository,
     SqlRunRepository,
     SqlSampleRepository,
+    SqlTargetChatRepository,
     SqlTargetRepository,
     SqlToolCallEvidenceReader,
 )
@@ -52,6 +53,7 @@ from .runs.planner import RunPlanner
 from .runs.redactor import Redactor
 from .runs.scheduler import RunScheduler
 from .runs.service import RunService
+from .target_chat import TargetChatService
 from .targets import TargetService
 from .targets.drivers import DriverRegistry
 from .tool_results import SampleService
@@ -71,6 +73,7 @@ class ServiceContainer:
     evaluation_plans: EvaluationPlanService
     agent_invocations: AgentInvocationService
     agentteams_bridge: AgentTeamsBridge
+    target_chats: TargetChatService
     runs: RunService
     scheduler: RunScheduler
     drivers: DriverRegistry
@@ -126,6 +129,7 @@ class ServiceContainer:
         evaluation_repository = SqlEvaluationRepository(resolved_database)
         assistant_repository = SqlAssistantRepository(resolved_database)
         invocation_repository = SqlAgentInvocationRepository(resolved_database)
+        target_chat_repository = SqlTargetChatRepository(resolved_database)
 
         cases = CaseService(case_repository)
         targets = TargetService(
@@ -177,10 +181,11 @@ class ServiceContainer:
             runtime_health_url=resolved_settings.agentteams.health_url,
             role_mcp_configured=all(role_mcp_tokens.values()),
         )
-        simulation_curator: SimulationCuratorPort = SimulationCurator(
+        local_simulation_curator = SimulationCurator(
             resolved_model_client,
             secret_resolver,
         )
+        simulation_curator: SimulationCuratorPort = local_simulation_curator
         evidence_judge: EvidenceJudgePort = EvidenceJudge(
             resolved_model_client,
             secret_resolver,
@@ -205,6 +210,24 @@ class ServiceContainer:
             run_repository,
             redactor,
         )
+        validator = ToolResultValidator(
+            max_bytes=resolved_settings.evidence.max_event_payload_bytes,
+        )
+        target_chats = TargetChatService(
+            targets=targets,
+            cases=cases,
+            profiles=profiles,
+            drivers=driver_registry,
+            secrets=secret_resolver,
+            samples=sample_repository,
+            sample_service=samples,
+            repository=target_chat_repository,
+            validator=validator,
+            curator=local_simulation_curator,
+            redactor=redactor,
+            real_tool_client=resolved_real_tool_client,
+            real_tool_allowlist=resolved_settings.execution.real_tool_allowlist,
+        )
         executor = CaseExecutor(
             runs=run_repository,
             evaluations=evaluation_repository,
@@ -212,9 +235,7 @@ class ServiceContainer:
             drivers=driver_registry,
             secrets=secret_resolver,
             recorder=recorder,
-            validator=ToolResultValidator(
-                max_bytes=resolved_settings.evidence.max_event_payload_bytes,
-            ),
+            validator=validator,
             simulation_curator=simulation_curator,
             evidence_judge=evidence_judge,
             invocation_results=agent_invocations,
@@ -266,6 +287,7 @@ class ServiceContainer:
             evaluation_plans=evaluation_plans,
             agent_invocations=agent_invocations,
             agentteams_bridge=agentteams_bridge,
+            target_chats=target_chats,
             runs=runs,
             scheduler=scheduler,
             drivers=driver_registry,
@@ -281,6 +303,7 @@ class ServiceContainer:
         await self.agentteams_bridge.start()
 
     async def close(self) -> None:
+        await self.target_chats.close_all()
         await self.agentteams_bridge.close()
         await self.scheduler.shutdown()
         await self.database.dispose()
@@ -288,6 +311,7 @@ class ServiceContainer:
     async def _mark_interrupted(self) -> None:
         repository = SqlRunRepository(self.database)
         await repository.mark_in_progress_interrupted()
+        await self.target_chats.mark_interrupted()
         await self.agent_invocations.cancel_in_progress()
 
 

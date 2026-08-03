@@ -256,10 +256,15 @@ async def get_run_cases_schema() -> dict[str, object]:
 @router.get("/runs")
 async def list_runs(
     request: Request,
+    target_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> object:
-    return await services(request).runs.list_runs(limit=limit, offset=offset)
+    return await services(request).runs.list_runs(
+        target_id=target_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/runs/{run_id}")

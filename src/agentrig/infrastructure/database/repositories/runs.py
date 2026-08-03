@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import selectinload
 
 from ....evaluations.models import EvaluationOutcome, EvaluatorType
@@ -97,12 +97,32 @@ class SqlRunRepository:
             row = await session.get(RunORM, run_id)
             return self._run_view(row) if row is not None else None
 
-    async def list_runs(self, *, limit: int, offset: int) -> RunPage:
+    async def list_runs(
+        self,
+        *,
+        target_id: str | None,
+        limit: int,
+        offset: int,
+    ) -> RunPage:
+        filters = []
+        if target_id is not None:
+            filters.append(
+                exists(
+                    select(CaseRunORM.id).where(
+                        CaseRunORM.run_id == RunORM.id,
+                        CaseRunORM.target_snapshot["id"].as_string() == target_id,
+                    )
+                )
+            )
         async with self._database.session() as session:
-            total = int(await session.scalar(select(func.count(RunORM.id))) or 0)
+            total = int(
+                await session.scalar(select(func.count(RunORM.id)).where(*filters))
+                or 0
+            )
             rows = list(
                 await session.scalars(
                     select(RunORM)
+                    .where(*filters)
                     .order_by(RunORM.created_at.desc(), RunORM.id.desc())
                     .limit(limit)
                     .offset(offset)

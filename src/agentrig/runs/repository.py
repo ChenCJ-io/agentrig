@@ -49,7 +49,13 @@ class RunRepository(Protocol):
 
     async def get_run(self, run_id: str) -> RunView | None: ...
 
-    async def list_runs(self, *, limit: int, offset: int) -> RunPage: ...
+    async def list_runs(
+        self,
+        *,
+        target_id: str | None,
+        limit: int,
+        offset: int,
+    ) -> RunPage: ...
 
     async def list_case_runs(
         self,

@@ -91,6 +91,17 @@ class AgentInvocationService:
             offset=max(0, offset),
         )
 
+    async def list_all(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AgentInvocationPage:
+        return await self._repository.list_all(
+            limit=max(1, min(limit, 200)),
+            offset=max(0, offset),
+        )
+
     async def mark_dispatched(
         self,
         invocation_id: str,

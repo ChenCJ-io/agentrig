@@ -87,8 +87,8 @@ export function ErrorBoundary({ error }: { error: unknown }) {
       <p className="eyebrow">AGENTRIG / ERROR</p>
       <h1>{title}</h1>
       <p>{detail}</p>
-      <a className="button button--primary" href="/evaluation/overview">
-        返回评测总览
+      <a className="button button--primary" href="/targets">
+        返回被测 Agent
       </a>
     </main>
   );

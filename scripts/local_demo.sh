@@ -514,8 +514,9 @@ verify_demo() {
   curl -fsS "$AGENTRIG_URL/api/test-cases/case_lassist_confirmation_gate_failure" \
     | jq -e '.review_status == "approved"' >/dev/null \
     || die "negative security Case is missing or not approved"
-  curl -fsS "$AGENTRIG_URL/assistant" | grep -qi '<!doctype html' \
-    || die "assistant Web UI is unavailable"
+  curl -fsS "$AGENTRIG_URL/targets/target_lassist_local/conversation" \
+    | grep -qi '<!doctype html' \
+    || die "Target conversation Web UI is unavailable"
   test "$(docker exec hiclaw-controller hiclaw get workers -o json \
     | jq '[.workers[] | select(.phase == "Running")] | length')" -eq 2 \
     || die "AgentTeams Workers are not running"
@@ -586,12 +587,13 @@ show_status() {
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     docker ps -a --format '{{.Names}}\t{{.Status}}' | grep '^hiclaw-' | sort || true
   fi
-  printf 'Web: %s/assistant\n' "$AGENTRIG_URL"
+  printf 'Web: %s/targets/target_lassist_local/conversation\n' "$AGENTRIG_URL"
 }
 
 open_demo() {
-  open "$AGENTRIG_URL/assistant"
-  log "opened $AGENTRIG_URL/assistant"
+  local conversation_url="$AGENTRIG_URL/targets/target_lassist_local/conversation"
+  open "$conversation_url"
+  log "opened $conversation_url"
 }
 
 usage() {
@@ -603,7 +605,7 @@ Usage: scripts/local_demo.sh <command>
   restart  Rebuild and restart lassist/AgentRig, then seed and verify
   seed     Idempotently create the local Target, approved Case and Profile
   verify   Run local health and contract acceptance checks
-  open     Open the assistant conversation window
+  open     Open the lassist Target conversation window
   status   Show service/container status
   stop     Stop only this demo; preserve databases, containers and volumes
   all      Alias for setup, followed by opening the assistant window

@@ -294,6 +294,52 @@ async def test_async_run_persists_events_and_rule_evaluation(
     ]
 
 
+async def test_list_runs_can_be_scoped_to_target(
+    container: ServiceContainer,
+) -> None:
+    await seed_case(container, "case_target_scope")
+    await seed_target_and_profile(container)
+    await container.targets.create(
+        TargetCreate(
+            id="target_other",
+            name="Other Agent",
+            driver_type="scripted",
+            versions=[{"version": "v1"}],
+        )
+    )
+
+    scripted = await container.runs.run_cases(
+        RunCasesRequest(
+            case_ids=["case_target_scope"],
+            targets=[{"target_id": "target_scripted", "version": "v1"}],
+            profile_id="profile_fixture",
+        )
+    )
+    other = await container.runs.run_cases(
+        RunCasesRequest(
+            case_ids=["case_target_scope"],
+            targets=[{"target_id": "target_other", "version": "v1"}],
+            profile_id="profile_fixture",
+        )
+    )
+    await container.scheduler.wait(scripted.run_id)
+    await container.scheduler.wait(other.run_id)
+
+    all_runs = await container.runs.list_runs(limit=10)
+    scripted_runs = await container.runs.list_runs(
+        target_id="target_scripted",
+        limit=10,
+    )
+    other_runs = await container.runs.list_runs(
+        target_id="target_other",
+        limit=10,
+    )
+
+    assert {item.id for item in all_runs.items} == {scripted.run_id, other.run_id}
+    assert [item.id for item in scripted_runs.items] == [scripted.run_id]
+    assert [item.id for item in other_runs.items] == [other.run_id]
+
+
 async def test_driver_request_session_and_text_order_are_persisted_as_evidence() -> None:
     database = Database("sqlite+aiosqlite:///:memory:")
     registry = DriverRegistry()

@@ -24,6 +24,12 @@ from .assistant.schemas import (
 )
 from .bootstrap import ServiceContainer
 from .errors import AgentRigError, ErrorCode
+from .target_chat import (
+    TargetChatCreate,
+    TargetChatDraftCaseCreate,
+    TargetChatDraftSampleCreate,
+    TargetChatMessage,
+)
 
 logger = logging.getLogger("agentrig.v2_api")
 router = APIRouter(prefix="/api/v2", tags=["AgentRig V2"])
@@ -242,6 +248,18 @@ async def get_agent_invocation(request: Request, invocation_id: str) -> object:
     return await services(request).agent_invocations.get(invocation_id)
 
 
+@router.get("/agent-invocations")
+async def list_all_agent_invocations(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+) -> object:
+    return await services(request).agent_invocations.list_all(
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/assistant/sessions/{session_id}/agent-invocations")
 async def list_agent_invocations(
     request: Request,
@@ -265,6 +283,68 @@ async def agentteams_health(request: Request) -> object:
 @router.get("/agentteams/collaboration/{session_id}")
 async def agentteams_collaboration(request: Request, session_id: str) -> object:
     return await services(request).agentteams_bridge.collaboration(session_id)
+
+
+@router.post("/target-chats", status_code=status.HTTP_201_CREATED)
+async def create_target_chat(request: Request, value: TargetChatCreate) -> object:
+    return await services(request).target_chats.create(value)
+
+
+@router.get("/target-chats")
+async def list_target_chats(
+    request: Request,
+    target_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> object:
+    return await services(request).target_chats.list_sessions(
+        target_id=target_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/target-chats/{chat_id}")
+async def get_target_chat(request: Request, chat_id: str) -> object:
+    return await services(request).target_chats.get(chat_id)
+
+
+@router.post("/target-chats/{chat_id}/messages")
+async def send_target_chat_message(
+    request: Request,
+    chat_id: str,
+    value: TargetChatMessage,
+) -> object:
+    return await services(request).target_chats.send(chat_id, value)
+
+
+@router.post("/target-chats/{chat_id}/close")
+async def close_target_chat(request: Request, chat_id: str) -> object:
+    return await services(request).target_chats.close(chat_id)
+
+
+@router.post(
+    "/target-chats/{chat_id}/draft-case",
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_draft_case_from_target_chat(
+    request: Request,
+    chat_id: str,
+    value: TargetChatDraftCaseCreate,
+) -> object:
+    return await services(request).target_chats.create_draft_case(chat_id, value)
+
+
+@router.post(
+    "/target-chats/{chat_id}/draft-sample",
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_draft_sample_from_target_chat(
+    request: Request,
+    chat_id: str,
+    value: TargetChatDraftSampleCreate,
+) -> object:
+    return await services(request).target_chats.create_draft_sample(chat_id, value)
 
 
 async def _ensure_room(container: ServiceContainer, session_id: str) -> None:

@@ -10,7 +10,7 @@ from .model_client import ModelClient
 from .ports import AgentTaskContext
 from .schemas import CuratorCandidate, CuratorGeneration, CuratorInput
 
-PROMPT_VERSION = "simulation_curator.v1"
+PROMPT_VERSION = "simulation_curator.v2"
 
 
 class SimulationCurator:
@@ -36,7 +36,9 @@ class SimulationCurator:
                     "content": (
                         "You are AgentRig Simulation Curator. Generate a plausible tool result "
                         "from only the supplied runtime context. Never infer or optimize for test "
-                        "assertions, expected answers, rubrics, or scores. Return JSON only."
+                        "assertions, expected answers, rubrics, or scores. Return JSON only. "
+                        "Prefer an object with exactly two fields: result (the tool payload) and "
+                        "state_updates (an object, usually empty)."
                     ),
                 },
                 {
@@ -51,8 +53,18 @@ class SimulationCurator:
             timeout_seconds=timeout_seconds,
             options=model_config.options,
         )
+        candidate_value = output.value
+        # Some OpenAI-compatible providers support JSON text but not json_schema and
+        # naturally return the tool payload itself. The Provider still validates this
+        # payload against the ToolCall result schema before it can be injected.
+        if (
+            model_config.options.get("structured_output", True) is False
+            and isinstance(candidate_value, dict)
+            and "result" not in candidate_value
+        ):
+            candidate_value = {"result": candidate_value, "state_updates": {}}
         return CuratorGeneration(
-            candidate=CuratorCandidate.model_validate(output.value),
+            candidate=CuratorCandidate.model_validate(candidate_value),
             model_metadata=output.metadata,
             prompt_version=PROMPT_VERSION,
         )

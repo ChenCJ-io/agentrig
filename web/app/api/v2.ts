@@ -6,6 +6,7 @@ import {
   jsonBody,
   resolveApiUrl,
 } from "./client";
+import type { Page, Sample, TestCase } from "./v1";
 
 export interface AssistantSession {
   id: string;
@@ -91,7 +92,10 @@ export interface AgentInvocation {
   run_id: string;
   case_run_id: string;
   tool_call_event_id: string | null;
+  attempt?: number;
+  input_snapshot?: Record<string, unknown>;
   input_hash: string;
+  result_payload?: Record<string, unknown> | null;
   result_ref: string | null;
   result_hash: string | null;
   matrix_room_id: string | null;
@@ -99,7 +103,10 @@ export interface AgentInvocation {
   response_event_id: string | null;
   assigned_agent: string | null;
   deadline: string;
+  idempotency_key?: string;
+  error_code?: string | null;
   error_message: string | null;
+  retryable?: boolean;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -124,6 +131,24 @@ export interface MessageReceipt {
   event_id: string;
   turn_id: string;
   delivery_status: string;
+}
+
+export interface TargetChatEvent {
+  seq: number;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TargetChatSession {
+  id: string;
+  target_id: string;
+  profile_id: string | null;
+  version: string | null;
+  status: string;
+  events: TargetChatEvent[];
+  created_at: string;
+  updated_at: string;
 }
 
 export function listAssistantSessions(): Promise<AssistantSessionPage> {
@@ -256,6 +281,54 @@ export function listAgentInvocations(id: string): Promise<AgentInvocationPage> {
   );
 }
 
+export function getAgentInvocation(id: string): Promise<AgentInvocation> {
+  return apiRequest(`/api/v2/agent-invocations/${encodeURIComponent(id)}`);
+}
+
+export function listAllAgentInvocations(): Promise<AgentInvocationPage> {
+  return apiRequest("/api/v2/agent-invocations?limit=200");
+}
+
 export function getAgentTeamsHealth(): Promise<AgentTeamsHealth> {
   return apiRequest("/api/v2/agentteams/health");
+}
+
+export function createTargetChat(targetId: string, profileId: string | null): Promise<TargetChatSession> {
+  return apiRequest("/api/v2/target-chats", {
+    method: "POST",
+    ...jsonBody({ target_id: targetId, profile_id: profileId }),
+  });
+}
+
+export function getTargetChat(sessionId: string): Promise<TargetChatSession> {
+  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}`);
+}
+
+export function listTargetChats(targetId: string): Promise<Page<TargetChatSession>> {
+  return apiRequest(`/api/v2/target-chats?target_id=${encodeURIComponent(targetId)}&limit=100`);
+}
+
+export function sendTargetChatMessage(sessionId: string, content: string): Promise<TargetChatSession> {
+  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/messages`, {
+    method: "POST",
+    ...jsonBody({ content }),
+  });
+}
+
+export function closeTargetChat(sessionId: string): Promise<TargetChatSession> {
+  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/close`, { method: "POST" });
+}
+
+export function createDraftCaseFromTargetChat(sessionId: string): Promise<TestCase> {
+  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/draft-case`, {
+    method: "POST",
+    ...jsonBody({}),
+  });
+}
+
+export function createDraftSampleFromTargetChat(sessionId: string, toolCallId: string): Promise<Sample> {
+  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/draft-sample`, {
+    method: "POST",
+    ...jsonBody({ tool_call_id: toolCallId }),
+  });
 }

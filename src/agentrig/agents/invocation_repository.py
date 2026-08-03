@@ -37,6 +37,13 @@ class AgentInvocationRepository(Protocol):
         offset: int,
     ) -> AgentInvocationPage: ...
 
+    async def list_all(
+        self,
+        *,
+        limit: int,
+        offset: int,
+    ) -> AgentInvocationPage: ...
+
     async def set_status(
         self,
         invocation_id: str,

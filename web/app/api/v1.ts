@@ -32,6 +32,15 @@ export interface Target {
   [key: string]: unknown;
 }
 
+export interface TargetCheck {
+  reachable: boolean;
+  driver_type: string;
+  version: string | null;
+  endpoint: string | null;
+  capabilities: string[];
+  message: string;
+}
+
 export interface ExecutionProfile {
   id: string;
   name: string;
@@ -65,6 +74,7 @@ export interface Run {
   id: string;
   status: "queued" | "running" | "completed" | "failed" | "cancelled";
   resolved_case_ids: string[];
+  target_snapshots: Array<{ id?: string; version?: string | null; [key: string]: unknown }>;
   total_count: number;
   completed_count: number;
   failed_count: number;

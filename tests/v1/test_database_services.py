@@ -76,6 +76,7 @@ async def test_schema_contains_v1_core_and_v2_extension_tables(database: Databas
         "samples",
         "targets",
         "target_versions",
+        "target_chat_sessions",
         "execution_profiles",
         "runs",
         "case_runs",
@@ -88,6 +89,16 @@ async def test_schema_contains_v1_core_and_v2_extension_tables(database: Databas
         "agent_invocations",
         "integration_cursors",
     }
+
+
+async def test_in_memory_schema_survives_async_pool_reconnect(database: Database) -> None:
+    """Timeout cancellation may invalidate aiosqlite's pooled connection."""
+
+    await database.engine.dispose()
+    async with database.engine.connect() as connection:
+        names = set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
+    assert "runs" in names
+    assert "target_chat_sessions" in names
 
 
 async def test_case_crud_selector_and_approval_boundary(database: Database) -> None:

@@ -91,6 +91,9 @@ async def test_invocation_role_state_and_result_idempotency(
     )
     assert linked.result_ref == "evt_provider_attempt"
     assert linked.result_payload is None
+    global_page = await services.agent_invocations.list_all(limit=10)
+    assert global_page.total == 1
+    assert [item.id for item in global_page.items] == [invocation.id]
 
 
 async def test_role_mcp_tool_sets_are_isolated(services: ServiceContainer) -> None:

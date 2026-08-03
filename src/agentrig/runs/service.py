@@ -65,8 +65,15 @@ class RunService:
             )
         return run
 
-    async def list_runs(self, *, limit: int = 50, offset: int = 0) -> RunPage:
+    async def list_runs(
+        self,
+        *,
+        target_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> RunPage:
         return await self._repository.list_runs(
+            target_id=target_id,
             limit=max(1, min(limit, 200)),
             offset=max(0, offset),
         )
