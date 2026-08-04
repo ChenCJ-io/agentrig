@@ -7,9 +7,9 @@ description: Diagnose an AgentRig Run from frozen CaseRun snapshots, append-only
 
 Contract version: `agentrig.diagnose-run.v1`. Applicable role: `agentteams_manager`.
 
-Require `run_id`; optionally accept the user's diagnostic question. Output an evidence-backed summary with separate execution status, evaluation outcome, uncertainty, and recommended next step.
+Require `run_id`; optionally accept the user's diagnostic question. Use `adaptive-evaluation` to record the final diagnosis or recovery choice. Output an evidence-backed summary with separate execution status, evaluation outcome, uncertainty, and recommended next step.
 
-Allowed tools: `get_run`, `list_case_runs`, `get_case_run`, and `list_case_run_events`.
+Allowed tools: `get_decision_context`, `record_manager_decision`, `get_decision`, `get_run`, `list_case_runs`, `get_case_run`, and `list_case_run_events`.
 
 ## Workflow
 

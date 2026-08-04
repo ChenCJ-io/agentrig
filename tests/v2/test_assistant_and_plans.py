@@ -9,7 +9,12 @@ import pytest
 from agentrig.assistant import (
     AssistantMessageCreate,
     AssistantSessionCreate,
+    DecisionActionType,
+    DecisionKind,
+    DecisionStatus,
+    DecisionTrigger,
     EvaluationPlanCreate,
+    ManagerDecisionProposal,
 )
 from agentrig.assistant.schemas import (
     EvaluationPlanConfirm,
@@ -233,7 +238,7 @@ async def test_draft_plan_can_be_edited_and_repreviewed(
 
 
 async def test_confirmed_plan_detects_asset_drift(services: ServiceContainer) -> None:
-    plan_id, confirmation_event_id, _ = await _plan(services)
+    plan_id, confirmation_event_id, session_id = await _plan(services)
     await services.evaluation_plans.confirm(
         plan_id,
         EvaluationPlanConfirm(
@@ -241,6 +246,39 @@ async def test_confirmed_plan_detects_asset_drift(services: ServiceContainer) ->
             confirmed_by="user-1",
         ),
     )
+    confirmation_event = await services.assistant.get_event(confirmation_event_id)
+    submit_decision = await services.decisions.record(
+        ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=confirmation_event.turn_id,
+            trigger="user_confirmation",
+            decision_kind="submission",
+            objective="submit the confirmed plan without changing its frozen scope",
+            observation_summary={
+                "known": ["the plan has been confirmed"],
+                "constraints": ["reject submission when selected assets drift"],
+            },
+            options=[
+                {
+                    "action_type": "submit_plan",
+                    "label": "submit the confirmed plan",
+                }
+            ],
+            selected_action={"action_type": "submit_plan"},
+            rationale_summary={
+                "summary": "submit only if the current selection hash remains valid"
+            },
+            evidence_refs=[
+                {
+                    "kind": "evaluation_plan",
+                    "resource_id": plan_id,
+                    "label": "confirmed plan",
+                }
+            ],
+            idempotency_key="submit-stale-decision",
+        )
+    )
+    await services.decisions.authorize(submit_decision.id, confirmation_event_id)
     target = await services.targets.get("target_v2_plan")
     await services.targets.update(
         target.id,
@@ -249,6 +287,174 @@ async def test_confirmed_plan_detects_asset_drift(services: ServiceContainer) ->
     with pytest.raises(AgentRigError) as exc:
         await services.evaluation_plans.submit(
             plan_id,
-            EvaluationPlanSubmit(idempotency_key="submit-stale"),
+            EvaluationPlanSubmit(
+                idempotency_key="submit-stale",
+                decision_id=submit_decision.id,
+            ),
         )
     assert exc.value.detail.code is ErrorCode.PLAN_STALE
+    failed = await services.decisions.get(submit_decision.id)
+    assert failed.status is DecisionStatus.FAILED
+    assert failed.error_code == ErrorCode.PLAN_STALE.value
+
+
+async def test_decision_is_idempotent_and_links_plan_provenance(
+    services: ServiceContainer,
+) -> None:
+    session_id, event_id, turn_id = await _message(services)
+    proposal = ManagerDecisionProposal(
+        session_id=session_id,
+        turn_id=turn_id,
+        trigger=DecisionTrigger.USER_REQUEST,
+        decision_kind=DecisionKind.EXECUTION_STRATEGY,
+        objective="evaluate the approved search case",
+        observation_summary={
+            "known": ["one approved case and reachable target are available"],
+            "constraints": ["use deterministic fixture evidence first"],
+        },
+        options=[
+            {
+                "action_type": DecisionActionType.CREATE_PLAN,
+                "label": "create a bounded plan",
+                "expected_effect": "run one deterministic case",
+            }
+        ],
+        selected_action={
+            "action_type": DecisionActionType.CREATE_PLAN,
+            "parameters": {"provider_chain": ["fixture"]},
+        },
+        rationale_summary={
+            "summary": "The exact approved case already has deterministic evidence."
+        },
+        evidence_refs=[{"kind": "assistant_event", "resource_id": event_id}],
+        idempotency_key="decision-create-plan-1",
+    )
+    decision = await services.decisions.record(proposal)
+    duplicate = await services.decisions.record(proposal)
+    assert duplicate.id == decision.id
+    assert decision.status is DecisionStatus.AUTHORIZED
+
+    other_session_id, other_event_id, other_turn_id = await _message(services)
+    cross_session_proposal = ManagerDecisionProposal.model_validate(
+        {
+            **proposal.model_dump(mode="json"),
+            "session_id": other_session_id,
+            "turn_id": other_turn_id,
+            "evidence_refs": [
+                {"kind": "assistant_event", "resource_id": other_event_id}
+            ],
+        }
+    )
+    with pytest.raises(AgentRigError) as conflict:
+        await services.decisions.record(cross_session_proposal)
+    assert conflict.value.detail.code is ErrorCode.DECISION_INVALID
+
+    plan = await services.evaluation_plans.create(
+        EvaluationPlanCreate(
+            session_id=session_id,
+            source_turn_id=turn_id,
+            origin_decision_id=decision.id,
+            goal={"user_request": "evaluate search"},
+            selection={
+                "case_ids": ["case_v2_plan"],
+                "targets": [{"target_id": "target_v2_plan", "version": "v1"}],
+                "profile_id": "profile_v2_plan",
+            },
+            created_by="agentteams_manager",
+        )
+    )
+    completed = await services.decisions.get(decision.id)
+    assert completed.status is DecisionStatus.SUCCEEDED
+    assert completed.action_ref_type == "evaluation_plan"
+    assert completed.action_ref_id == plan.id
+    assert plan.origin_decision_id == decision.id
+    decision_events = [
+        event
+        for event in (await services.assistant.list_events(session_id)).items
+        if event.decision_id == decision.id
+    ]
+    assert {item.event_type.value for item in decision_events} == {
+        "decision_recorded",
+        "decision_status_changed",
+        "plan_created",
+    }
+
+    await services.evaluation_plans.confirm(
+        plan.id,
+        EvaluationPlanConfirm(
+            confirmation_event_id=event_id,
+            confirmed_by="user-1",
+        ),
+    )
+    submit_decision = await services.decisions.record(
+        ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=turn_id,
+            parent_decision_id=decision.id,
+            trigger="user_confirmation",
+            decision_kind="submission",
+            objective="submit the exact confirmed plan once",
+            observation_summary={"known": ["the plan is confirmed and unchanged"]},
+            options=[{"action_type": "submit_plan", "label": "submit one run"}],
+            selected_action={"action_type": "submit_plan", "parameters": {"plan_id": plan.id}},
+            rationale_summary={"summary": "The bounded plan is ready."},
+            evidence_refs=[
+                {"kind": "assistant_event", "resource_id": event_id},
+                {"kind": "evaluation_plan", "resource_id": plan.id},
+            ],
+            idempotency_key="decision-submit-plan-1",
+        )
+    )
+    await services.decisions.authorize(submit_decision.id, event_id)
+    submitted, run = await services.evaluation_plans.submit(
+        plan.id,
+        EvaluationPlanSubmit(
+            idempotency_key="decision-linked-submit",
+            decision_id=submit_decision.id,
+        ),
+    )
+    await services.scheduler.wait(run.run_id)
+    assert submitted.run_id == run.run_id
+    run_decisions = await services.decisions.list_for_run(run.run_id)
+    assert {item.id for item in run_decisions.items} == {
+        decision.id,
+        submit_decision.id,
+    }
+
+
+async def test_decision_confirmation_requires_same_session_user_event(
+    services: ServiceContainer,
+) -> None:
+    session_id, event_id, turn_id = await _message(services)
+    proposal = ManagerDecisionProposal(
+        session_id=session_id,
+        turn_id=turn_id,
+        trigger="user_confirmation",
+        decision_kind="submission",
+        objective="submit the confirmed evaluation plan",
+        observation_summary={"known": ["the user requested execution"]},
+        options=[{"action_type": "submit_plan", "label": "submit one run"}],
+        selected_action={"action_type": "submit_plan"},
+        rationale_summary={"summary": "The exact scope is ready for submission."},
+        evidence_refs=[{"kind": "assistant_event", "resource_id": event_id}],
+    )
+    decision = await services.decisions.record(proposal)
+    assert decision.status is DecisionStatus.AWAITING_CONFIRMATION
+    authorized = await services.decisions.authorize(decision.id, event_id)
+    assert authorized.status is DecisionStatus.AUTHORIZED
+
+    other = await services.assistant.create_session(
+        AssistantSessionCreate(title="other"),
+        created_by="user-2",
+    )
+    other_message = await services.assistant.send_message(
+        other.id,
+        AssistantMessageCreate(client_message_id="other-1", content="confirm"),
+        actor_id="user-2",
+    )
+    second = await services.decisions.record(
+        proposal.model_copy(update={"idempotency_key": "second-submission"})
+    )
+    with pytest.raises(AgentRigError) as exc:
+        await services.decisions.authorize(second.id, other_message.event_id)
+    assert exc.value.detail.code is ErrorCode.DECISION_CONFIRMATION_REQUIRED

@@ -4,6 +4,7 @@ import {
   ArrowRight,
   BarChart3,
   Bot,
+  BrainCircuit,
   Boxes,
   Check,
   CheckCircle2,
@@ -67,10 +68,12 @@ import {
   getAgentTeamsHealth,
   getTargetChat,
   listAllAgentInvocations,
+  listRunDecisions,
   listTargetChats,
   sendTargetChatMessage,
   type AgentInvocation,
   type AgentTeamsHealth,
+  type DecisionRecord,
   type TargetChatEvent,
 } from "~/api/v2";
 import { Badge } from "~/components/ui/badge";
@@ -741,6 +744,7 @@ function RunsPage({ targetId, runId }: { targetId: string; runId: string | null 
 function RunDetailPage({ runId, targetId }: { runId: string; targetId: string }) {
   const run = useQuery({ queryKey: ["product", "run", runId], queryFn: () => getOne<Run>(`/api/runs/${encodeURIComponent(runId)}`), refetchInterval: (query) => ["queued", "running"].includes(query.state.data?.status ?? "") ? 2_000 : false });
   const caseRuns = useQuery({ queryKey: ["product", "run", runId, "case-runs"], queryFn: () => getPage<CaseRun>(`/api/runs/${encodeURIComponent(runId)}/case-runs?limit=200`), refetchInterval: ["queued", "running"].includes(run.data?.status ?? "") ? 2_000 : false });
+  const decisions = useQuery({ queryKey: ["product", "run", runId, "decisions"], queryFn: () => listRunDecisions(runId), refetchInterval: ["queued", "running"].includes(run.data?.status ?? "") ? 2_000 : false });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState("all");
   useEffect(() => { if (!selectedId && caseRuns.data?.items[0]) setSelectedId(caseRuns.data.items[0].id); }, [caseRuns.data, selectedId]);
@@ -767,6 +771,7 @@ function RunDetailPage({ runId, targetId }: { runId: string; targetId: string })
       { label: "证据不足", value: outcomes.inconclusive, meta: "无法形成可靠结论", tone: outcomes.inconclusive ? "warning" : "neutral" },
       { label: "执行错误", value: run.data?.failed_count ?? "—", meta: "平台或被测 Agent 错误", tone: run.data?.failed_count ? "danger" : "neutral" },
     ]} />
+    {decisions.data?.items.length ? <Surface title="自适应决策链" eyebrow="为什么这样执行"><div className={styles.runDecisionChain}>{[...decisions.data.items].sort((left, right) => decisionTime(left) - decisionTime(right)).map((decision, index) => <RunDecisionStep decision={decision} index={index + 1} key={decision.id} />)}</div></Surface> : null}
     <div className={styles.evidenceWorkbench}>
       <aside className={styles.caseRunRail}><header><div><span className="eyebrow">用例运行</span><strong>{caseRuns.data?.total ?? 0} 个原子结果</strong></div><Status value={run.data?.status ?? "queued"} /></header><div className={styles.caseRunList}>{caseRuns.data?.items.map((item) => <button className={selectedId === item.id ? styles.selectedCaseRun : ""} key={item.id} onClick={() => setSelectedId(item.id)} type="button"><span><strong>{item.case_id}</strong><small>{item.version ?? "默认版本"} · 第 {item.repeat_index} 次{item.comparison_role ? ` · ${comparisonRoleLabel(item.comparison_role)}` : ""}</small></span><Status value={item.evaluation_state} /></button>)}</div><footer><span>配置快照</span><small>测试用例、被测 Agent 与执行配置均已冻结</small></footer></aside>
       <main className={styles.evidenceTimeline}><header><div><span className="eyebrow">运行证据时间线</span><h2>{detail.data?.case_id ?? "选择用例运行"}</h2><code>{detail.data?.id ?? "—"}</code></div><div className={styles.eventFilters}><button className={eventFilter === "all" ? styles.activeEventFilter : ""} onClick={() => setEventFilter("all")} type="button">全部</button>{["tool_call", "provider_attempt", "tool_result", "validation", "error"].map((value) => <button className={eventFilter === value ? styles.activeEventFilter : ""} key={value} onClick={() => setEventFilter(value)} type="button">{eventTypeLabel(value)}</button>)}</div></header>
@@ -778,6 +783,14 @@ function RunDetailPage({ runId, targetId }: { runId: string; targetId: string })
     </div>
   </ProductWorkspace>;
 }
+
+function RunDecisionStep({ decision, index }: { decision: DecisionRecord; index: number }) {
+  return <article><span><BrainCircuit size={13} /></span><div><small>{String(index).padStart(2, "0")} · {decisionKindName(decision.decision_kind)}</small><strong>{decisionActionName(decision.selected_action.action_type)}</strong><p>{decision.rationale_summary.summary}</p><footer><code>{shortId(decision.id)}</code><Status value={decision.status} /></footer></div></article>;
+}
+
+function decisionKindName(value: string) { const labels: Record<string, string> = { scope_selection: "范围选择", execution_strategy: "执行策略", submission: "提交决策", diagnosis: "证据诊断", recovery: "恢复建议", clarification: "信息澄清", asset_draft: "资产沉淀" }; return labels[value] ?? value; }
+function decisionActionName(value: string) { const labels: Record<string, string> = { create_plan: "生成评测计划", create_plan_revision: "生成计划修订", update_draft_plan: "更新计划草稿", confirm_plan: "确认当前计划", submit_plan: "提交评测运行", no_action: "保留现状并解释", ask_user: "询问关键信息", request_plan_confirmation: "请求计划确认" }; return labels[value] ?? value.replaceAll("_", " "); }
+function decisionTime(value: DecisionRecord) { return Date.parse(value.finished_at ?? value.started_at ?? value.created_at); }
 
 function EvidenceEvent({ event }: { event: NonNullable<CaseRun["events"]>[number] }) {
   const Icon = eventIcon(event.event_type);

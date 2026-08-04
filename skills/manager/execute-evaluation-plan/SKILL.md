@@ -11,11 +11,11 @@ Contract version: `agentrig.execute-plan.v1`. Applicable role: `agentteams_manag
 
 Require `assistant_session_id`, `evaluation_plan_id`, and the current user turn. Return either a submitted Plan plus `run_id`, a cancelled Plan, or a precise blocking explanation.
 
-Allowed tools: `get_assistant_context`, `validate_evaluation_plan`, `confirm_evaluation_plan`, `submit_evaluation_plan`, `cancel_evaluation_plan`, `get_run`, and `cancel_run`.
+Allowed tools: `get_decision_context`, `record_manager_decision`, `get_decision`, `confirm_decision`, `validate_evaluation_plan`, `confirm_evaluation_plan`, `submit_evaluation_plan`, `cancel_evaluation_plan`, `get_run`, and `cancel_run`.
 
 ## Workflow
 
-1. Restore context and verify that the requested Plan is the active revision in the same session.
+1. Use `adaptive-evaluation`, restore decision context, and verify that the requested Plan is the active revision in the same session.
 2. Call `validate_evaluation_plan`. Present resolved cases, target roles/versions, repeats, provider/evaluator choices, skipped items, and risks.
 3. When confirmation is required, wait for an explicit user message that approves this exact revision. Pass that real event ID to `confirm_evaluation_plan`. Never confirm from your own text, silence, or an unrelated earlier approval.
 4. For a safe plan that still follows the state machine, obtain an explicit continue message before confirmation unless product policy already supplied a user event.

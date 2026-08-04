@@ -183,6 +183,7 @@ apply_resources() {
       "hiclaw/hiclaw-storage/manager/$role_name" >/dev/null
   done
   for role_name in \
+    adaptive-evaluation \
     plan-evaluation \
     execute-evaluation-plan \
     diagnose-run \
@@ -523,6 +524,9 @@ verify_demo() {
   docker exec hiclaw-manager \
     grep -q 'AgentRig request envelope' /root/manager-workspace/AGENTS.md \
     || die "AgentRig Manager contract is not installed"
+  docker exec hiclaw-manager \
+    test -f /root/manager-workspace/skills/adaptive-evaluation/SKILL.md \
+    || die "AgentRig adaptive decision Skill is not installed"
   docker exec hiclaw-manager \
     test -f /root/manager-workspace/skills/plan-evaluation/SKILL.md \
     || die "AgentRig Manager Skills are not installed"

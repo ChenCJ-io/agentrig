@@ -41,6 +41,7 @@ export interface AssistantEvent {
   run_id: string | null;
   case_run_id: string | null;
   invocation_id: string | null;
+  decision_id: string | null;
   matrix_event_id: string | null;
   delivery_status: "local" | "pending" | "delivered" | "failed";
   last_error: string | null;
@@ -52,6 +53,71 @@ export interface AssistantEventPage {
   total: number;
   limit: number;
   after_seq: number;
+}
+
+export interface EvidenceRef {
+  kind: string;
+  resource_id: string;
+  version: string | null;
+  snapshot_hash: string | null;
+  label: string | null;
+}
+
+export interface DecisionRecord {
+  id: string;
+  session_id: string;
+  turn_id: string;
+  parent_decision_id: string | null;
+  ordinal: number;
+  schema_version: string;
+  trigger: string;
+  decision_kind: string;
+  status: string;
+  objective: string;
+  observation_summary: {
+    known: string[];
+    unknown: string[];
+    constraints: string[];
+  };
+  options: Array<{
+    action_type: string;
+    label: string;
+    expected_effect: string;
+  }>;
+  selected_action: {
+    action_type: string;
+    parameters: Record<string, unknown>;
+  };
+  rationale_summary: {
+    summary: string;
+    tradeoffs: string[];
+  };
+  evidence_refs: EvidenceRef[];
+  confidence: number | null;
+  context_hash: string;
+  policy_verdict: {
+    verdict: "allow" | "require_confirmation" | "deny" | "stale";
+    reasons: string[];
+    rule_version: string;
+  };
+  confirmation_event_id: string | null;
+  action_idempotency_key: string | null;
+  action_ref_type: string | null;
+  action_ref_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  proposed_by: string;
+  created_at: string;
+  authorized_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface DecisionRecordPage {
+  items: DecisionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface PlanConfirmation {
@@ -67,6 +133,7 @@ export interface EvaluationPlan {
   session_id: string;
   revision: number;
   status: "draft" | "confirmed" | "submitted" | "cancelled";
+  origin_decision_id: string | null;
   goal: Record<string, unknown>;
   selection: Record<string, unknown>;
   reasoning_summary: Record<string, unknown>;
@@ -170,6 +237,20 @@ export function listAssistantEvents(id: string): Promise<AssistantEventPage> {
   return apiRequest(
     `/api/v2/assistant/sessions/${encodeURIComponent(id)}/events?limit=500`,
   );
+}
+
+export function listDecisions(id: string): Promise<DecisionRecordPage> {
+  return apiRequest(
+    `/api/v2/assistant/sessions/${encodeURIComponent(id)}/decisions?limit=100`,
+  );
+}
+
+export function getDecision(id: string): Promise<DecisionRecord> {
+  return apiRequest(`/api/v2/decisions/${encodeURIComponent(id)}`);
+}
+
+export function listRunDecisions(id: string): Promise<DecisionRecordPage> {
+  return apiRequest(`/api/v2/runs/${encodeURIComponent(id)}/decisions`);
 }
 
 export async function streamAssistantEvents(

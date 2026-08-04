@@ -13,6 +13,8 @@ from fastapi import APIRouter, BackgroundTasks, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
+from .assistant.decision_models import DecisionKind, DecisionStatus
+from .assistant.decision_schemas import DecisionCancel, DecisionConfirmation
 from .assistant.models import ActorType
 from .assistant.schemas import (
     AssistantMessageCreate,
@@ -129,6 +131,55 @@ async def list_events(
         after_seq=after_seq,
         limit=limit,
     )
+
+
+@router.get("/assistant/sessions/{session_id}/decisions")
+async def list_decisions(
+    request: Request,
+    session_id: str,
+    decision_status: DecisionStatus | None = None,
+    decision_kind: DecisionKind | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> object:
+    return await services(request).decisions.list_for_session(
+        session_id,
+        status=decision_status,
+        decision_kind=decision_kind,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/decisions/{decision_id}")
+async def get_decision(request: Request, decision_id: str) -> object:
+    return await services(request).decisions.get(decision_id)
+
+
+@router.get("/runs/{run_id}/decisions")
+async def list_run_decisions(request: Request, run_id: str) -> object:
+    return await services(request).decisions.list_for_run(run_id)
+
+
+@router.post("/decisions/{decision_id}/confirm")
+async def confirm_decision(
+    request: Request,
+    decision_id: str,
+    value: DecisionConfirmation,
+) -> object:
+    return await services(request).decisions.authorize(
+        decision_id,
+        value.confirmation_event_id,
+    )
+
+
+@router.post("/decisions/{decision_id}/cancel")
+async def cancel_decision(
+    request: Request,
+    decision_id: str,
+    value: DecisionCancel,
+) -> object:
+    return await services(request).decisions.cancel(decision_id, value.reason)
 
 
 @router.get("/assistant/sessions/{session_id}/stream")

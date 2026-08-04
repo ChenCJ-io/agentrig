@@ -380,6 +380,16 @@
 .runDrawer > footer { display: flex; min-height: 62px; align-items: center; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--oc-line); padding: 10px 16px; }
 .evidenceWorkbench { display: grid; height: calc(100vh - 260px); min-height: 580px; border: 1px solid var(--oc-line); border-radius: 5px; grid-template-columns: 260px minmax(420px, 1fr) 330px; overflow: hidden; background: var(--oc-white); }
 .caseRunRail { display: flex; min-width: 0; min-height: 0; border-right: 1px solid var(--oc-line); flex-direction: column; background: #f8f9f8; }
+.runDecisionChain { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.runDecisionChain > article { position: relative; display: flex; min-width: 0; gap: 10px; border-top: 1px solid var(--oc-line); padding: 13px 14px; background: linear-gradient(145deg, rgb(238 243 255 / 62%), transparent); }
+.runDecisionChain > article + article { border-left: 1px solid var(--oc-line); }
+.runDecisionChain > article > span { display: grid; width: 30px; height: 30px; border-radius: 6px; flex: 0 0 30px; place-items: center; background: var(--oc-cobalt); color: white; }
+.runDecisionChain > article > div { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.runDecisionChain small { color: var(--oc-cobalt); font-size: 8px; font-weight: 700; }
+.runDecisionChain strong { color: var(--oc-fg); font-size: 11px; }
+.runDecisionChain p { display: -webkit-box; overflow: hidden; color: var(--oc-muted); font-size: 9px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.runDecisionChain footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 3px; }
+.runDecisionChain code { color: var(--oc-faint); font-family: var(--font-mono); font-size: 8px; }
 .caseRunRail > header { display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--oc-line); padding: 10px 12px; }
 .caseRunRail > header > div { display: flex; flex-direction: column; gap: 3px; }
 .caseRunRail > header strong { font-size: 10px; }

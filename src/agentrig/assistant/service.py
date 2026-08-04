@@ -220,6 +220,7 @@ class AssistantService:
         run_id: str | None = None,
         case_run_id: str | None = None,
         invocation_id: str | None = None,
+        decision_id: str | None = None,
         matrix_event_id: str | None = None,
         delivery_status: DeliveryStatus = DeliveryStatus.LOCAL,
     ) -> AssistantEventView:
@@ -236,6 +237,7 @@ class AssistantService:
             run_id=run_id,
             case_run_id=case_run_id,
             invocation_id=invocation_id,
+            decision_id=decision_id,
             matrix_event_id=matrix_event_id,
             delivery_status=delivery_status,
         )

@@ -21,6 +21,9 @@ def test_v2_session_health_and_disabled_message_boundary() -> None:
         )
         assert created.status_code == 201
         session_id = created.json()["id"]
+        decisions = client.get(f"/api/v2/assistant/sessions/{session_id}/decisions")
+        assert decisions.status_code == 200
+        assert decisions.json()["items"] == []
         health = client.get("/api/v2/agentteams/health")
         assert health.status_code == 200
         assert health.json()["enabled"] is False

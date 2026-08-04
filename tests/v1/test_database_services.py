@@ -87,6 +87,7 @@ async def test_schema_contains_v1_core_and_v2_extension_tables(database: Databas
         "assistant_turns",
         "evaluation_plans",
         "agent_invocations",
+        "decision_records",
         "integration_cursors",
     }
 

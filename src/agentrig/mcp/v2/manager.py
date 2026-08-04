@@ -6,6 +6,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from ...assistant.decision_models import DecisionKind, DecisionStatus
+from ...assistant.decision_schemas import ManagerDecisionProposal
 from ...assistant.models import ActorType, AssistantEventType
 from ...assistant.schemas import (
     EvaluationPlanConfirm,
@@ -45,6 +47,64 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return await invoke(services.assistant.get_context(assistant_session_id))
 
     @server.tool()
+    async def get_decision_context(
+        assistant_session_id: str,
+        assistant_turn_id: str,
+    ) -> dict[str, Any]:
+        """恢复当前事实、最近决策与合法动作；不返回隐藏模型推理。"""
+        turn = await invoke(services.assistant.get_turn(assistant_turn_id))
+        if turn.session_id != assistant_session_id:
+            raise AgentRigError(
+                ErrorCode.DECISION_INVALID,
+                "assistant turn does not belong to the requested session",
+            )
+        return await invoke(services.decisions.context(assistant_session_id))
+
+    @server.tool()
+    async def record_manager_decision(
+        value: ManagerDecisionProposal,
+    ) -> dict[str, Any]:
+        """记录证据化、结构化的关键业务决策；Core 会独立重算策略裁定。"""
+        safe = value.model_copy(update={"proposed_by": "agentteams_manager"})
+        return dump_model(await invoke(services.decisions.record(safe)))
+
+    @server.tool()
+    async def get_decision(decision_id: str) -> dict[str, Any]:
+        """读取一个决策的依据、策略状态和领域结果引用。"""
+        return dump_model(await invoke(services.decisions.get(decision_id)))
+
+    @server.tool()
+    async def list_decisions(
+        assistant_session_id: str,
+        decision_status: DecisionStatus | None = None,
+        decision_kind: DecisionKind | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """分页读取当前会话的结构化决策链。"""
+        return dump_model(
+            await invoke(
+                services.decisions.list_for_session(
+                    assistant_session_id,
+                    status=decision_status,
+                    decision_kind=decision_kind,
+                    limit=limit,
+                    offset=offset,
+                )
+            )
+        )
+
+    @server.tool()
+    async def confirm_decision(
+        decision_id: str,
+        confirmation_event_id: str,
+    ) -> dict[str, Any]:
+        """用同会话真实 user_message 授权一个等待确认的决策。"""
+        return dump_model(
+            await invoke(services.decisions.authorize(decision_id, confirmation_event_id))
+        )
+
+    @server.tool()
     async def create_evaluation_plan(value: EvaluationPlanCreate) -> dict[str, Any]:
         """创建并预检 draft；selection 必须完整符合 V1 RunCasesRequest。"""
         safe = value.model_copy(update={"created_by": "agentteams_manager"})
@@ -56,16 +116,12 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         value: EvaluationPlanPatch,
     ) -> dict[str, Any]:
         """只修改 draft；confirmed 内容冻结，调整时应创建新 revision。"""
-        return dump_model(
-            await invoke(services.evaluation_plans.update(evaluation_plan_id, value))
-        )
+        return dump_model(await invoke(services.evaluation_plans.update(evaluation_plan_id, value)))
 
     @server.tool()
     async def validate_evaluation_plan(evaluation_plan_id: str) -> dict[str, Any]:
         """使用 V1 Planner 规则只读展开用例、版本、Target、Provider 和评判器。"""
-        return dump_model(
-            await invoke(services.evaluation_plans.validate(evaluation_plan_id))
-        )
+        return dump_model(await invoke(services.evaluation_plans.validate(evaluation_plan_id)))
 
     @server.tool()
     async def confirm_evaluation_plan(
@@ -78,9 +134,21 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         )
 
     @server.tool()
-    async def cancel_evaluation_plan(evaluation_plan_id: str) -> dict[str, Any]:
+    async def cancel_evaluation_plan(
+        evaluation_plan_id: str,
+        decision_id: str | None = None,
+        confirmation_event_id: str | None = None,
+    ) -> dict[str, Any]:
         """取消未提交计划；已提交计划应改为 cancel_run。"""
-        return dump_model(await invoke(services.evaluation_plans.cancel(evaluation_plan_id)))
+        return dump_model(
+            await invoke(
+                services.evaluation_plans.cancel(
+                    evaluation_plan_id,
+                    decision_id=decision_id,
+                    confirmation_event_id=confirmation_event_id,
+                )
+            )
+        )
 
     @server.tool()
     async def submit_evaluation_plan(
@@ -88,9 +156,7 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         value: EvaluationPlanSubmit,
     ) -> dict[str, Any]:
         """重校验已确认计划并幂等创建 V1 Run；不提供绕过计划的 run_cases。"""
-        plan, run = await invoke(
-            services.evaluation_plans.submit(evaluation_plan_id, value)
-        )
+        plan, run = await invoke(services.evaluation_plans.submit(evaluation_plan_id, value))
         return {"plan": dump_model(plan), "run": dump_model(run)}
 
     @server.tool()
@@ -144,9 +210,7 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
     @server.tool()
     async def list_targets(limit: int = 50, offset: int = 0) -> dict[str, Any]:
         """分页列出被测 Agent Target。"""
-        return dump_model(
-            await invoke(services.targets.list_targets(limit=limit, offset=offset))
-        )
+        return dump_model(await invoke(services.targets.list_targets(limit=limit, offset=offset)))
 
     @server.tool()
     async def get_target(target_id: str) -> dict[str, Any]:
@@ -185,9 +249,7 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         offset: int = 0,
     ) -> dict[str, Any]:
         """列出 Provider、评判器和超时配置。"""
-        return dump_model(
-            await invoke(services.profiles.list_profiles(limit=limit, offset=offset))
-        )
+        return dump_model(await invoke(services.profiles.list_profiles(limit=limit, offset=offset)))
 
     @server.tool()
     async def get_execution_profile(profile_id: str) -> dict[str, Any]:

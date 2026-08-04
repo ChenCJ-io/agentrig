@@ -17,6 +17,7 @@ from .agents.invocation_coordinator import (
 from .agents.invocation_service import AgentInvocationService
 from .agents.ports import EvidenceJudgePort, SimulationCuratorPort
 from .assistant import AssistantService, EvaluationPlanService
+from .assistant.decision_service import DecisionService
 from .assistant.run_notifier import AssistantRunNotifier
 from .cases import CaseService
 from .config import Settings, get_settings
@@ -27,6 +28,7 @@ from .infrastructure.database.repositories import (
     SqlAgentInvocationRepository,
     SqlAssistantRepository,
     SqlCaseRepository,
+    SqlDecisionRepository,
     SqlEvaluationRepository,
     SqlProfileRepository,
     SqlRunRepository,
@@ -70,6 +72,7 @@ class ServiceContainer:
     profiles: ProfileService
     samples: SampleService
     assistant: AssistantService
+    decisions: DecisionService
     evaluation_plans: EvaluationPlanService
     agent_invocations: AgentInvocationService
     agentteams_bridge: AgentTeamsBridge
@@ -101,19 +104,11 @@ class ServiceContainer:
         )
         resolved_model_client = model_client or OpenAICompatibleModelClient()
         secret_resolver = SecretResolver()
-        server_api_token = secret_resolver.resolve(
-            resolved_settings.server.api_token_ref
-        )
+        server_api_token = secret_resolver.resolve(resolved_settings.server.api_token_ref)
         role_mcp_tokens = {
-            "manager": secret_resolver.resolve(
-                resolved_settings.agentteams.manager_mcp_token_ref
-            ),
-            "curator": secret_resolver.resolve(
-                resolved_settings.agentteams.curator_mcp_token_ref
-            ),
-            "judge": secret_resolver.resolve(
-                resolved_settings.agentteams.judge_mcp_token_ref
-            ),
+            "manager": secret_resolver.resolve(resolved_settings.agentteams.manager_mcp_token_ref),
+            "curator": secret_resolver.resolve(resolved_settings.agentteams.curator_mcp_token_ref),
+            "judge": secret_resolver.resolve(resolved_settings.agentteams.judge_mcp_token_ref),
         }
         proxy_scopes = ProxyScopeRegistry()
         resolved_backend_registry = backend_registry or BackendRegistry()
@@ -128,6 +123,7 @@ class ServiceContainer:
         run_repository = SqlRunRepository(resolved_database)
         evaluation_repository = SqlEvaluationRepository(resolved_database)
         assistant_repository = SqlAssistantRepository(resolved_database)
+        decision_repository = SqlDecisionRepository(resolved_database)
         invocation_repository = SqlAgentInvocationRepository(resolved_database)
         target_chat_repository = SqlTargetChatRepository(resolved_database)
 
@@ -147,6 +143,12 @@ class ServiceContainer:
             sensitive_keys=resolved_settings.evidence.sensitive_keys,
             sensitive_paths=resolved_settings.evidence.sensitive_paths,
         )
+        decisions = DecisionService(
+            decision_repository,
+            assistant_repository=assistant_repository,
+            assistant=assistant,
+            redactor=redactor,
+        )
         agent_invocations = AgentInvocationService(
             invocation_repository,
             assistant_repository=assistant_repository,
@@ -155,8 +157,7 @@ class ServiceContainer:
         matrix_config = resolved_settings.agentteams.matrix
         matrix_token = (
             secret_resolver.resolve(matrix_config.access_token_ref)
-            if resolved_settings.agentteams.enabled
-            and matrix_config.access_token_ref is not None
+            if resolved_settings.agentteams.enabled and matrix_config.access_token_ref is not None
             else None
         )
         matrix_client = (
@@ -268,6 +269,7 @@ class ServiceContainer:
             repository=assistant_repository,
             assistant=assistant,
             runs=runs,
+            decisions=decisions,
         )
         scheduler.add_completion_listener(
             AssistantRunNotifier(
@@ -284,6 +286,7 @@ class ServiceContainer:
             profiles=profiles,
             samples=samples,
             assistant=assistant,
+            decisions=decisions,
             evaluation_plans=evaluation_plans,
             agent_invocations=agent_invocations,
             agentteams_bridge=agentteams_bridge,

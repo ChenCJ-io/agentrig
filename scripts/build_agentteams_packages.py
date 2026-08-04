@@ -10,6 +10,7 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROLES = {
     "manager": [
+        "adaptive-evaluation",
         "plan-evaluation",
         "execute-evaluation-plan",
         "diagnose-run",

@@ -34,6 +34,13 @@ class ErrorCode(StrEnum):
     AGENT_INVOCATION_TIMED_OUT = "agent_invocation_timed_out"
     AGENT_RESULT_INVALID = "agent_result_invalid"
     AGENT_ROLE_FORBIDDEN = "agent_role_forbidden"
+    DECISION_INVALID = "decision_invalid"
+    DECISION_DENIED = "decision_denied"
+    DECISION_CONFIRMATION_REQUIRED = "decision_confirmation_required"
+    DECISION_STALE = "decision_stale"
+    DECISION_ACTION_MISMATCH = "decision_action_mismatch"
+    DECISION_ALREADY_CLAIMED = "decision_already_claimed"
+    DECISION_RETRY_EXHAUSTED = "decision_retry_exhausted"
     INTERNAL_ERROR = "internal_error"
 
 

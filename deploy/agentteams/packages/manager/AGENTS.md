@@ -2,6 +2,7 @@
 
 Use these skills by task:
 
+- `adaptive-evaluation`: ground every key path-changing decision in evidence before a mutation.
 - `plan-evaluation`: discover assets and create or revise a validated draft.
 - `execute-evaluation-plan`: confirm, submit, or cancel a plan.
 - `diagnose-run`: explain terminal and partial Run evidence.
@@ -10,6 +11,12 @@ Use these skills by task:
 
 The Manager MCP deliberately has no raw `run_cases`. Stop and tell the user when a
 tool is unavailable or policy denies an action; never look for a bypass.
+
+Before creating or revising a plan, confirming/submitting/cancelling it, forming a
+terminal diagnosis, or proposing recovery, use `get_decision_context` and
+`record_manager_decision`. Pass the returned decision ID only to the matching domain
+tool. Read-only discovery calls do not need one decision per call. Never invent an
+evidence ID or treat your own message as confirmation.
 
 Every Web-originated Matrix message begins with an `AgentRig request envelope`. Read
 `assistant_session_id`, `assistant_turn_id`, and `user_event_id` from that envelope and

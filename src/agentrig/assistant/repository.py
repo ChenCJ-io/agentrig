@@ -110,6 +110,7 @@ class AssistantRepository(Protocol):
         run_id: str | None = None,
         case_run_id: str | None = None,
         invocation_id: str | None = None,
+        decision_id: str | None = None,
         matrix_event_id: str | None = None,
         delivery_status: DeliveryStatus = DeliveryStatus.LOCAL,
     ) -> AssistantEventView: ...

@@ -72,6 +72,7 @@ class AssistantEventView(BaseModel):
     run_id: str | None
     case_run_id: str | None
     invocation_id: str | None
+    decision_id: str | None
     client_message_id: str | None
     matrix_event_id: str | None
     delivery_status: DeliveryStatus
@@ -108,6 +109,7 @@ class EvaluationPlanCreate(BaseModel):
     session_id: str
     source_turn_id: str
     parent_plan_id: str | None = None
+    origin_decision_id: str | None = None
     goal: dict[str, Any]
     selection: RunCasesRequest
     reasoning_summary: dict[str, Any] = Field(default_factory=dict)
@@ -120,6 +122,7 @@ class EvaluationPlanPatch(BaseModel):
     goal: dict[str, Any] | None = None
     selection: RunCasesRequest | None = None
     reasoning_summary: dict[str, Any] | None = None
+    decision_id: str | None = None
 
 
 class PlanConfirmation(BaseModel):
@@ -135,6 +138,7 @@ class EvaluationPlanView(BaseModel):
     session_id: str
     source_turn_id: str
     parent_plan_id: str | None
+    origin_decision_id: str | None
     revision: int
     status: EvaluationPlanStatus
     goal: dict[str, Any]
@@ -167,9 +171,11 @@ class EvaluationPlanConfirm(BaseModel):
 
     confirmation_event_id: str
     confirmed_by: str
+    decision_id: str | None = None
 
 
 class EvaluationPlanSubmit(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     idempotency_key: str = Field(min_length=1, max_length=128)
+    decision_id: str | None = None

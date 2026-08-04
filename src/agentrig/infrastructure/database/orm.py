@@ -1,4 +1,4 @@
-"""AgentRig V1 的 11 张核心表与 V2 的 6 张协作表。
+"""AgentRig V1 核心表与 V2/V2.1 协作、决策表。
 
 领域层只处理 Pydantic 对象；这些 ORM 类型仅由 infrastructure repository 使用。
 """
@@ -12,6 +12,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -104,9 +105,7 @@ class SampleORM(Base):
     sample_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[Any] = mapped_column(JSON)
     match_arguments: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    ignored_argument_paths: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
+    ignored_argument_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     supported_versions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -341,6 +340,7 @@ class AssistantEventORM(Base):
     run_id: Mapped[str | None] = mapped_column(String(96), index=True)
     case_run_id: Mapped[str | None] = mapped_column(String(96), index=True)
     invocation_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    decision_id: Mapped[str | None] = mapped_column(String(96), index=True)
     client_message_id: Mapped[str | None] = mapped_column(String(128))
     matrix_event_id: Mapped[str | None] = mapped_column(String(300), unique=True)
     delivery_status: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -386,13 +386,12 @@ class EvaluationPlanORM(Base):
     )
     source_turn_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
     parent_plan_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    origin_decision_id: Mapped[str | None] = mapped_column(String(96), index=True)
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     goal: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     selection: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    reasoning_summary: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    reasoning_summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     preview: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     confirmation: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     selection_hash: Mapped[str | None] = mapped_column(String(64))
@@ -444,6 +443,52 @@ class AgentInvocationORM(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DecisionRecordORM(Base):
+    __tablename__ = "decision_records"
+    __table_args__ = (
+        UniqueConstraint("session_id", "turn_id", "ordinal"),
+        UniqueConstraint("action_idempotency_key"),
+        Index("ix_decision_records_session_created", "session_id", "created_at"),
+        Index("ix_decision_records_action_ref", "action_ref_type", "action_ref_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    turn_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    parent_decision_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision_kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    observation_summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    options: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    selected_action: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    rationale_summary: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    evidence_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float)
+    context_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_verdict: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    confirmation_event_id: Mapped[str | None] = mapped_column(String(96), index=True)
+    action_idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    action_ref_type: Mapped[str | None] = mapped_column(String(64))
+    action_ref_id: Mapped[str | None] = mapped_column(String(96))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    proposed_by: Mapped[str] = mapped_column(String(300), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

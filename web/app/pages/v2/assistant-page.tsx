@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   Bot,
+  BrainCircuit,
   CheckCircle2,
   ChevronRight,
   CircleAlert,
@@ -9,13 +10,13 @@ import {
   FilePenLine,
   GitBranch,
   LoaderCircle,
+  Network,
   MessageSquarePlus,
   Play,
   Send,
   ShieldCheck,
   Sparkles,
   UserRound,
-  UsersRound,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -33,12 +34,14 @@ import {
   listAgentInvocations,
   listAssistantEvents,
   listAssistantSessions,
+  listDecisions,
   sendAssistantMessage,
   streamAssistantEvents,
   submitEvaluationPlan,
   type AgentInvocation,
   type AssistantEvent,
   type AssistantEventPage,
+  type DecisionRecord,
   updateEvaluationPlan,
 } from "~/api/v2";
 import { Badge } from "~/components/ui/badge";
@@ -80,6 +83,11 @@ export function AssistantPage() {
     queryFn: () => listAssistantEvents(selectedId!),
     enabled: Boolean(selectedId),
   });
+  const decisions = useQuery({
+    queryKey: ["v2", "decisions", selectedId],
+    queryFn: () => listDecisions(selectedId!),
+    enabled: Boolean(selectedId),
+  });
 
   useEffect(() => {
     if (!selectedId) return;
@@ -111,6 +119,9 @@ export function AssistantPage() {
             void queryClient.invalidateQueries({ queryKey: ["v2", "session", selectedId] });
             if (incoming.plan_id) {
               void queryClient.invalidateQueries({ queryKey: ["v2", "plan"] });
+            }
+            if (incoming.decision_id) {
+              void queryClient.invalidateQueries({ queryKey: ["v2", "decisions", selectedId] });
             }
             if (incoming.invocation_id || incoming.event_type === "run_status") {
               void queryClient.invalidateQueries({ queryKey: ["v2", "invocations", selectedId] });
@@ -156,6 +167,7 @@ export function AssistantPage() {
       queryClient.invalidateQueries({ queryKey: ["v2", "sessions"] }),
       queryClient.invalidateQueries({ queryKey: ["v2", "session", selectedId] }),
       queryClient.invalidateQueries({ queryKey: ["v2", "events", selectedId] }),
+      queryClient.invalidateQueries({ queryKey: ["v2", "decisions", selectedId] }),
       queryClient.invalidateQueries({ queryKey: ["v2", "plan"] }),
     ]);
   };
@@ -247,6 +259,27 @@ export function AssistantPage() {
     () => summarizeAgents(invocations.data?.items ?? []),
     [invocations.data],
   );
+  const latestDecision = decisions.data?.items[0];
+  const decisionById = useMemo(
+    () => new Map((decisions.data?.items ?? []).map((item) => [item.id, item])),
+    [decisions.data],
+  );
+  const runStatus = [...(events.data?.items ?? [])]
+    .reverse()
+    .find((item) => item.event_type === "run_status")?.payload.status;
+  const runTerminal = ["completed", "failed", "cancelled"].includes(String(runStatus ?? ""));
+  const providers = plan.data?.preview.providers ?? [];
+  const evaluators = plan.data?.preview.primary_evaluators ?? [];
+  const curatorPath = adaptiveRoleStatus(
+    groupedAgents.curator,
+    providers.includes("simulation_curator"),
+    runTerminal,
+  );
+  const judgePath = adaptiveRoleStatus(
+    groupedAgents.judge,
+    evaluators.includes("evidence_judge"),
+    runTerminal,
+  );
   const latestEventId = events.data?.items.at(-1)?.id;
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -328,9 +361,13 @@ export function AssistantPage() {
         ) : null}
 
         <div className={styles.messages}>
-          {(events.data?.items ?? []).map((item) => (
-            <EventMessage event={item} key={item.id} />
-          ))}
+          {(events.data?.items ?? []).map((item) => {
+            const decision = item.decision_id ? decisionById.get(item.decision_id) : undefined;
+            if (item.event_type === "decision_recorded" && decision) {
+              return <DecisionCard decision={decision} key={item.id} />;
+            }
+            return <EventMessage event={item} key={item.id} />;
+          })}
           {send.isPending ? (
             <div className={`${styles.message} ${styles.managerMessage}`}>
               <span className={styles.avatar}><Bot size={14} /></span>
@@ -390,14 +427,27 @@ export function AssistantPage() {
       </main>
 
       <aside className={styles.context}>
+        <section className={styles.currentDecision}>
+          <header>
+            <div><span className="eyebrow">自适应决策</span><strong>当前决策</strong></div>
+            <BrainCircuit size={16} />
+          </header>
+          {latestDecision ? <DecisionSummary decision={latestDecision} /> : (
+            <p className={styles.empty}>Manager 形成关键判断后，这里会显示选择、依据和策略裁定。</p>
+          )}
+        </section>
+
         <section className={styles.agentTeam}>
           <header>
-            <div><span className="eyebrow">评测团队</span><strong>协作角色</strong></div>
-            <UsersRound size={16} />
+            <div><span className="eyebrow">动态协作拓扑</span><strong>实际执行路径</strong></div>
+            <Network size={16} />
           </header>
+          <div className={styles.topologyRail}>
+            <span>Manager</span><i /><span>Core Gate</span><i /><span>lassist</span>
+          </div>
           <AgentRow icon={<Bot size={14} />} label="评测主控 Manager" status={health.data?.enabled ? "ready" : "offline"} />
-          <AgentRow icon={<GitBranch size={14} />} label="结果模拟 Curator" status={groupedAgents.curator} />
-          <AgentRow icon={<ShieldCheck size={14} />} label="证据裁决 Judge" status={groupedAgents.judge} />
+          <AgentRow icon={<GitBranch size={14} />} label="结果模拟 Curator" status={curatorPath} />
+          <AgentRow icon={<ShieldCheck size={14} />} label="证据裁决 Judge" status={judgePath} />
         </section>
 
         <section className={styles.planCard}>
@@ -511,6 +561,17 @@ export function AssistantPage() {
 }
 
 function EventMessage({ event }: { event: AssistantEvent }) {
+  if (event.event_type === "decision_status_changed") return null;
+  if (event.event_type === "run_status") {
+    const status = String(event.payload.status ?? "completed");
+    return (
+      <div className={`${styles.activity} ${styles.runActivity}`}>
+        <CheckCircle2 size={12} />
+        <span>评测运行{status === "completed" ? "已完成，Manager 正在基于证据诊断" : `状态更新：${statusLabel(status)}`}</span>
+        <code>{event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
+      </div>
+    );
+  }
   if (!["user_message", "assistant_message", "system_notice", "error", "run_status"].includes(event.event_type)) {
     return (
       <div className={styles.activity}>
@@ -536,6 +597,65 @@ function EventMessage({ event }: { event: AssistantEvent }) {
           {user ? <em>{event.delivery_status}</em> : null}
         </footer>
       </div>
+    </div>
+  );
+}
+
+function DecisionCard({ decision }: { decision: DecisionRecord }) {
+  const known = decision.observation_summary.known.slice(0, 3);
+  return (
+    <article className={styles.decisionCard}>
+      <header>
+        <span><BrainCircuit size={15} /></span>
+        <div>
+          <small>{decisionKindLabel(decision.decision_kind)}</small>
+          <strong>{actionLabel(decision.selected_action.action_type)}</strong>
+        </div>
+        <Badge tone={tone(decision.status)}>{statusLabel(decision.status)}</Badge>
+      </header>
+      <p>{decision.rationale_summary.summary}</p>
+      {known.length ? (
+        <ul>{known.map((item) => <li key={item}>{item}</li>)}</ul>
+      ) : null}
+      <footer>
+        <span><ShieldCheck size={12} /> {policyLabel(decision.policy_verdict.verdict)}</span>
+        <code>{shortId(decision.id)}</code>
+      </footer>
+      <details>
+        <summary>查看决策依据与取舍 <ChevronRight size={12} /></summary>
+        <div className={styles.decisionEvidence}>
+          {decision.evidence_refs.map((item) => (
+            <span key={`${item.kind}:${item.resource_id}`}>
+              <small>{evidenceKindLabel(item.kind)}</small>
+              <code title={item.resource_id}>{shortId(item.resource_id)}</code>
+            </span>
+          ))}
+        </div>
+        {decision.rationale_summary.tradeoffs.length ? (
+          <p className={styles.tradeoffs}>取舍：{decision.rationale_summary.tradeoffs.join(" · ")}</p>
+        ) : null}
+      </details>
+    </article>
+  );
+}
+
+function DecisionSummary({ decision }: { decision: DecisionRecord }) {
+  return (
+    <div className={styles.decisionSummary}>
+      <div>
+        <Badge tone={tone(decision.status)}>{statusLabel(decision.status)}</Badge>
+        <code>{shortId(decision.id)}</code>
+      </div>
+      <strong>{actionLabel(decision.selected_action.action_type)}</strong>
+      <p>{decision.objective}</p>
+      <dl>
+        <div><dt>策略裁定</dt><dd>{policyLabel(decision.policy_verdict.verdict)}</dd></div>
+        <div><dt>证据引用</dt><dd>{decision.evidence_refs.length}</dd></div>
+        <div><dt>置信度</dt><dd>{decision.confidence == null ? "—" : `${Math.round(decision.confidence * 100)}%`}</dd></div>
+      </dl>
+      {decision.action_ref_id ? (
+        <footer><span>业务结果</span><code title={decision.action_ref_id}>{shortId(decision.action_ref_id)}</code></footer>
+      ) : null}
     </div>
   );
 }
@@ -572,6 +692,8 @@ function activityName(event: AssistantEvent) {
     plan_confirmed: "用户确认已绑定计划",
     plan_submitted: "计划已提交运行",
     collaboration_intervention: "协作成员消息",
+    decision_recorded: "Manager 已记录结构化决策",
+    decision_status_changed: "决策状态已更新",
   };
   return labels[event.event_type] ?? event.event_type.replaceAll("_", " ");
 }
@@ -604,10 +726,10 @@ function parseJsonObject(value: string, label: string): Record<string, unknown> 
 }
 
 function tone(value: string): "neutral" | "accent" | "success" | "warning" | "danger" {
-  if (["completed", "submitted", "ready", "delivered"].includes(value)) return "success";
-  if (["failed", "timed_out", "cancelled", "offline", "error"].includes(value)) return "danger";
-  if (["running", "dispatched", "confirmed"].includes(value)) return "accent";
-  if (["queued", "created", "draft", "pending"].includes(value)) return "warning";
+  if (["completed", "submitted", "ready", "delivered", "authorized", "succeeded"].includes(value)) return "success";
+  if (["failed", "timed_out", "cancelled", "offline", "error", "denied"].includes(value)) return "danger";
+  if (["running", "dispatched", "confirmed", "executing", "eligible"].includes(value)) return "accent";
+  if (["queued", "created", "draft", "pending", "awaiting_confirmation", "stale"].includes(value)) return "warning";
   return "neutral";
 }
 
@@ -626,11 +748,89 @@ function statusLabel(value: string) {
     pending: "待处理",
     queued: "排队中",
     ready: "就绪",
+    authorized: "已授权",
+    awaiting_confirmation: "等待确认",
+    denied: "已拒绝",
+    stale: "已过期",
+    superseded: "已替代",
+    executing: "执行中",
+    bypassed: "已绕过",
+    eligible: "按需调用",
+    not_needed: "不需要",
     running: "运行中",
     submitted: "已提交",
+    succeeded: "已完成",
     timed_out: "已超时",
   };
   return labels[value] ?? value.replaceAll("_", " ");
+}
+
+function adaptiveRoleStatus(current: string, planned: boolean, terminal: boolean) {
+  if (current !== "idle") return current;
+  if (!planned) return "not_needed";
+  return terminal ? "bypassed" : "eligible";
+}
+
+function decisionKindLabel(value: string) {
+  const labels: Record<string, string> = {
+    clarification: "信息澄清",
+    scope_selection: "范围选择",
+    execution_strategy: "执行策略",
+    submission: "提交决策",
+    diagnosis: "证据诊断",
+    recovery: "恢复建议",
+    asset_draft: "资产沉淀",
+  };
+  return labels[value] ?? value;
+}
+
+function actionLabel(value: string) {
+  const labels: Record<string, string> = {
+    ask_user: "向用户确认关键信息",
+    no_action: "保留现状并解释",
+    create_plan: "生成有界评测计划",
+    create_plan_revision: "生成新的计划修订",
+    update_draft_plan: "更新评测计划草稿",
+    request_plan_confirmation: "请求确认精确计划",
+    confirm_plan: "确认当前计划",
+    submit_plan: "提交一个评测运行",
+    cancel_plan: "取消当前计划",
+    cancel_run: "停止评测运行",
+    retry_invocation_delivery: "重试同一 Worker 投递",
+    request_worker_correction: "请求 Worker 纠正输出",
+    create_case_draft: "沉淀测试用例草稿",
+    create_sample_draft: "沉淀工具结果样本",
+    create_target_draft: "创建被测 Agent 草稿",
+  };
+  return labels[value] ?? value.replaceAll("_", " ");
+}
+
+function policyLabel(value: string) {
+  return {
+    allow: "Core 已允许",
+    require_confirmation: "需要用户确认",
+    deny: "Core 已拒绝",
+    stale: "事实已变化",
+  }[value] ?? value;
+}
+
+function evidenceKindLabel(value: string) {
+  const labels: Record<string, string> = {
+    assistant_event: "用户/会话事件",
+    evaluation_plan: "评测计划",
+    run: "评测运行",
+    case_run: "用例运行",
+    run_event: "运行事件",
+    evaluation: "评测结论",
+    agent_invocation: "Worker 调用",
+    test_case: "测试用例",
+    target: "被测 Agent",
+    execution_profile: "执行配置",
+    tool_sample: "工具结果样本",
+    target_check: "连通性检查",
+    runtime_health: "运行时健康",
+  };
+  return labels[value] ?? value;
 }
 
 function shortId(value: string) {

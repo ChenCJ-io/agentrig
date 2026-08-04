@@ -100,6 +100,17 @@ class AssistantConfig(BaseSettings):
     max_message_chars: int = 100_000
 
 
+class AdaptiveDecisionConfig(BaseSettings):
+    """V2.1 结构化决策、证据引用与有限恢复上限。"""
+
+    enabled: bool = True
+    enforce_managed_mutations: bool = False
+    max_options: int = Field(default=5, ge=1, le=10)
+    max_evidence_refs: int = Field(default=50, ge=1, le=200)
+    delivery_retry_limit: int = Field(default=2, ge=0, le=5)
+    worker_correction_limit: int = Field(default=1, ge=0, le=3)
+
+
 class MatrixConfig(BaseSettings):
     """AgentRig Bridge 使用的 Matrix Client-Server API 配置。"""
 
@@ -165,6 +176,9 @@ class Settings(BaseSettings):
     evidence: EvidenceConfig = EvidenceConfig()
     proxy: ProxyConfig = ProxyConfig()
     assistant: AssistantConfig = Field(default_factory=AssistantConfig)
+    adaptive_decisions: AdaptiveDecisionConfig = Field(
+        default_factory=AdaptiveDecisionConfig
+    )
     agentteams: AgentTeamsConfig = Field(default_factory=AgentTeamsConfig)
 
     @classmethod

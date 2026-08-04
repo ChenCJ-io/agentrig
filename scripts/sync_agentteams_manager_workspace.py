@@ -34,6 +34,7 @@ def sync_workspace(root: Path, workspace: Path) -> None:
     destination = workspace / "skills"
     destination.mkdir(parents=True, exist_ok=True)
     for skill_name in (
+        "adaptive-evaluation",
         "plan-evaluation",
         "execute-evaluation-plan",
         "diagnose-run",

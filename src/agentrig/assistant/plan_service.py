@@ -12,6 +12,8 @@ from ..identifiers import new_id
 from ..profiles.models import ProviderName
 from ..runs.schemas import RunCasesRequest, RunPreview, RunSubmitResult
 from ..runs.service import RunService
+from .decision_models import DecisionActionType
+from .decision_service import DecisionService
 from .models import ActorType, AssistantEventType, EvaluationPlanStatus
 from .repository import AssistantRepository
 from .schemas import (
@@ -32,10 +34,12 @@ class EvaluationPlanService:
         repository: AssistantRepository,
         assistant: AssistantService,
         runs: RunService,
+        decisions: DecisionService | None = None,
     ) -> None:
         self._repository = repository
         self._assistant = assistant
         self._runs = runs
+        self._decisions = decisions
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def create(self, value: EvaluationPlanCreate) -> EvaluationPlanView:
@@ -53,17 +57,36 @@ class EvaluationPlanService:
                     ErrorCode.VALIDATION_ERROR,
                     "parent plan does not belong to the assistant session",
                 )
-        plan = await self._repository.create_plan(new_id("plan"), value)
-        await self._assistant.append_event(
-            session.id,
-            AssistantEventType.PLAN_CREATED,
-            actor_type=ActorType.MANAGER,
-            actor_id=value.created_by,
-            payload={"plan_id": plan.id, "revision": plan.revision},
-            turn_id=value.source_turn_id,
-            plan_id=plan.id,
+        decision_id = value.origin_decision_id
+        action = (
+            DecisionActionType.CREATE_PLAN_REVISION
+            if value.parent_plan_id is not None
+            else DecisionActionType.CREATE_PLAN
         )
-        validated = await self.validate(plan.id)
+        if decision_id is not None and self._decisions is not None:
+            await self._decisions.begin_action(decision_id, action)
+        try:
+            plan = await self._repository.create_plan(new_id("plan"), value)
+            await self._assistant.append_event(
+                session.id,
+                AssistantEventType.PLAN_CREATED,
+                actor_type=ActorType.MANAGER,
+                actor_id=value.created_by,
+                payload={"plan_id": plan.id, "revision": plan.revision},
+                turn_id=value.source_turn_id,
+                plan_id=plan.id,
+                decision_id=decision_id,
+            )
+            validated = await self.validate(plan.id)
+        except Exception as exc:
+            await self._fail_decision(decision_id, exc)
+            raise
+        if decision_id is not None and self._decisions is not None:
+            await self._decisions.complete_action(
+                decision_id,
+                action_ref_type="evaluation_plan",
+                action_ref_id=plan.id,
+            )
         return validated.plan
 
     async def get(self, plan_id: str) -> EvaluationPlanView:
@@ -86,17 +109,34 @@ class EvaluationPlanService:
     ) -> EvaluationPlanView:
         plan = await self.get(plan_id)
         self._require_status(plan, EvaluationPlanStatus.DRAFT)
-        updated = await self._repository.update_draft_plan(plan_id, value)
-        assert updated is not None
-        validated = await self.validate(plan_id)
-        await self._assistant.append_event(
-            plan.session_id,
-            AssistantEventType.PLAN_UPDATED,
-            actor_type=actor_type,
-            actor_id=actor_id or plan.created_by,
-            payload={"plan_id": plan_id, "revision": plan.revision},
-            plan_id=plan_id,
-        )
+        decision_id = value.decision_id
+        if decision_id is not None and self._decisions is not None:
+            await self._decisions.begin_action(
+                decision_id,
+                DecisionActionType.UPDATE_DRAFT_PLAN,
+            )
+        try:
+            updated = await self._repository.update_draft_plan(plan_id, value)
+            assert updated is not None
+            validated = await self.validate(plan_id)
+            await self._assistant.append_event(
+                plan.session_id,
+                AssistantEventType.PLAN_UPDATED,
+                actor_type=actor_type,
+                actor_id=actor_id or plan.created_by,
+                payload={"plan_id": plan_id, "revision": plan.revision},
+                plan_id=plan_id,
+                decision_id=decision_id,
+            )
+        except Exception as exc:
+            await self._fail_decision(decision_id, exc)
+            raise
+        if decision_id is not None and self._decisions is not None:
+            await self._decisions.complete_action(
+                decision_id,
+                action_ref_type="evaluation_plan",
+                action_ref_id=plan_id,
+            )
         return validated.plan
 
     async def validate(self, plan_id: str) -> EvaluationPlanValidation:
@@ -147,6 +187,15 @@ class EvaluationPlanService:
                 "confirmed_by must match the user who authored the confirmation event",
                 details={"confirmation_event_id": value.confirmation_event_id},
             )
+        if value.decision_id is not None and self._decisions is not None:
+            await self._decisions.authorize(
+                value.decision_id,
+                value.confirmation_event_id,
+            )
+            await self._decisions.begin_action(
+                value.decision_id,
+                DecisionActionType.CONFIRM_PLAN,
+            )
         confirmed = await self._repository.confirm_plan(
             plan_id,
             confirmation_event_id=value.confirmation_event_id,
@@ -162,10 +211,23 @@ class EvaluationPlanService:
                 "confirmation_required": validated.plan.confirmation.required,
             },
             plan_id=plan_id,
+            decision_id=value.decision_id,
         )
+        if value.decision_id is not None and self._decisions is not None:
+            await self._decisions.complete_action(
+                value.decision_id,
+                action_ref_type="evaluation_plan",
+                action_ref_id=plan_id,
+            )
         return confirmed
 
-    async def cancel(self, plan_id: str) -> EvaluationPlanView:
+    async def cancel(
+        self,
+        plan_id: str,
+        *,
+        decision_id: str | None = None,
+        confirmation_event_id: str | None = None,
+    ) -> EvaluationPlanView:
         plan = await self.get(plan_id)
         if plan.status is EvaluationPlanStatus.SUBMITTED:
             raise AgentRigError(
@@ -175,7 +237,18 @@ class EvaluationPlanService:
             )
         if plan.status is EvaluationPlanStatus.CANCELLED:
             return plan
-        return await self._repository.cancel_plan(plan_id)
+        if decision_id is not None and self._decisions is not None:
+            if confirmation_event_id is not None:
+                await self._decisions.authorize(decision_id, confirmation_event_id)
+            await self._decisions.begin_action(decision_id, DecisionActionType.CANCEL_PLAN)
+        cancelled = await self._repository.cancel_plan(plan_id)
+        if decision_id is not None and self._decisions is not None:
+            await self._decisions.complete_action(
+                decision_id,
+                action_ref_type="evaluation_plan",
+                action_ref_id=plan_id,
+            )
+        return cancelled
 
     async def submit(
         self,
@@ -202,6 +275,11 @@ class EvaluationPlanService:
                     skipped_items=[],
                 )
             self._require_status(plan, EvaluationPlanStatus.CONFIRMED)
+            if value.decision_id is not None and self._decisions is not None:
+                await self._decisions.begin_action(
+                    value.decision_id,
+                    DecisionActionType.SUBMIT_PLAN,
+                )
             request = plan.run_request()
             try:
                 preview = await self._runs.preview_run_cases(request)
@@ -218,6 +296,10 @@ class EvaluationPlanService:
                     plan_id,
                     exc.detail.model_dump(mode="json"),
                 )
+                await self._fail_decision(value.decision_id, exc)
+                raise
+            except Exception as exc:
+                await self._fail_decision(value.decision_id, exc)
                 raise
             updated = await self._repository.mark_plan_submitted(
                 plan_id,
@@ -234,8 +316,33 @@ class EvaluationPlanService:
                 payload={"plan_id": plan_id, "run_id": submitted.run_id},
                 plan_id=plan_id,
                 run_id=submitted.run_id,
+                decision_id=value.decision_id,
             )
+            if value.decision_id is not None and self._decisions is not None:
+                await self._decisions.complete_action(
+                    value.decision_id,
+                    action_ref_type="run",
+                    action_ref_id=submitted.run_id,
+                )
             return updated, submitted
+
+    async def _fail_decision(
+        self,
+        decision_id: str | None,
+        exc: Exception,
+    ) -> None:
+        if decision_id is None or self._decisions is None:
+            return
+        code = (
+            exc.detail.code.value
+            if isinstance(exc, AgentRigError)
+            else ErrorCode.INTERNAL_ERROR.value
+        )
+        await self._decisions.fail_action(
+            decision_id,
+            error_code=code,
+            error_message=str(exc),
+        )
 
     @staticmethod
     def _confirmation_reasons(

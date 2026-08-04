@@ -1,5 +1,18 @@
 """AgentRig V2 智能评测助手领域服务。"""
 
+from .decision_models import (
+    DecisionActionType,
+    DecisionKind,
+    DecisionStatus,
+    DecisionTrigger,
+    PolicyVerdictType,
+)
+from .decision_schemas import (
+    DecisionRecordPage,
+    DecisionRecordView,
+    ManagerDecisionProposal,
+)
+from .decision_service import DecisionService
 from .models import (
     ActorType,
     AssistantEventType,
@@ -39,9 +52,18 @@ __all__ = [
     "AssistantTurnStatus",
     "AssistantTurnView",
     "DeliveryStatus",
+    "DecisionActionType",
+    "DecisionKind",
+    "DecisionRecordPage",
+    "DecisionRecordView",
+    "DecisionService",
+    "DecisionStatus",
+    "DecisionTrigger",
     "EvaluationPlanCreate",
     "EvaluationPlanPatch",
     "EvaluationPlanService",
     "EvaluationPlanStatus",
     "EvaluationPlanView",
+    "ManagerDecisionProposal",
+    "PolicyVerdictType",
 ]
