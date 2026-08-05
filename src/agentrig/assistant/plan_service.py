@@ -35,11 +35,13 @@ class EvaluationPlanService:
         assistant: AssistantService,
         runs: RunService,
         decisions: DecisionService | None = None,
+        enforce_managed_mutations: bool = False,
     ) -> None:
         self._repository = repository
         self._assistant = assistant
         self._runs = runs
         self._decisions = decisions
+        self._enforce_managed_mutations = enforce_managed_mutations
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def create(self, value: EvaluationPlanCreate) -> EvaluationPlanView:
@@ -62,6 +64,11 @@ class EvaluationPlanService:
             DecisionActionType.CREATE_PLAN_REVISION
             if value.parent_plan_id is not None
             else DecisionActionType.CREATE_PLAN
+        )
+        self._require_managed_decision(
+            decision_id,
+            action,
+            managed=value.created_by == "agentteams_manager",
         )
         if decision_id is not None and self._decisions is not None:
             await self._decisions.begin_action(decision_id, action)
@@ -110,6 +117,11 @@ class EvaluationPlanService:
         plan = await self.get(plan_id)
         self._require_status(plan, EvaluationPlanStatus.DRAFT)
         decision_id = value.decision_id
+        self._require_managed_decision(
+            decision_id,
+            DecisionActionType.UPDATE_DRAFT_PLAN,
+            managed=actor_type is ActorType.MANAGER,
+        )
         if decision_id is not None and self._decisions is not None:
             await self._decisions.begin_action(
                 decision_id,
@@ -187,6 +199,10 @@ class EvaluationPlanService:
                 "confirmed_by must match the user who authored the confirmation event",
                 details={"confirmation_event_id": value.confirmation_event_id},
             )
+        self._require_managed_decision(
+            value.decision_id,
+            DecisionActionType.CONFIRM_PLAN,
+        )
         if value.decision_id is not None and self._decisions is not None:
             await self._decisions.authorize(
                 value.decision_id,
@@ -237,6 +253,7 @@ class EvaluationPlanService:
             )
         if plan.status is EvaluationPlanStatus.CANCELLED:
             return plan
+        self._require_managed_decision(decision_id, DecisionActionType.CANCEL_PLAN)
         if decision_id is not None and self._decisions is not None:
             if confirmation_event_id is not None:
                 await self._decisions.authorize(decision_id, confirmation_event_id)
@@ -275,6 +292,10 @@ class EvaluationPlanService:
                     skipped_items=[],
                 )
             self._require_status(plan, EvaluationPlanStatus.CONFIRMED)
+            self._require_managed_decision(
+                value.decision_id,
+                DecisionActionType.SUBMIT_PLAN,
+            )
             if value.decision_id is not None and self._decisions is not None:
                 await self._decisions.begin_action(
                     value.decision_id,
@@ -343,6 +364,20 @@ class EvaluationPlanService:
             error_code=code,
             error_message=str(exc),
         )
+
+    def _require_managed_decision(
+        self,
+        decision_id: str | None,
+        action: DecisionActionType,
+        *,
+        managed: bool = True,
+    ) -> None:
+        if self._enforce_managed_mutations and managed and decision_id is None:
+            raise AgentRigError(
+                ErrorCode.DECISION_REQUIRED,
+                "managed plan mutation requires an authorized decision",
+                details={"action_type": action.value},
+            )
 
     @staticmethod
     def _confirmation_reasons(

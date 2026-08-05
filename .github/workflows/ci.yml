@@ -84,13 +84,69 @@ jobs:
         working-directory: web
         run: npm run typecheck
 
+      - name: Run unit tests with coverage gates
+        working-directory: web
+        run: npm run test:coverage
+
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser and accessibility tests
+        working-directory: web
+        run: npm run e2e
+
       - name: Build frontend
         working-directory: web
         run: npm run build
 
+  postgresql:
+    name: PostgreSQL migrations and concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: agentrig_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agentrig_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AGENTRIG_DATABASE__URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/agentrig_test
+      AGENTRIG_TEST_POSTGRES_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/agentrig_test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Run PostgreSQL repository and concurrency tests
+        run: uv run --frozen pytest -q tests/v1/test_postgresql.py
+
+      - name: Verify migration round trip
+        run: |
+          uv run --frozen agentrig db upgrade
+          uv run --frozen agentrig db current
+          uv run --frozen agentrig db downgrade
+          uv run --frozen agentrig db upgrade
+
   package:
     name: Package smoke test
-    needs: [backend, quality, frontend]
+    needs: [backend, quality, frontend, postgresql]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -119,7 +175,16 @@ jobs:
       - name: Build sdist and wheel
         run: uv build
 
+      - name: Read package version
+        id: package
+        shell: bash
+        run: |
+          package_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          echo "version=${package_version}" >> "${GITHUB_OUTPUT}"
+
       - name: Install wheel in an isolated environment
+        env:
+          EXPECTED_PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         shell: bash
         run: |
           smoke_root="${RUNNER_TEMP}/agentrig-wheel-smoke"
@@ -129,19 +194,21 @@ jobs:
           "${smoke_root}/venv/bin/agentrig" db upgrade
           "${smoke_root}/venv/bin/agentrig" demo
           "${smoke_root}/venv/bin/python" - <<'PY'
+          import os
           from importlib.metadata import version
           from importlib.resources import files
 
           import agentrig
 
-          assert agentrig.__version__ == version("agentrig") == "0.1.0a1"
+          expected = os.environ["EXPECTED_PACKAGE_VERSION"]
+          assert agentrig.__version__ == version("agentrig") == expected
           assert files("agentrig").joinpath("web_dist/index.html").is_file()
           PY
 
       - name: Upload distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: agentrig-0.1.0a1
+          name: agentrig-${{ steps.package.outputs.version }}
           path: dist/*
           if-no-files-found: error
           retention-days: 7

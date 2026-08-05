@@ -67,10 +67,10 @@ class ManagerDecisionProposal(BaseModel):
     decision_kind: DecisionKind
     objective: str = Field(min_length=1, max_length=500)
     observation_summary: ObservationSummary
-    options: list[DecisionOption] = Field(min_length=1, max_length=5)
+    options: list[DecisionOption] = Field(min_length=1, max_length=10)
     selected_action: DecisionAction
     rationale_summary: RationaleSummary
-    evidence_refs: list[EvidenceRef] = Field(min_length=1, max_length=50)
+    evidence_refs: list[EvidenceRef] = Field(min_length=1, max_length=200)
     confidence: float | None = Field(default=None, ge=0, le=1)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
     proposed_by: str = Field(default="agentteams_manager", min_length=1, max_length=300)
@@ -125,6 +125,21 @@ class DecisionRecordPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class DecisionQualityMetrics(BaseModel):
+    decision_count: int
+    terminal_count: int
+    succeeded_count: int
+    failed_count: int
+    in_flight_count: int
+    success_rate: float | None
+    evidence_reference_count: int
+    evidence_kind_coverage: list[str]
+    confirmation_bound_count: int
+    provenance_linked_count: int
+    provenance_link_rate: float | None
+    latest_decision_at: datetime | None
 
 
 class DecisionConfirmation(BaseModel):

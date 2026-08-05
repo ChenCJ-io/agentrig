@@ -12,6 +12,9 @@ dist/
 .coverage
 .coverage.*
 htmlcov/
+web/coverage/
+web/playwright-report/
+web/test-results/
 .env
 .env.*
 agentrig.toml

@@ -30,6 +30,7 @@ Key；控制方也可以关闭 Evidence Judge，自行读取 CaseRun 后调用
 - Rule、Evidence Judge、External Controller 分别存档，主评判器决定当前状态。
 - SQLite / PostgreSQL async SQLAlchemy、17 张表、Alembic 迁移和运行快照。
 - V2 会话事件流、EvaluationPlan 状态机、AgentInvocation 生命周期与断线恢复。
+- V2.1 结构化 DecisionRecord、证据存在性校验、Core 策略门禁、并发幂等和质量指标。
 - Matrix Bridge、AgentTeams 三角色部署包和 Manager/Worker 独立 MCP 权限面。
 - HTTP/SSE API、Streamable HTTP MCP、React 管理界面和 10 份控制/协作 Skill。
 
@@ -79,7 +80,7 @@ scripts/local_demo.sh all
 ```
 
 命令会保留本地 SQLite 和 AgentTeams Docker volume，可重复运行。完成后直接访问
-`http://127.0.0.1:8010/assistant`。完整搭建、交互和验收说明见
+`http://127.0.0.1:8010/targets/target_lassist_local/assistant`。完整搭建、交互和验收说明见
 [本机演示与验收](./docs/04-本机演示与验收.md)。
 
 ## 最小配置
@@ -147,7 +148,7 @@ AgentRig 会把服务 Token 和 CaseRun 的短期 Scope 一起注入 ACP MCP 配
 uv run ruff check src tests examples
 uv run mypy src/agentrig
 uv run pytest
-cd web && npm run typecheck && npm run build
+cd web && npm run typecheck && npm run test:coverage && npm run e2e && npm run build
 ```
 
 架构、接口边界和模块说明见 [docs](./docs/README.md)，编码 Agent 工作流见

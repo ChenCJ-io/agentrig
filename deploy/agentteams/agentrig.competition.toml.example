@@ -8,6 +8,14 @@ api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
 [database]
 url = "postgresql+asyncpg://agentrig:change-me@postgres:5432/agentrig"
 
+[adaptive_decisions]
+enabled = true
+enforce_managed_mutations = true
+max_options = 5
+max_evidence_refs = 50
+delivery_retry_limit = 2
+worker_correction_limit = 1
+
 [agentteams]
 enabled = true
 health_url = "http://agentteams-controller:8080/healthz"

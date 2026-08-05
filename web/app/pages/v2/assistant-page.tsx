@@ -21,15 +21,14 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import remarkGfm from "remark-gfm";
 
 import {
-  cancelEvaluationPlan,
-  confirmEvaluationPlan,
   createAssistantSession,
   getAgentTeamsHealth,
   getAssistantSession,
+  getDecisionMetrics,
   getEvaluationPlan,
   listAgentInvocations,
   listAssistantEvents,
@@ -37,7 +36,6 @@ import {
   listDecisions,
   sendAssistantMessage,
   streamAssistantEvents,
-  submitEvaluationPlan,
   type AgentInvocation,
   type AssistantEvent,
   type AssistantEventPage,
@@ -48,8 +46,11 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 
 import styles from "./assistant-page.module.css";
+import { shortId, statusLabel, tone } from "./assistant-presenters";
+import { DecisionCard, DecisionSummary } from "./decision-cards";
 
 export function AssistantPage() {
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -88,6 +89,11 @@ export function AssistantPage() {
     queryFn: () => listDecisions(selectedId!),
     enabled: Boolean(selectedId),
   });
+  const decisionMetrics = useQuery({
+    queryKey: ["v2", "decision-metrics", selectedId],
+    queryFn: () => getDecisionMetrics(selectedId!),
+    enabled: Boolean(selectedId),
+  });
 
   useEffect(() => {
     if (!selectedId) return;
@@ -122,6 +128,7 @@ export function AssistantPage() {
             }
             if (incoming.decision_id) {
               void queryClient.invalidateQueries({ queryKey: ["v2", "decisions", selectedId] });
+              void queryClient.invalidateQueries({ queryKey: ["v2", "decision-metrics", selectedId] });
             }
             if (incoming.invocation_id || incoming.event_type === "run_status") {
               void queryClient.invalidateQueries({ queryKey: ["v2", "invocations", selectedId] });
@@ -168,6 +175,7 @@ export function AssistantPage() {
       queryClient.invalidateQueries({ queryKey: ["v2", "session", selectedId] }),
       queryClient.invalidateQueries({ queryKey: ["v2", "events", selectedId] }),
       queryClient.invalidateQueries({ queryKey: ["v2", "decisions", selectedId] }),
+      queryClient.invalidateQueries({ queryKey: ["v2", "decision-metrics", selectedId] }),
       queryClient.invalidateQueries({ queryKey: ["v2", "plan"] }),
     ]);
   };
@@ -202,15 +210,14 @@ export function AssistantPage() {
     mutationFn: async () => {
       const current = plan.data;
       if (!selectedId || !current) throw new Error("没有可确认的计划");
-      const receipt = await sendAssistantMessage(
+      return sendAssistantMessage(
         selectedId,
-        `确认执行 ${current.id} revision ${current.revision}`,
+        `确认计划 ${current.id} revision ${current.revision}。请记录 confirm_plan 决策并完成确认，但不要提交 Run。`,
         current.id,
       );
-      return confirmEvaluationPlan(current.id, receipt.event_id);
     },
     onSuccess: async () => {
-      setNotice("计划已绑定真实用户确认，可以提交运行。");
+      setNotice("确认请求已交给 Manager，Core 将校验决策和本次用户确认。");
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -232,18 +239,28 @@ export function AssistantPage() {
   });
 
   const submit = useMutation({
-    mutationFn: () => submitEvaluationPlan(plan.data!.id),
+    mutationFn: () =>
+      sendAssistantMessage(
+        selectedId!,
+        `提交已确认计划 ${plan.data!.id} revision ${plan.data!.revision}。请记录 submit_plan 决策并只创建一个 Run。`,
+        plan.data!.id,
+      ),
     onSuccess: async () => {
-      setNotice("计划已提交，Run 将在后台继续执行。");
+      setNotice("提交请求已交给 Manager；授权成功后 Run 会在后台执行。");
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
   });
 
   const cancel = useMutation({
-    mutationFn: () => cancelEvaluationPlan(plan.data!.id),
+    mutationFn: () =>
+      sendAssistantMessage(
+        selectedId!,
+        `取消计划 ${plan.data!.id} revision ${plan.data!.revision}。请记录 cancel_plan 决策并说明影响。`,
+        plan.data!.id,
+      ),
     onSuccess: async () => {
-      setNotice("计划已取消。");
+      setNotice("取消请求已交给 Manager，等待 Core 策略裁定。");
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -281,6 +298,8 @@ export function AssistantPage() {
     runTerminal,
   );
   const latestEventId = events.data?.items.at(-1)?.id;
+  const workspaceTargetId = targetIdFromSelection(plan.data?.selection)
+    ?? targetIdFromPath(location.pathname);
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [latestEventId, send.isPending]);
@@ -432,7 +451,7 @@ export function AssistantPage() {
             <div><span className="eyebrow">自适应决策</span><strong>当前决策</strong></div>
             <BrainCircuit size={16} />
           </header>
-          {latestDecision ? <DecisionSummary decision={latestDecision} /> : (
+          {latestDecision ? <DecisionSummary decision={latestDecision} metrics={decisionMetrics.data} /> : (
             <p className={styles.empty}>Manager 形成关键判断后，这里会显示选择、依据和策略裁定。</p>
           )}
         </section>
@@ -450,7 +469,7 @@ export function AssistantPage() {
           <AgentRow icon={<ShieldCheck size={14} />} label="证据裁决 Judge" status={judgePath} />
         </section>
 
-        <section className={styles.planCard}>
+        <section className={styles.planCard} id="evaluation-plan">
           <header>
             <div><span className="eyebrow">评测计划</span><strong>当前计划</strong></div>
             {plan.data ? <Badge tone={tone(plan.data.status)}>{statusLabel(plan.data.status)}</Badge> : null}
@@ -519,7 +538,9 @@ export function AssistantPage() {
                   </Button>
                 ) : null}
                 {plan.data.run_id ? (
-                  <Link className={styles.runLink} to={`/evaluation/batches/${plan.data.run_id}`}>
+                  <Link className={styles.runLink} to={workspaceTargetId
+                    ? `/targets/${encodeURIComponent(workspaceTargetId)}/evaluation/runs/${plan.data.run_id}`
+                    : `/evaluation/runs/${plan.data.run_id}`}>
                     查看 Run <ChevronRight size={13} />
                   </Link>
                 ) : null}
@@ -565,7 +586,7 @@ function EventMessage({ event }: { event: AssistantEvent }) {
   if (event.event_type === "run_status") {
     const status = String(event.payload.status ?? "completed");
     return (
-      <div className={`${styles.activity} ${styles.runActivity}`}>
+      <div className={`${styles.activity} ${styles.runActivity}`} id={`assistant-event-${event.id}`}>
         <CheckCircle2 size={12} />
         <span>评测运行{status === "completed" ? "已完成，Manager 正在基于证据诊断" : `状态更新：${statusLabel(status)}`}</span>
         <code>{event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
@@ -574,7 +595,7 @@ function EventMessage({ event }: { event: AssistantEvent }) {
   }
   if (!["user_message", "assistant_message", "system_notice", "error", "run_status"].includes(event.event_type)) {
     return (
-      <div className={styles.activity}>
+      <div className={styles.activity} id={`assistant-event-${event.id}`}>
         <Clock3 size={12} />
         <span>{activityName(event)}</span>
         <code>{event.invocation_id ? shortId(event.invocation_id) : event.plan_id ? shortId(event.plan_id) : event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
@@ -584,7 +605,7 @@ function EventMessage({ event }: { event: AssistantEvent }) {
   const user = event.actor_type === "user";
   const content = String(event.payload.content ?? event.payload.message ?? event.event_type.replaceAll("_", " "));
   return (
-    <div className={`${styles.message} ${user ? styles.userMessage : styles.managerMessage}`}>
+    <div className={`${styles.message} ${user ? styles.userMessage : styles.managerMessage}`} id={`assistant-event-${event.id}`}>
       <span className={styles.avatar}>{user ? <UserRound size={14} /> : <Bot size={14} />}</span>
       <div>
         <small>{user ? "你" : event.actor_id}</small>
@@ -597,65 +618,6 @@ function EventMessage({ event }: { event: AssistantEvent }) {
           {user ? <em>{event.delivery_status}</em> : null}
         </footer>
       </div>
-    </div>
-  );
-}
-
-function DecisionCard({ decision }: { decision: DecisionRecord }) {
-  const known = decision.observation_summary.known.slice(0, 3);
-  return (
-    <article className={styles.decisionCard}>
-      <header>
-        <span><BrainCircuit size={15} /></span>
-        <div>
-          <small>{decisionKindLabel(decision.decision_kind)}</small>
-          <strong>{actionLabel(decision.selected_action.action_type)}</strong>
-        </div>
-        <Badge tone={tone(decision.status)}>{statusLabel(decision.status)}</Badge>
-      </header>
-      <p>{decision.rationale_summary.summary}</p>
-      {known.length ? (
-        <ul>{known.map((item) => <li key={item}>{item}</li>)}</ul>
-      ) : null}
-      <footer>
-        <span><ShieldCheck size={12} /> {policyLabel(decision.policy_verdict.verdict)}</span>
-        <code>{shortId(decision.id)}</code>
-      </footer>
-      <details>
-        <summary>查看决策依据与取舍 <ChevronRight size={12} /></summary>
-        <div className={styles.decisionEvidence}>
-          {decision.evidence_refs.map((item) => (
-            <span key={`${item.kind}:${item.resource_id}`}>
-              <small>{evidenceKindLabel(item.kind)}</small>
-              <code title={item.resource_id}>{shortId(item.resource_id)}</code>
-            </span>
-          ))}
-        </div>
-        {decision.rationale_summary.tradeoffs.length ? (
-          <p className={styles.tradeoffs}>取舍：{decision.rationale_summary.tradeoffs.join(" · ")}</p>
-        ) : null}
-      </details>
-    </article>
-  );
-}
-
-function DecisionSummary({ decision }: { decision: DecisionRecord }) {
-  return (
-    <div className={styles.decisionSummary}>
-      <div>
-        <Badge tone={tone(decision.status)}>{statusLabel(decision.status)}</Badge>
-        <code>{shortId(decision.id)}</code>
-      </div>
-      <strong>{actionLabel(decision.selected_action.action_type)}</strong>
-      <p>{decision.objective}</p>
-      <dl>
-        <div><dt>策略裁定</dt><dd>{policyLabel(decision.policy_verdict.verdict)}</dd></div>
-        <div><dt>证据引用</dt><dd>{decision.evidence_refs.length}</dd></div>
-        <div><dt>置信度</dt><dd>{decision.confidence == null ? "—" : `${Math.round(decision.confidence * 100)}%`}</dd></div>
-      </dl>
-      {decision.action_ref_id ? (
-        <footer><span>业务结果</span><code title={decision.action_ref_id}>{shortId(decision.action_ref_id)}</code></footer>
-      ) : null}
     </div>
   );
 }
@@ -725,120 +687,30 @@ function parseJsonObject(value: string, label: string): Record<string, unknown> 
   return parsed as Record<string, unknown>;
 }
 
-function tone(value: string): "neutral" | "accent" | "success" | "warning" | "danger" {
-  if (["completed", "submitted", "ready", "delivered", "authorized", "succeeded"].includes(value)) return "success";
-  if (["failed", "timed_out", "cancelled", "offline", "error", "denied"].includes(value)) return "danger";
-  if (["running", "dispatched", "confirmed", "executing", "eligible"].includes(value)) return "accent";
-  if (["queued", "created", "draft", "pending", "awaiting_confirmation", "stale"].includes(value)) return "warning";
-  return "neutral";
-}
-
-function statusLabel(value: string) {
-  const labels: Record<string, string> = {
-    cancelled: "已取消",
-    completed: "已完成",
-    confirmed: "已确认",
-    created: "已创建",
-    delivered: "已送达",
-    dispatched: "已派发",
-    draft: "草稿",
-    failed: "失败",
-    idle: "空闲",
-    offline: "离线",
-    pending: "待处理",
-    queued: "排队中",
-    ready: "就绪",
-    authorized: "已授权",
-    awaiting_confirmation: "等待确认",
-    denied: "已拒绝",
-    stale: "已过期",
-    superseded: "已替代",
-    executing: "执行中",
-    bypassed: "已绕过",
-    eligible: "按需调用",
-    not_needed: "不需要",
-    running: "运行中",
-    submitted: "已提交",
-    succeeded: "已完成",
-    timed_out: "已超时",
-  };
-  return labels[value] ?? value.replaceAll("_", " ");
-}
-
 function adaptiveRoleStatus(current: string, planned: boolean, terminal: boolean) {
   if (current !== "idle") return current;
   if (!planned) return "not_needed";
   return terminal ? "bypassed" : "eligible";
 }
 
-function decisionKindLabel(value: string) {
-  const labels: Record<string, string> = {
-    clarification: "信息澄清",
-    scope_selection: "范围选择",
-    execution_strategy: "执行策略",
-    submission: "提交决策",
-    diagnosis: "证据诊断",
-    recovery: "恢复建议",
-    asset_draft: "资产沉淀",
-  };
-  return labels[value] ?? value;
-}
-
-function actionLabel(value: string) {
-  const labels: Record<string, string> = {
-    ask_user: "向用户确认关键信息",
-    no_action: "保留现状并解释",
-    create_plan: "生成有界评测计划",
-    create_plan_revision: "生成新的计划修订",
-    update_draft_plan: "更新评测计划草稿",
-    request_plan_confirmation: "请求确认精确计划",
-    confirm_plan: "确认当前计划",
-    submit_plan: "提交一个评测运行",
-    cancel_plan: "取消当前计划",
-    cancel_run: "停止评测运行",
-    retry_invocation_delivery: "重试同一 Worker 投递",
-    request_worker_correction: "请求 Worker 纠正输出",
-    create_case_draft: "沉淀测试用例草稿",
-    create_sample_draft: "沉淀工具结果样本",
-    create_target_draft: "创建被测 Agent 草稿",
-  };
-  return labels[value] ?? value.replaceAll("_", " ");
-}
-
-function policyLabel(value: string) {
-  return {
-    allow: "Core 已允许",
-    require_confirmation: "需要用户确认",
-    deny: "Core 已拒绝",
-    stale: "事实已变化",
-  }[value] ?? value;
-}
-
-function evidenceKindLabel(value: string) {
-  const labels: Record<string, string> = {
-    assistant_event: "用户/会话事件",
-    evaluation_plan: "评测计划",
-    run: "评测运行",
-    case_run: "用例运行",
-    run_event: "运行事件",
-    evaluation: "评测结论",
-    agent_invocation: "Worker 调用",
-    test_case: "测试用例",
-    target: "被测 Agent",
-    execution_profile: "执行配置",
-    tool_sample: "工具结果样本",
-    target_check: "连通性检查",
-    runtime_health: "运行时健康",
-  };
-  return labels[value] ?? value;
-}
-
-function shortId(value: string) {
-  return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-5)}` : value;
-}
-
 function planGoal(goal: Record<string, unknown>) {
   return String(goal.normalized_goal ?? goal.user_request ?? "已准备评测目标");
+}
+
+function targetIdFromSelection(selection?: Record<string, unknown>): string | null {
+  const direct = selection?.target_id;
+  if (typeof direct === "string" && direct) return direct;
+  const targets = selection?.targets;
+  if (!Array.isArray(targets)) return null;
+  const first = targets[0];
+  if (!first || typeof first !== "object") return null;
+  const targetId = (first as Record<string, unknown>).target_id;
+  return typeof targetId === "string" && targetId ? targetId : null;
+}
+
+function targetIdFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/targets\/([^/]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 function errorMessage(error: unknown) {

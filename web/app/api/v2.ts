@@ -120,6 +120,21 @@ export interface DecisionRecordPage {
   offset: number;
 }
 
+export interface DecisionQualityMetrics {
+  decision_count: number;
+  terminal_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  in_flight_count: number;
+  success_rate: number | null;
+  evidence_reference_count: number;
+  evidence_kind_coverage: string[];
+  confirmation_bound_count: number;
+  provenance_linked_count: number;
+  provenance_link_rate: number | null;
+  latest_decision_at: string | null;
+}
+
 export interface PlanConfirmation {
   required: boolean;
   reasons: string[];
@@ -242,6 +257,12 @@ export function listAssistantEvents(id: string): Promise<AssistantEventPage> {
 export function listDecisions(id: string): Promise<DecisionRecordPage> {
   return apiRequest(
     `/api/v2/assistant/sessions/${encodeURIComponent(id)}/decisions?limit=100`,
+  );
+}
+
+export function getDecisionMetrics(id: string): Promise<DecisionQualityMetrics> {
+  return apiRequest(
+    `/api/v2/assistant/sessions/${encodeURIComponent(id)}/decision-metrics`,
   );
 }
 

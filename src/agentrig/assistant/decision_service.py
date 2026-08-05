@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from typing import Never
 
+from ..config import AdaptiveDecisionConfig
 from ..errors import AgentRigError, ErrorCode
 from ..identifiers import new_id
 from ..runs.redactor import Redactor
@@ -17,6 +20,7 @@ from .decision_models import (
 from .decision_policy import DecisionPolicyService
 from .decision_repository import DecisionRepository
 from .decision_schemas import (
+    DecisionQualityMetrics,
     DecisionRecordPage,
     DecisionRecordView,
     ManagerDecisionProposal,
@@ -54,16 +58,36 @@ class DecisionService:
         *,
         assistant_repository: AssistantRepository,
         assistant: AssistantService,
+        config: AdaptiveDecisionConfig | None = None,
         policy: DecisionPolicyService | None = None,
         redactor: Redactor | None = None,
     ) -> None:
         self._repository = repository
         self._assistant_repository = assistant_repository
         self._assistant = assistant
+        self._config = config or AdaptiveDecisionConfig()
         self._policy = policy or DecisionPolicyService()
         self._redactor = redactor or Redactor()
+        self._record_locks = [asyncio.Lock() for _ in range(64)]
 
     async def record(self, value: ManagerDecisionProposal) -> DecisionRecordView:
+        if not self._config.enabled:
+            raise AgentRigError(
+                ErrorCode.DECISION_DENIED,
+                "adaptive decisions are disabled by configuration",
+            )
+        if len(value.options) > self._config.max_options:
+            raise AgentRigError(
+                ErrorCode.DECISION_INVALID,
+                "decision exceeds the configured option limit",
+                details={"limit": self._config.max_options},
+            )
+        if len(value.evidence_refs) > self._config.max_evidence_refs:
+            raise AgentRigError(
+                ErrorCode.DECISION_INVALID,
+                "decision exceeds the configured evidence reference limit",
+                details={"limit": self._config.max_evidence_refs},
+            )
         session = await self._assistant.get_session(value.session_id)
         turn = await self._assistant.get_turn(value.turn_id)
         if turn.session_id != session.id:
@@ -95,6 +119,16 @@ class DecisionService:
             }
         )
         safe = ManagerDecisionProposal.model_validate(safe_payload)
+        lock_index = hash(safe.session_id) % len(self._record_locks)
+        lock = self._record_locks[lock_index]
+        async with lock:
+            return await self._record_validated(session.id, safe)
+
+    async def _record_validated(
+        self,
+        session_id: str,
+        safe: ManagerDecisionProposal,
+    ) -> DecisionRecordView:
         idempotency_key = safe.idempotency_key or self._proposal_key(safe)
         existing = await self._repository.get_by_idempotency_key(idempotency_key)
         if existing is not None:
@@ -104,6 +138,7 @@ class DecisionService:
                     "decision idempotency key is already owned by another session",
                 )
             return existing
+        await self._enforce_recovery_budget(safe)
         verdict = self._policy.evaluate(safe)
         status = {
             PolicyVerdictType.ALLOW: DecisionStatus.AUTHORIZED,
@@ -116,19 +151,19 @@ class DecisionService:
             and safe.selected_action.action_type in self._immediate_actions
         ):
             status = DecisionStatus.SUCCEEDED
-        ordinal = await self._repository.next_ordinal(safe.session_id, safe.turn_id)
         context_hash = self._context_hash(safe)
-        decision = await self._repository.create(
+        decision, created = await self._repository.create(
             new_id("decision"),
             safe,
-            ordinal=ordinal,
             status=status,
             context_hash=context_hash,
             policy_verdict=verdict.model_dump(mode="json"),
             action_idempotency_key=idempotency_key,
         )
+        if not created:
+            return decision
         await self._assistant.append_event(
-            session.id,
+            session_id,
             AssistantEventType.DECISION_RECORDED,
             actor_type=ActorType.MANAGER,
             actor_id=safe.proposed_by,
@@ -202,6 +237,40 @@ class DecisionService:
             offset=0,
         )
 
+    async def metrics(self, session_id: str) -> DecisionQualityMetrics:
+        page = await self.list_for_session(session_id, limit=200)
+        items = page.items
+        terminal = [item for item in items if item.status.terminal]
+        succeeded = [item for item in items if item.status is DecisionStatus.SUCCEEDED]
+        failed = [item for item in items if item.status is DecisionStatus.FAILED]
+        provenance_candidates = [
+            item
+            for item in succeeded
+            if item.selected_action.action_type not in self._immediate_actions
+        ]
+        linked = [item for item in provenance_candidates if item.action_ref_id is not None]
+        return DecisionQualityMetrics(
+            decision_count=len(items),
+            terminal_count=len(terminal),
+            succeeded_count=len(succeeded),
+            failed_count=len(failed),
+            in_flight_count=len(items) - len(terminal),
+            success_rate=self._rate(len(succeeded), len(terminal)),
+            evidence_reference_count=sum(len(item.evidence_refs) for item in items),
+            evidence_kind_coverage=sorted(
+                {ref.kind for item in items for ref in item.evidence_refs}
+            ),
+            confirmation_bound_count=sum(
+                item.confirmation_event_id is not None for item in items
+            ),
+            provenance_linked_count=len(linked),
+            provenance_link_rate=self._rate(len(linked), len(provenance_candidates)),
+            latest_decision_at=max(
+                (item.created_at for item in items),
+                default=None,
+            ),
+        )
+
     async def authorize(
         self,
         decision_id: str,
@@ -226,7 +295,10 @@ class DecisionService:
             decision_id,
             DecisionStatus.AUTHORIZED,
             confirmation_event_id=confirmation_event_id,
+            expected_statuses={DecisionStatus.AWAITING_CONFIRMATION},
         )
+        if updated is None:
+            self._raise_status_conflict(await self.get(decision_id))
         await self._status_event(updated)
         return updated
 
@@ -256,7 +328,13 @@ class DecisionService:
                     "decision requires a real user confirmation",
                 )
             self._raise_status_conflict(decision)
-        updated = await self._repository.set_status(decision_id, DecisionStatus.EXECUTING)
+        updated = await self._repository.set_status(
+            decision_id,
+            DecisionStatus.EXECUTING,
+            expected_statuses={DecisionStatus.AUTHORIZED},
+        )
+        if updated is None:
+            self._raise_status_conflict(await self.get(decision_id))
         await self._status_event(updated)
         return updated
 
@@ -282,7 +360,10 @@ class DecisionService:
             DecisionStatus.SUCCEEDED,
             action_ref_type=action_ref_type,
             action_ref_id=action_ref_id,
+            expected_statuses={DecisionStatus.EXECUTING},
         )
+        if updated is None:
+            self._raise_status_conflict(await self.get(decision_id))
         await self._status_event(updated)
         return updated
 
@@ -301,7 +382,15 @@ class DecisionService:
             DecisionStatus.FAILED,
             error_code=error_code,
             error_message=self._redact_text(error_message)[:2_000],
+            expected_statuses={
+                DecisionStatus.PROPOSED,
+                DecisionStatus.AWAITING_CONFIRMATION,
+                DecisionStatus.AUTHORIZED,
+                DecisionStatus.EXECUTING,
+            },
         )
+        if updated is None:
+            return await self.get(decision_id)
         await self._status_event(updated)
         return updated
 
@@ -315,7 +404,15 @@ class DecisionService:
             decision_id,
             DecisionStatus.CANCELLED,
             error_message=self._redact_text(reason)[:500],
+            expected_statuses={
+                DecisionStatus.PROPOSED,
+                DecisionStatus.AWAITING_CONFIRMATION,
+                DecisionStatus.AUTHORIZED,
+                DecisionStatus.EXECUTING,
+            },
         )
+        if updated is None:
+            self._raise_status_conflict(await self.get(decision_id))
         await self._status_event(updated)
         return updated
 
@@ -326,27 +423,72 @@ class DecisionService:
                     ErrorCode.DECISION_INVALID,
                     f"unsupported evidence kind: {ref.kind}",
                 )
-            if ref.kind == "assistant_event":
-                event = await self._assistant.get_event(ref.resource_id)
-                if event.session_id != value.session_id:
+            if ref.kind == "runtime_health":
+                if not ref.version and not ref.snapshot_hash:
                     raise AgentRigError(
                         ErrorCode.DECISION_INVALID,
-                        "assistant evidence belongs to another session",
+                        "runtime health evidence requires a version or snapshot hash",
                     )
-            elif ref.kind == "evaluation_plan":
-                plan = await self._assistant_repository.get_plan(ref.resource_id)
-                if plan is None or plan.session_id != value.session_id:
-                    raise AgentRigError(
-                        ErrorCode.DECISION_INVALID,
-                        "plan evidence does not belong to this session",
-                    )
-            elif ref.kind == "run":
-                plan = await self._assistant_repository.get_plan_by_run_id(ref.resource_id)
-                if plan is None or plan.session_id != value.session_id:
-                    raise AgentRigError(
-                        ErrorCode.DECISION_INVALID,
-                        "run evidence does not belong to this session",
-                    )
+                continue
+            if not await self._repository.evidence_ref_is_valid(
+                ref,
+                session_id=value.session_id,
+            ):
+                raise AgentRigError(
+                    ErrorCode.DECISION_INVALID,
+                    "decision evidence does not exist or belongs to another session",
+                    details={"kind": ref.kind, "resource_id": ref.resource_id},
+                )
+
+    async def _enforce_recovery_budget(self, value: ManagerDecisionProposal) -> None:
+        action = value.selected_action.action_type
+        limits = {
+            DecisionActionType.RETRY_INVOCATION_DELIVERY: self._config.delivery_retry_limit,
+            DecisionActionType.REQUEST_WORKER_CORRECTION: self._config.worker_correction_limit,
+        }
+        limit = limits.get(action)
+        if limit is None:
+            return
+        invocation_refs = [
+            ref.resource_id for ref in value.evidence_refs if ref.kind == "agent_invocation"
+        ]
+        if len(invocation_refs) != 1:
+            raise AgentRigError(
+                ErrorCode.DECISION_INVALID,
+                "recovery decisions require exactly one agent_invocation evidence reference",
+            )
+        invocation_id = invocation_refs[0]
+        page = await self._repository.list_for_session(
+            value.session_id,
+            status=None,
+            decision_kind=None,
+            limit=200,
+            offset=0,
+        )
+        consumed = sum(
+            item.selected_action.action_type is action
+            and any(
+                ref.kind == "agent_invocation" and ref.resource_id == invocation_id
+                for ref in item.evidence_refs
+            )
+            and item.status
+            not in {
+                DecisionStatus.DENIED,
+                DecisionStatus.STALE,
+                DecisionStatus.CANCELLED,
+            }
+            for item in page.items
+        )
+        if consumed >= limit:
+            raise AgentRigError(
+                ErrorCode.DECISION_RETRY_EXHAUSTED,
+                "the configured recovery budget is exhausted",
+                details={
+                    "action_type": action.value,
+                    "agent_invocation_id": invocation_id,
+                    "limit": limit,
+                },
+            )
 
     async def _status_event(self, decision: DecisionRecordView) -> None:
         await self._assistant.append_event(
@@ -386,6 +528,10 @@ class DecisionService:
         return str(self._redactor.redact({"value": value})["value"])
 
     @staticmethod
+    def _rate(numerator: int, denominator: int) -> float | None:
+        return round(numerator / denominator, 4) if denominator else None
+
+    @staticmethod
     def _context_hash(value: ManagerDecisionProposal) -> str:
         payload = {
             "session_id": value.session_id,
@@ -404,7 +550,7 @@ class DecisionService:
         return hashlib.sha256(encoded.encode()).hexdigest()
 
     @staticmethod
-    def _raise_status_conflict(decision: DecisionRecordView) -> None:
+    def _raise_status_conflict(decision: DecisionRecordView) -> Never:
         raise AgentRigError(
             ErrorCode.CONFLICT,
             f"decision cannot transition from {decision.status.value}",

@@ -151,6 +151,11 @@ async def list_decisions(
     )
 
 
+@router.get("/assistant/sessions/{session_id}/decision-metrics")
+async def decision_metrics(request: Request, session_id: str) -> object:
+    return await services(request).decisions.metrics(session_id)
+
+
 @router.get("/decisions/{decision_id}")
 async def get_decision(request: Request, decision_id: str) -> object:
     return await services(request).decisions.get(decision_id)

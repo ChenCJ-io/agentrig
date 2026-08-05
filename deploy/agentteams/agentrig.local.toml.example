@@ -22,6 +22,14 @@ sse_poll_interval_seconds = 0.5
 sse_heartbeat_seconds = 15
 max_message_chars = 100000
 
+[adaptive_decisions]
+enabled = true
+enforce_managed_mutations = true
+max_options = 5
+max_evidence_refs = 50
+delivery_retry_limit = 2
+worker_correction_limit = 1
+
 [agentteams]
 enabled = true
 # Matrix 连通性已覆盖本机运行时探测；本地模式无需额外暴露 Controller 健康端点。

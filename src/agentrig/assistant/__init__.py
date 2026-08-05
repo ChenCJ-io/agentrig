@@ -8,6 +8,7 @@ from .decision_models import (
     PolicyVerdictType,
 )
 from .decision_schemas import (
+    DecisionQualityMetrics,
     DecisionRecordPage,
     DecisionRecordView,
     ManagerDecisionProposal,
@@ -54,6 +55,7 @@ __all__ = [
     "DeliveryStatus",
     "DecisionActionType",
     "DecisionKind",
+    "DecisionQualityMetrics",
     "DecisionRecordPage",
     "DecisionRecordView",
     "DecisionService",

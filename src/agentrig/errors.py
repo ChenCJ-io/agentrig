@@ -35,6 +35,7 @@ class ErrorCode(StrEnum):
     AGENT_RESULT_INVALID = "agent_result_invalid"
     AGENT_ROLE_FORBIDDEN = "agent_role_forbidden"
     DECISION_INVALID = "decision_invalid"
+    DECISION_REQUIRED = "decision_required"
     DECISION_DENIED = "decision_denied"
     DECISION_CONFIRMATION_REQUIRED = "decision_confirmation_required"
     DECISION_STALE = "decision_stale"

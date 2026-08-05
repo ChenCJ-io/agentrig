@@ -129,6 +129,7 @@ def _add_error_handlers(app: FastAPI) -> None:
             "decision_action_mismatch": 409,
             "decision_already_claimed": 409,
             "decision_retry_exhausted": 409,
+            "decision_required": 409,
             "agent_role_forbidden": 403,
             "agentteams_unavailable": 503,
             "matrix_delivery_failed": 503,

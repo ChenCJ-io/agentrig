@@ -147,6 +147,7 @@ class ServiceContainer:
             decision_repository,
             assistant_repository=assistant_repository,
             assistant=assistant,
+            config=resolved_settings.adaptive_decisions,
             redactor=redactor,
         )
         agent_invocations = AgentInvocationService(
@@ -270,6 +271,10 @@ class ServiceContainer:
             assistant=assistant,
             runs=runs,
             decisions=decisions,
+            enforce_managed_mutations=(
+                resolved_settings.adaptive_decisions.enabled
+                and resolved_settings.adaptive_decisions.enforce_managed_mutations
+            ),
         )
         scheduler.add_completion_listener(
             AssistantRunNotifier(

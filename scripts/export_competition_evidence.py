@@ -84,6 +84,14 @@ def build_bundle(base_url: str, session_id: str | None) -> dict[str, Any]:
         base_url,
         f"/api/v2/assistant/sessions/{encoded_session}/agent-invocations?limit=100",
     )
+    decisions = get_json(
+        base_url,
+        f"/api/v2/assistant/sessions/{encoded_session}/decisions?limit=200",
+    )
+    decision_metrics = get_json(
+        base_url,
+        f"/api/v2/assistant/sessions/{encoded_session}/decision-metrics",
+    )
 
     plan: dict[str, Any] | None = None
     run: dict[str, Any] | None = None
@@ -171,6 +179,37 @@ def build_bundle(base_url: str, session_id: str | None) -> dict[str, Any]:
             )
             for item in events.get("items", [])
         ],
+        "decision_records": [
+            pick(
+                item,
+                "id",
+                "turn_id",
+                "parent_decision_id",
+                "ordinal",
+                "trigger",
+                "decision_kind",
+                "status",
+                "objective",
+                "observation_summary",
+                "options",
+                "selected_action",
+                "rationale_summary",
+                "evidence_refs",
+                "confidence",
+                "context_hash",
+                "policy_verdict",
+                "confirmation_event_id",
+                "action_ref_type",
+                "action_ref_id",
+                "error_code",
+                "created_at",
+                "authorized_at",
+                "started_at",
+                "finished_at",
+            )
+            for item in decisions.get("items", [])
+        ],
+        "decision_quality_metrics": decision_metrics,
         "plan": plan,
         "agent_invocations": [
             pick(

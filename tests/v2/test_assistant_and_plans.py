@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from agentrig.agents.invocation_models import AgentRole
+from agentrig.agents.invocation_schemas import AgentInvocationCreate
+from agentrig.agents.ports import AgentTaskContext
 from agentrig.assistant import (
     AssistantMessageCreate,
     AssistantSessionCreate,
@@ -458,3 +463,200 @@ async def test_decision_confirmation_requires_same_session_user_event(
     with pytest.raises(AgentRigError) as exc:
         await services.decisions.authorize(second.id, other_message.event_id)
     assert exc.value.detail.code is ErrorCode.DECISION_CONFIRMATION_REQUIRED
+
+
+async def test_concurrent_decisions_allocate_unique_ordinals_and_deduplicate_events(
+    services: ServiceContainer,
+) -> None:
+    session_id, event_id, turn_id = await _message(services)
+
+    def proposal(index: int, key: str) -> ManagerDecisionProposal:
+        return ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=turn_id,
+            trigger="user_request",
+            decision_kind="clarification",
+            objective=f"resolve bounded question {index}",
+            observation_summary={"known": ["the request is persisted"]},
+            options=[{"action_type": "no_action", "label": "record evidence"}],
+            selected_action={"action_type": "no_action"},
+            rationale_summary={"summary": "No mutation is needed."},
+            evidence_refs=[{"kind": "assistant_event", "resource_id": event_id}],
+            idempotency_key=key,
+        )
+
+    records = await asyncio.gather(
+        services.decisions.record(proposal(1, "concurrent-1")),
+        services.decisions.record(proposal(2, "concurrent-2")),
+        services.decisions.record(proposal(1, "concurrent-1")),
+    )
+    assert records[0].id == records[2].id
+    assert sorted({item.ordinal for item in records}) == [1, 2]
+    decision_events = [
+        item
+        for item in (await services.assistant.list_events(session_id)).items
+        if item.event_type.value == "decision_recorded"
+    ]
+    assert len(decision_events) == 2
+    metrics = await services.decisions.metrics(session_id)
+    assert metrics.decision_count == 2
+    assert metrics.succeeded_count == 2
+    assert metrics.success_rate == 1.0
+    assert metrics.evidence_reference_count == 2
+    assert metrics.evidence_kind_coverage == ["assistant_event"]
+    assert metrics.provenance_link_rate is None
+
+
+async def test_decision_validates_asset_evidence_and_configured_limits(
+    services: ServiceContainer,
+) -> None:
+    session_id, _, turn_id = await _message(services)
+    proposal = ManagerDecisionProposal(
+        session_id=session_id,
+        turn_id=turn_id,
+        trigger="user_request",
+        decision_kind="scope_selection",
+        objective="select only existing approved evaluation assets",
+        observation_summary={"known": ["the requested assets exist"]},
+        options=[{"action_type": "create_plan", "label": "create one plan"}],
+        selected_action={"action_type": "create_plan"},
+        rationale_summary={"summary": "Use the exact persisted assets."},
+        evidence_refs=[
+            {"kind": "test_case", "resource_id": "case_v2_plan", "version": "draft"},
+            {"kind": "target", "resource_id": "target_v2_plan", "version": "v1"},
+            {"kind": "execution_profile", "resource_id": "profile_v2_plan"},
+            {"kind": "target_check", "resource_id": "target_v2_plan"},
+        ],
+        idempotency_key="validated-assets",
+    )
+    decision = await services.decisions.record(proposal)
+    assert decision.status is DecisionStatus.AUTHORIZED
+
+    missing = ManagerDecisionProposal.model_validate(
+        {
+            **proposal.model_dump(mode="json"),
+            "idempotency_key": "missing-asset",
+            "evidence_refs": [{"kind": "test_case", "resource_id": "case_missing"}],
+        }
+    )
+    with pytest.raises(AgentRigError) as exc:
+        await services.decisions.record(missing)
+    assert exc.value.detail.code is ErrorCode.DECISION_INVALID
+
+    unknown_version = ManagerDecisionProposal.model_validate(
+        {
+            **proposal.model_dump(mode="json"),
+            "idempotency_key": "unknown-case-version",
+            "evidence_refs": [
+                {
+                    "kind": "test_case",
+                    "resource_id": "case_v2_plan",
+                    "version": "invented",
+                }
+            ],
+        }
+    )
+    with pytest.raises(AgentRigError) as version_error:
+        await services.decisions.record(unknown_version)
+    assert version_error.value.detail.code is ErrorCode.DECISION_INVALID
+
+
+async def test_recovery_decisions_enforce_configured_worker_budget(
+    services: ServiceContainer,
+) -> None:
+    session_id, _, turn_id = await _message(services)
+    invocation = await services.agent_invocations.create_or_get(
+        AgentInvocationCreate(
+            role=AgentRole.EVIDENCE_JUDGE,
+            context=AgentTaskContext(
+                run_id="run_recovery_budget",
+                case_run_id="case_run_recovery_budget",
+                session_id=session_id,
+            ),
+            input_snapshot={"evidence": []},
+            deadline=datetime.now(UTC) + timedelta(minutes=5),
+            idempotency_key="recovery-budget-invocation",
+        )
+    )
+
+    def proposal(key: str) -> ManagerDecisionProposal:
+        return ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=turn_id,
+            trigger="evidence_inconclusive",
+            decision_kind="recovery",
+            objective="request one bounded correction from the evidence judge",
+            observation_summary={"known": ["the first result is inconclusive"]},
+            options=[
+                {
+                    "action_type": "request_worker_correction",
+                    "label": "request a corrected result",
+                }
+            ],
+            selected_action={"action_type": "request_worker_correction"},
+            rationale_summary={"summary": "One correction attempt is permitted."},
+            evidence_refs=[
+                {"kind": "agent_invocation", "resource_id": invocation.id}
+            ],
+            idempotency_key=key,
+        )
+
+    first = await services.decisions.record(proposal("worker-correction-1"))
+    assert first.status is DecisionStatus.AUTHORIZED
+    duplicate = await services.decisions.record(proposal("worker-correction-1"))
+    assert duplicate.id == first.id
+    with pytest.raises(AgentRigError) as exhausted:
+        await services.decisions.record(proposal("worker-correction-2"))
+    assert exhausted.value.detail.code is ErrorCode.DECISION_RETRY_EXHAUSTED
+
+
+async def test_enforced_managed_plan_requires_decision() -> None:
+    container = ServiceContainer.build(
+        Settings(
+            adaptive_decisions={
+                "enabled": True,
+                "enforce_managed_mutations": True,
+                "max_options": 1,
+            }
+        ),
+        database=Database("sqlite+aiosqlite:///:memory:"),
+    )
+    await container.initialize()
+    try:
+        session_id, event_id, turn_id = await _message(container)
+        with pytest.raises(AgentRigError) as required:
+            await container.evaluation_plans.create(
+                EvaluationPlanCreate(
+                    session_id=session_id,
+                    source_turn_id=turn_id,
+                    goal={"user_request": "must be authorized"},
+                    selection={
+                        "case_ids": ["case_missing"],
+                        "targets": [{"target_id": "target_missing"}],
+                        "profile_id": "profile_missing",
+                    },
+                    created_by="agentteams_manager",
+                )
+            )
+        assert required.value.detail.code is ErrorCode.DECISION_REQUIRED
+
+        too_many_options = ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=turn_id,
+            trigger="user_request",
+            decision_kind="clarification",
+            objective="respect configured decision limits",
+            observation_summary={"known": ["one user request exists"]},
+            options=[
+                {"action_type": "ask_user", "label": "ask"},
+                {"action_type": "no_action", "label": "stop"},
+            ],
+            selected_action={"action_type": "ask_user"},
+            rationale_summary={"summary": "The configured limit is one option."},
+            evidence_refs=[{"kind": "assistant_event", "resource_id": event_id}],
+        )
+        with pytest.raises(AgentRigError) as limited:
+            await container.decisions.record(too_many_options)
+        assert limited.value.detail.code is ErrorCode.DECISION_INVALID
+    finally:
+        await container.close()

@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 SCENARIOS = {
     "success": {
-        "title": "Competition acceptance · successful regression",
+        "title": "参赛验收 · 成功回归",
         "case_id": "case_lassist_three_agent_demo",
         "expected": "pass",
         "prompt": (
@@ -22,7 +22,7 @@ SCENARIOS = {
         ),
     },
     "failure": {
-        "title": "Competition acceptance · confirmation policy",
+        "title": "参赛验收 · 确认策略",
         "case_id": "case_lassist_confirmation_gate_failure",
         "expected": "fail",
         "prompt": (
@@ -130,23 +130,57 @@ def run_scenario(api: Api, scenario_name: str, timeout: float) -> dict[str, Any]
         f"/api/v2/assistant/sessions/{encoded_session}/messages",
         {
             "client_message_id": str(uuid.uuid4()),
-            "content": f"确认执行 {plan_id} revision {plan['revision']}",
+            "content": (
+                f"确认并提交计划 {plan_id} revision {plan['revision']}。"
+                "请分别记录 confirm_plan 与 submit_plan 决策，只创建一个 Run。"
+            ),
             "active_plan_id": plan_id,
         },
     )
-    api.post(
-        f"/api/v2/evaluation-plans/{quote(str(plan_id), safe='')}/confirm",
-        {
-            "confirmation_event_id": confirmation["event_id"],
-            "confirmed_by": "competition-acceptance",
-        },
+    confirmation_event_id = str(confirmation["event_id"])
+    submitted_plan = wait_for(
+        "Manager decision-authorized plan submission",
+        timeout,
+        lambda: (
+            value
+            if (value := api.get(f"/api/v2/evaluation-plans/{quote(str(plan_id), safe='')}"))[
+                "status"
+            ]
+            == "submitted"
+            and value.get("run_id")
+            else None
+        ),
     )
-    submission = api.post(
-        f"/api/v2/evaluation-plans/{quote(str(plan_id), safe='')}/submit",
-        {"idempotency_key": str(uuid.uuid4())},
-    )
-    run_id = str(submission["run"]["run_id"])
+    run_id = str(submitted_plan["run_id"])
     encoded_run = quote(run_id, safe="")
+
+    def completed_decision_chain() -> list[dict[str, Any]] | None:
+        page = api.get(
+            f"/api/v2/assistant/sessions/{encoded_session}/decisions?limit=100"
+        )
+        items = page.get("items", [])
+        actions = {item["selected_action"]["action_type"] for item in items}
+        required = {"create_plan", "confirm_plan", "submit_plan"}
+        complete = all(
+            item.get("status") == "succeeded"
+            for item in items
+            if item["selected_action"]["action_type"] in required
+        )
+        confirmed = any(
+            item["selected_action"]["action_type"] == "confirm_plan"
+            and item.get("confirmation_event_id") == confirmation_event_id
+            for item in items
+        )
+        return items if required <= actions and complete and confirmed else None
+
+    decisions = wait_for("complete DecisionRecord chain", 90, completed_decision_chain)
+    decision_metrics = api.get(
+        f"/api/v2/assistant/sessions/{encoded_session}/decision-metrics"
+    )
+    if decision_metrics.get("success_rate") != 1.0:
+        raise RuntimeError(f"decision success rate is not 100%: {decision_metrics!r}")
+    if decision_metrics.get("provenance_link_rate") != 1.0:
+        raise RuntimeError(f"decision provenance is incomplete: {decision_metrics!r}")
 
     run = wait_for(
         "Run completion",
@@ -187,6 +221,19 @@ def run_scenario(api: Api, scenario_name: str, timeout: float) -> dict[str, Any]
         "run_status": run["status"],
         "case_run_id": case_run["id"],
         "evaluation_state": case_run["evaluation_state"],
+        "decision_quality_metrics": decision_metrics,
+        "decisions": [
+            {
+                "id": value["id"],
+                "decision_kind": value["decision_kind"],
+                "status": value["status"],
+                "action_type": value["selected_action"]["action_type"],
+                "evidence_refs": value["evidence_refs"],
+                "action_ref_type": value.get("action_ref_type"),
+                "action_ref_id": value.get("action_ref_id"),
+            }
+            for value in decisions
+        ],
         "evaluations": [
             {
                 "evaluator_type": value["evaluator_type"],

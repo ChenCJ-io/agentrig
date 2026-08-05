@@ -44,7 +44,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 
 import {
   createOne,
@@ -536,6 +536,7 @@ function errorMessage(error: unknown) {
 // shares the same data, status and evidence semantics.
 
 function TestCasesPage({ targetId }: { targetId: string }) {
+  const location = useLocation();
   const { cases } = useTargetData(targetId);
   const queryClient = useQueryClient();
   const importInput = useRef<HTMLInputElement>(null);
@@ -549,7 +550,11 @@ function TestCasesPage({ targetId }: { targetId: string }) {
     const text = `${item.id} ${item.name} ${item.description} ${item.tags.join(" ")}`.toLowerCase();
     return text.includes(query.toLowerCase()) && (status === "all" || item.review_status === status);
   }), [cases.data, query, status]);
-  useEffect(() => { if (!selectedId && items[0]) setSelectedId(items[0].id); }, [items, selectedId]);
+  useEffect(() => {
+    const requested = new URLSearchParams(location.search).get("case_id");
+    if (requested && cases.data?.items.some((item) => item.id === requested)) setSelectedId(requested);
+    else if (!selectedId && items[0]) setSelectedId(items[0].id);
+  }, [cases.data, items, location.search, selectedId]);
   const selected = items.find((item) => item.id === selectedId) ?? cases.data?.items.find((item) => item.id === selectedId) ?? null;
   const approved = cases.data?.items.filter((item) => item.review_status === "approved").length ?? 0;
   async function importCases(event: ChangeEvent<HTMLInputElement>) {
@@ -657,6 +662,7 @@ function CaseReviewPage({ targetId }: { targetId: string }) {
 function ReviewCheck({ pass, label }: { pass: boolean; label: string }) { return <div className={styles.reviewCheck} data-pass={pass}><span>{pass ? <Check size={12} /> : <CircleAlert size={12} />}</span><p>{label}</p><small>{pass ? "通过" : "需检查"}</small></div>; }
 
 function ToolResultsPage({ targetId: _targetId }: { targetId: string }) {
+  const location = useLocation();
   const samples = useQuery({ queryKey: ["product", "samples", "workbench"], queryFn: () => getPage<Sample>("/api/samples?limit=200") });
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -666,7 +672,11 @@ function ToolResultsPage({ targetId: _targetId }: { targetId: string }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingSample, setEditingSample] = useState<Sample | null>(null);
   const items = (samples.data?.items ?? []).filter((item) => (filter === "all" || item.status === filter) && `${item.name} ${item.id} ${item.tool_name}`.toLowerCase().includes(query.toLowerCase()));
-  useEffect(() => { if (!selectedId && items[0]) setSelectedId(items[0].id); }, [items, selectedId]);
+  useEffect(() => {
+    const requested = new URLSearchParams(location.search).get("sample_id");
+    if (requested && samples.data?.items.some((item) => item.id === requested)) setSelectedId(requested);
+    else if (!selectedId && items[0]) setSelectedId(items[0].id);
+  }, [items, location.search, samples.data, selectedId]);
   const selected = samples.data?.items.find((item) => item.id === selectedId) ?? null;
   const review = useMutation({ mutationFn: (status: "approved" | "disabled") => postAction(`/api/samples/${encodeURIComponent(selected!.id)}/review?sample_status=${status}`), onSuccess: async (_, status) => { setNotice(`结果样本已更新为${labelFor(status)}。`); await queryClient.invalidateQueries({ queryKey: ["product", "samples"] }); }, onError: (error) => setNotice(errorMessage(error)) });
   const toolCounts = useMemo(() => { const counts = new Map<string, number>(); (samples.data?.items ?? []).forEach((item) => counts.set(item.tool_name ?? "sequence", (counts.get(item.tool_name ?? "sequence") ?? 0) + 1)); return [...counts.entries()].sort((a, b) => b[1] - a[1]); }, [samples.data]);
@@ -691,11 +701,16 @@ function ToolResultsPage({ targetId: _targetId }: { targetId: string }) {
 function DefinitionJson({ label, value }: { label: string; value: unknown }) { return <section className={styles.definitionBlock}><header><span>{label}</span><small>JSON</small></header><pre>{pretty(value)}</pre></section>; }
 
 function ProfilesPage({ targetId }: { targetId: string }) {
+  const location = useLocation();
   const { profiles, target } = useTargetData(targetId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ExecutionProfile | null>(null);
-  useEffect(() => { if (!selectedId && profiles.data?.items[0]) setSelectedId(profiles.data.items[0].id); }, [profiles.data, selectedId]);
+  useEffect(() => {
+    const requested = new URLSearchParams(location.search).get("profile_id");
+    if (requested && profiles.data?.items.some((item) => item.id === requested)) setSelectedId(requested);
+    else if (!selectedId && profiles.data?.items[0]) setSelectedId(profiles.data.items[0].id);
+  }, [location.search, profiles.data, selectedId]);
   const selected = profiles.data?.items.find((item) => item.id === selectedId) ?? null;
   return <ProductWorkspace>
     <PageIntro eyebrow="资产管理 · 执行策略" title="执行配置" description="复用工具模式、结果提供链、评判器、模型、并发和超时策略。" actions={<Button icon={<Plus />} onClick={() => { setEditingProfile(null); setEditorOpen(true); }} variant="primary">新建执行配置</Button>} />
@@ -772,7 +787,7 @@ function RunDetailPage({ runId, targetId }: { runId: string; targetId: string })
       { label: "执行错误", value: run.data?.failed_count ?? "—", meta: "平台或被测 Agent 错误", tone: run.data?.failed_count ? "danger" : "neutral" },
     ]} />
     {decisions.data?.items.length ? <Surface title="自适应决策链" eyebrow="为什么这样执行"><div className={styles.runDecisionChain}>{[...decisions.data.items].sort((left, right) => decisionTime(left) - decisionTime(right)).map((decision, index) => <RunDecisionStep decision={decision} index={index + 1} key={decision.id} />)}</div></Surface> : null}
-    <div className={styles.evidenceWorkbench}>
+    <div className={styles.evidenceWorkbench} id="evidence-workbench">
       <aside className={styles.caseRunRail}><header><div><span className="eyebrow">用例运行</span><strong>{caseRuns.data?.total ?? 0} 个原子结果</strong></div><Status value={run.data?.status ?? "queued"} /></header><div className={styles.caseRunList}>{caseRuns.data?.items.map((item) => <button className={selectedId === item.id ? styles.selectedCaseRun : ""} key={item.id} onClick={() => setSelectedId(item.id)} type="button"><span><strong>{item.case_id}</strong><small>{item.version ?? "默认版本"} · 第 {item.repeat_index} 次{item.comparison_role ? ` · ${comparisonRoleLabel(item.comparison_role)}` : ""}</small></span><Status value={item.evaluation_state} /></button>)}</div><footer><span>配置快照</span><small>测试用例、被测 Agent 与执行配置均已冻结</small></footer></aside>
       <main className={styles.evidenceTimeline}><header><div><span className="eyebrow">运行证据时间线</span><h2>{detail.data?.case_id ?? "选择用例运行"}</h2><code>{detail.data?.id ?? "—"}</code></div><div className={styles.eventFilters}><button className={eventFilter === "all" ? styles.activeEventFilter : ""} onClick={() => setEventFilter("all")} type="button">全部</button>{["tool_call", "provider_attempt", "tool_result", "validation", "error"].map((value) => <button className={eventFilter === value ? styles.activeEventFilter : ""} key={value} onClick={() => setEventFilter(value)} type="button">{eventTypeLabel(value)}</button>)}</div></header>
         {detail.isLoading ? <EmptyState icon={Clock3} title="正在读取证据">加载完整 CaseRun、Event 和 Evaluation。</EmptyState> : null}
@@ -1008,10 +1023,16 @@ function ExportPage({ targetId }: { targetId: string }) {
 }
 
 function EvaluatorTeamsPage() {
+  const location = useLocation();
   const health = useQuery({ queryKey: ["product", "teams", "health"], queryFn: getAgentTeamsHealth, refetchInterval: 10_000 });
   const invocations = useAllInvocations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  useEffect(() => { if (!selectedId && invocations.data?.[0]) setSelectedId(invocations.data[0].id); }, [invocations.data, selectedId]);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requested = params.get("invocation_id") ?? params.get("invocation");
+    if (requested && invocations.data?.some((item) => item.id === requested)) setSelectedId(requested);
+    else if (!selectedId && invocations.data?.[0]) setSelectedId(invocations.data[0].id);
+  }, [invocations.data, location.search, selectedId]);
   const detail = useQuery({ queryKey: ["product", "invocation", selectedId], queryFn: () => getAgentInvocation(selectedId!), enabled: Boolean(selectedId) });
   const curator = invocations.data?.filter((item) => item.agent_role === "simulation_curator") ?? [];
   const judge = invocations.data?.filter((item) => item.agent_role === "evidence_judge") ?? [];
