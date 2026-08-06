@@ -15,6 +15,7 @@ from agentrig.cases import (
     TestCasePatch,
 )
 from agentrig.cases.models import ReviewStatus
+from agentrig.config import TargetNetworkConfig
 from agentrig.errors import AgentRigError, ErrorCode
 from agentrig.infrastructure.database import Database
 from agentrig.infrastructure.database.repositories import (
@@ -23,6 +24,7 @@ from agentrig.infrastructure.database.repositories import (
     SqlSampleRepository,
     SqlTargetRepository,
 )
+from agentrig.infrastructure.http_policy import TargetHttpPolicy
 from agentrig.infrastructure.secrets import SecretResolver
 from agentrig.profiles import ProfileCreate, ProfilePatch, ProfileService
 from agentrig.targets import TargetCreate, TargetPatch, TargetService
@@ -285,6 +287,9 @@ async def test_target_check_treats_http_error_status_as_unreachable(
         SqlTargetRepository(database),
         drivers=DriverRegistry(),
         secrets=SecretResolver(),
+        http_policy=TargetHttpPolicy(
+            TargetNetworkConfig(allowed_hosts=["agent.test"])
+        ),
     )
     await service.create(
         TargetCreate(
@@ -306,6 +311,46 @@ async def test_target_check_treats_http_error_status_as_unreachable(
     result = await service.check("target_health_404")
     assert result.reachable is False
     assert result.message == "HTTP endpoint responded with 404"
+
+
+async def test_target_http_policy_blocks_private_endpoints_unless_allowlisted(
+    database: Database,
+) -> None:
+    repository = SqlTargetRepository(database)
+    restricted = TargetService(
+        repository,
+        drivers=DriverRegistry(),
+        secrets=SecretResolver(),
+        http_policy=TargetHttpPolicy(TargetNetworkConfig(allowed_hosts=[])),
+    )
+    with pytest.raises(AgentRigError) as exc:
+        await restricted.create(
+            TargetCreate(
+                id="target_metadata",
+                name="Metadata endpoint",
+                driver_type="http_sse",
+                endpoint="http://169.254.169.254/latest/meta-data",
+            )
+        )
+    assert exc.value.detail.code is ErrorCode.PERMISSION_DENIED
+
+    allowlisted = TargetService(
+        repository,
+        drivers=DriverRegistry(),
+        secrets=SecretResolver(),
+        http_policy=TargetHttpPolicy(
+            TargetNetworkConfig(allowed_hosts=["169.254.169.254"])
+        ),
+    )
+    created = await allowlisted.create(
+        TargetCreate(
+            id="target_allowlisted_private",
+            name="Explicit private target",
+            driver_type="http_sse",
+            endpoint="http://169.254.169.254/service",
+        )
+    )
+    assert created.endpoint == "http://169.254.169.254/service"
 
 
 def test_target_version_options_are_deep_merged_without_mutating_input() -> None:

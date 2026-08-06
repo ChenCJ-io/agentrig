@@ -37,7 +37,7 @@ own verdict after inspecting a CaseRun.
 - Durable assistant events, an EvaluationPlan state machine, AgentInvocation lifecycle,
   Matrix bridge, and reconnect-safe run notifications.
 - Three AgentTeams role packages, isolated role MCP surfaces, HTTP/SSE APIs, a React UI,
-  and ten controller/collaboration skills.
+  and eleven controller/collaboration skills.
 
 ## Quick start
 
@@ -50,6 +50,11 @@ cd web && npm ci && npm run build && cd ..
 uv run agentrig db upgrade
 uv run agentrig serve
 ```
+
+Persistent databases are no longer silently patched from ORM metadata. Startup checks
+the Alembic revision and fails when the schema is uninitialized or stale; run
+`uv run agentrig db upgrade` first. In-memory SQLite test databases are still created
+automatically.
 
 Default endpoints:
 
@@ -85,7 +90,35 @@ its reference:
 ```toml
 [server]
 api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
+# Configure only behind a trusted proxy that strips and rewrites this header.
+# trusted_principal_header = "x-authenticated-user"
+
+[execution]
+default_concurrency = 4
+max_concurrency = 20
+max_repeat_count = 20
+max_cases_per_run = 200
+max_planned_case_runs = 1000
+
+[target_network]
+allow_private_networks = false
+# Replace these local-development defaults with the exact trusted Target hosts in production.
+allowed_hosts = ["localhost", "127.0.0.1", "::1"]
+
+[reporting]
+# Oversized reports fail explicitly instead of producing a silently truncated download.
+max_report_case_runs = 10000
+max_export_records = 10000
 ```
+
+Target HTTP(S) URLs are checked when saved and before each run. Link-local, loopback,
+private, and hostnames resolving to non-public addresses are rejected unless explicitly
+trusted. In production, prefer exact `allowed_hosts` entries (or `*.example.com`) over
+`allow_private_networks = true`.
+
+Run reports and JSON/Markdown/HTML exports are generated server-side from every page and
+pass through the evidence redactor. A changing dataset returns a retryable conflict, and
+the `[reporting]` limits reject oversized output instead of truncating it.
 
 The Web UI opens an access-token dialog after its first 401 response; the same dialog is
 available from the user menu. The token is stored only in that browser's local storage.

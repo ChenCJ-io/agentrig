@@ -37,6 +37,7 @@ from .infrastructure.database.repositories import (
     SqlTargetRepository,
     SqlToolCallEvidenceReader,
 )
+from .infrastructure.http_policy import TargetHttpPolicy
 from .infrastructure.secrets import SecretResolver
 from .integrations.agentteams import (
     AgentTeamsBridge,
@@ -49,6 +50,7 @@ from .profiles import ProfileService
 from .profiles.resolver import ProfileResolver
 from .proxy.backend import BackendRegistry
 from .proxy.scoped import ProxyScopeRegistry
+from .reporting import ReportingService
 from .runs.event_recorder import EventRecorder
 from .runs.executor import CaseExecutor
 from .runs.planner import RunPlanner
@@ -78,6 +80,7 @@ class ServiceContainer:
     agentteams_bridge: AgentTeamsBridge
     target_chats: TargetChatService
     runs: RunService
+    reporting: ReportingService
     scheduler: RunScheduler
     drivers: DriverRegistry
     proxy_scopes: ProxyScopeRegistry
@@ -132,6 +135,7 @@ class ServiceContainer:
             target_repository,
             drivers=driver_registry,
             secrets=secret_resolver,
+            http_policy=TargetHttpPolicy(resolved_settings.target_network),
         )
         profiles = ProfileService(profile_repository)
         samples = SampleService(
@@ -256,6 +260,8 @@ class ServiceContainer:
             profile_resolver=ProfileResolver(resolved_settings),
             drivers=driver_registry,
             runs=run_repository,
+            max_cases_per_run=resolved_settings.execution.max_cases_per_run,
+            max_planned_case_runs=resolved_settings.execution.max_planned_case_runs,
         )
         runs = RunService(
             planner=planner,
@@ -265,6 +271,15 @@ class ServiceContainer:
                 evaluation_repository,
                 run_repository,
             ),
+        )
+        reporting = ReportingService(
+            cases=case_repository,
+            targets=target_repository,
+            samples=sample_repository,
+            runs=run_repository,
+            redactor=redactor,
+            max_report_case_runs=resolved_settings.reporting.max_report_case_runs,
+            max_export_records=resolved_settings.reporting.max_export_records,
         )
         evaluation_plans = EvaluationPlanService(
             repository=assistant_repository,
@@ -297,6 +312,7 @@ class ServiceContainer:
             agentteams_bridge=agentteams_bridge,
             target_chats=target_chats,
             runs=runs,
+            reporting=reporting,
             scheduler=scheduler,
             drivers=driver_registry,
             proxy_scopes=proxy_scopes,
@@ -306,7 +322,7 @@ class ServiceContainer:
         )
 
     async def initialize(self) -> None:
-        await self.database.create_schema()
+        await self.database.initialize_schema()
         await self._mark_interrupted()
         await self.agentteams_bridge.start()
 

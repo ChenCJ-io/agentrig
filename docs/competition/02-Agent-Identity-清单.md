@@ -33,8 +33,8 @@ Evaluation Manager（主控）
 - **输入**：AssistantSession ID、Turn ID、用户事件 ID、当前计划 ID，以及 Manager MCP
   返回的结构化资产和运行摘要。
 - **输出**：EvaluationPlan 草稿、确认说明、提交结果、证据化诊断或 TestCase 草稿。
-- **核心 Skills**：`plan-evaluation`、`execute-evaluation-plan`、`diagnose-run`、
-  `build-test-case-draft`、`configure-test-target`。
+- **核心 Skills**：`adaptive-evaluation`、`plan-evaluation`、`execute-evaluation-plan`、
+  `diagnose-run`、`build-test-case-draft`、`configure-test-target`。
 - **依赖工具**：仅 `agentrig-manager` MCP。
 - **权限**：读取评测资产；写 draft 计划；确认动作必须绑定真实用户事件；提交只能消费已
   confirmed 的同一 revision。

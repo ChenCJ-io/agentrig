@@ -10,10 +10,11 @@ Agent 是执行控制方：负责选案、提交运行、读取原子证据，�
 | [`run-test-cases`](./core/run-test-cases/) | 异步执行单个、批量、多版本、重复和 A/B 测试 |
 | [`harvest-tool-samples`](./core/harvest-tool-samples/) | 从已存档 Real Tool 证据显式创建 Sample 草稿 |
 
-V2 还提供七项 AgentTeams Skill：
+V2/V2.1 还提供八项 AgentTeams Skill：
 
 | 角色 | Skill | 用途 |
 |---|---|---|
+| Manager | [`adaptive-evaluation`](./manager/adaptive-evaluation/) | 为规划、委派、诊断和恢复决策绑定证据与策略门禁 |
 | Manager | [`plan-evaluation`](./manager/plan-evaluation/) | 将自然语言目标整理为 EvaluationPlan |
 | Manager | [`execute-evaluation-plan`](./manager/execute-evaluation-plan/) | 校验确认并幂等提交计划 |
 | Manager | [`diagnose-run`](./manager/diagnose-run/) | 基于持久化证据诊断 Run |

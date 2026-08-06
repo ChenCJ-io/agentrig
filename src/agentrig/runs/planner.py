@@ -69,6 +69,8 @@ class RunPlanner:
         profile_resolver: ProfileResolver,
         drivers: DriverRegistry,
         runs: RunRepository,
+        max_cases_per_run: int,
+        max_planned_case_runs: int,
     ) -> None:
         self._cases = cases
         self._targets = targets
@@ -76,6 +78,8 @@ class RunPlanner:
         self._profile_resolver = profile_resolver
         self._drivers = drivers
         self._runs = runs
+        self._max_cases_per_run = max_cases_per_run
+        self._max_planned_case_runs = max_planned_case_runs
 
     async def plan(self, request: RunCasesRequest) -> RunPlan:
         prepared = await self.prepare(request)
@@ -218,6 +222,7 @@ class RunPlanner:
 
     async def _resolve_cases(self, request: RunCasesRequest) -> list[TestCaseView]:
         if request.case_ids:
+            self._ensure_case_count(len(request.case_ids))
             return [await self._cases.get(case_id) for case_id in request.case_ids]
         assert request.selector is not None
         items: list[TestCaseView] = []
@@ -228,6 +233,7 @@ class RunPlanner:
                 limit=200,
                 offset=offset,
             )
+            self._ensure_case_count(page.total)
             items.extend(page.items)
             offset += len(page.items)
             if offset >= page.total:
@@ -240,19 +246,33 @@ class RunPlanner:
             )
         return items
 
+    def _ensure_case_count(self, count: int) -> None:
+        if count > self._max_cases_per_run:
+            raise AgentRigError(
+                ErrorCode.VALIDATION_ERROR,
+                "run selection exceeds the deployment case limit",
+                details={
+                    "selected_case_count": count,
+                    "max_cases_per_run": self._max_cases_per_run,
+                },
+            )
+
     async def _resolve_target(self, value: RunTargetInput) -> TargetView:
         if value.target_id is not None:
-            return await self._targets.get(value.target_id)
-        assert value.inline_target is not None
-        now = datetime.now(timezone.utc)
-        return TargetView.model_validate(
-            {
-                **value.inline_target.model_dump(mode="json"),
-                "id": value.inline_target.id or new_id("inline_target"),
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
+            target = await self._targets.get(value.target_id)
+        else:
+            assert value.inline_target is not None
+            now = datetime.now(timezone.utc)
+            target = TargetView.model_validate(
+                {
+                    **value.inline_target.model_dump(mode="json"),
+                    "id": value.inline_target.id or new_id("inline_target"),
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+        await self._targets.authorize_execution(target, version=value.version)
+        return target
 
     async def _resolve_profile(self, profile_id: str | None) -> ProfileView | None:
         return await self._profiles.get(profile_id) if profile_id else None
@@ -292,6 +312,7 @@ class RunPlanner:
                                 message=message,
                             )
                         )
+                        self._ensure_case_run_count(len(candidates) + len(skipped))
                     for version in versions:
                         pair_key_version = None if both_explicit else version
                         pair_id = (
@@ -314,7 +335,19 @@ class RunPlanner:
                                 primary_evaluator=self._primary_evaluator(case, profile),
                             )
                         )
+                        self._ensure_case_run_count(len(candidates) + len(skipped))
         return candidates, skipped
+
+    def _ensure_case_run_count(self, count: int) -> None:
+        if count > self._max_planned_case_runs:
+            raise AgentRigError(
+                ErrorCode.VALIDATION_ERROR,
+                "run expansion exceeds the deployment CaseRun limit",
+                details={
+                    "expanded_case_run_count": count,
+                    "max_planned_case_runs": self._max_planned_case_runs,
+                },
+            )
 
     @staticmethod
     def _versions(

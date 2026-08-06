@@ -21,16 +21,22 @@ from agentrig.targets import TargetCreate
 from agentrig.tool_results import SampleCreate
 from agentrig.tool_results.models import SampleStatus
 
-GOOSE_ROOT = Path("/Users/chenchunjie/Desktop/Project/goose")
+GOOSE_ROOT_VALUE = os.environ.get("AGENTRIG_TEST_GOOSE_ROOT")
+GOOSE_ROOT = (
+    Path(GOOSE_ROOT_VALUE).expanduser().resolve()
+    if GOOSE_ROOT_VALUE
+    else Path.cwd()
+)
 GOOSE_ACP_COMMAND = GOOSE_ROOT / ".runtime" / "run-acp.sh"
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("AGENTRIG_TEST_GOOSE_LIVE") != "1"
     or not os.environ.get("DEEPSEEK_API_KEY")
+    or not GOOSE_ROOT_VALUE
     or not GOOSE_ACP_COMMAND.is_file(),
     reason=(
-        "set AGENTRIG_TEST_GOOSE_LIVE=1 and DEEPSEEK_API_KEY, "
-        "and deploy Goose before running the live ACP test"
+        "set AGENTRIG_TEST_GOOSE_LIVE=1, DEEPSEEK_API_KEY, and "
+        "AGENTRIG_TEST_GOOSE_ROOT before running the live ACP test"
     ),
 )
 

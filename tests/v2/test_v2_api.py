@@ -20,6 +20,7 @@ def test_v2_session_health_and_disabled_message_boundary() -> None:
             json={"title": "V2 HTTP"},
         )
         assert created.status_code == 201
+        assert created.json()["created_by"] == "web-user"
         session_id = created.json()["id"]
         decisions = client.get(f"/api/v2/assistant/sessions/{session_id}/decisions")
         assert decisions.status_code == 200
@@ -33,6 +34,38 @@ def test_v2_session_health_and_disabled_message_boundary() -> None:
         )
         assert message.status_code == 503
         assert message.json()["code"] == "agentteams_unavailable"
+
+        assert client.get("/api/v2/assistant/sessions?limit=0").status_code == 422
+        assert client.get("/api/v2/assistant/sessions?limit=201").status_code == 422
+        assert client.get("/api/v2/assistant/sessions?offset=-1").status_code == 422
+
+
+def test_principal_header_is_ignored_unless_explicitly_trusted() -> None:
+    default_container = ServiceContainer.build(
+        Settings(),
+        database=Database("sqlite+aiosqlite:///:memory:"),
+    )
+    with TestClient(create_app(default_container)) as client:
+        created = client.post(
+            "/api/v2/assistant/sessions",
+            headers={"X-AgentRig-Principal": "spoofed-user"},
+            json={"title": "Untrusted principal"},
+        )
+        assert created.status_code == 201
+        assert created.json()["created_by"] == "web-user"
+
+    trusted_container = ServiceContainer.build(
+        Settings(server={"trusted_principal_header": "x-verified-user"}),
+        database=Database("sqlite+aiosqlite:///:memory:"),
+    )
+    with TestClient(create_app(trusted_container)) as client:
+        created = client.post(
+            "/api/v2/assistant/sessions",
+            headers={"X-Verified-User": "verified-user"},
+            json={"title": "Trusted principal"},
+        )
+        assert created.status_code == 201
+        assert created.json()["created_by"] == "verified-user"
 
 
 def test_role_mcp_surfaces_require_distinct_tokens(

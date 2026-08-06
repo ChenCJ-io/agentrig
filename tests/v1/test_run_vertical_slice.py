@@ -10,6 +10,7 @@ import pytest
 from agentrig.bootstrap import ServiceContainer
 from agentrig.cases import TestCaseCreate
 from agentrig.config import Settings
+from agentrig.errors import AgentRigError
 from agentrig.evaluations.models import EvaluationOutcome, EvaluatorType
 from agentrig.evaluations.schemas import ExternalVerdictSubmit
 from agentrig.infrastructure.database import Database
@@ -226,6 +227,55 @@ async def seed_target_and_profile(container: ServiceContainer) -> None:
             },
         )
     )
+
+
+async def test_run_request_respects_deployment_size_limits() -> None:
+    database = Database("sqlite+aiosqlite:///:memory:")
+    registry = DriverRegistry()
+    registry.register("scripted", ScriptedDriver)
+    services = ServiceContainer.build(
+        Settings(
+            execution={
+                "max_repeat_count": 1,
+                "max_cases_per_run": 1,
+                "max_planned_case_runs": 1,
+            }
+        ),
+        database=database,
+        drivers=registry,
+    )
+    await services.initialize()
+    try:
+        await seed_case(services, "case_limited", versions=["*"])
+        await seed_target_and_profile(services)
+
+        with pytest.raises(AgentRigError, match="deployment case limit"):
+            await services.runs.preview_run_cases(
+                RunCasesRequest(
+                    case_ids=["case_limited", "case_extra"],
+                    targets=[{"target_id": "target_scripted", "version": "v1"}],
+                )
+            )
+
+        with pytest.raises(AgentRigError, match="repeat_count"):
+            await services.runs.preview_run_cases(
+                RunCasesRequest(
+                    case_ids=["case_limited"],
+                    targets=[{"target_id": "target_scripted", "version": "v1"}],
+                    repeat_count=2,
+                )
+            )
+
+        with pytest.raises(AgentRigError, match="CaseRun limit"):
+            await services.runs.preview_run_cases(
+                RunCasesRequest(
+                    case_ids=["case_limited"],
+                    targets=[{"target_id": "target_scripted"}],
+                )
+            )
+        assert (await services.runs.list_runs()).total == 0
+    finally:
+        await services.close()
 
 
 async def test_async_run_persists_events_and_rule_evaluation(

@@ -6,11 +6,13 @@ from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Query, Request, Response, status
 
+from .api_params import EventLimit, PageLimit, PageOffset
 from .bootstrap import ServiceContainer
 from .cases import CaseSelector, TestCaseCreate, TestCasePatch
 from .cases.models import ReviewStatus
 from .evaluations.schemas import ExternalVerdictSubmit
 from .profiles import ProfileCreate, ProfilePatch
+from .reporting import RenderedDocument
 from .runs.models import RunEventType
 from .runs.schemas import RunCasesRequest
 from .targets import TargetCreate, TargetPatch
@@ -31,8 +33,8 @@ async def list_test_cases(
     tool_names: Annotated[list[str] | None, Query()] = None,
     tags: Annotated[list[str] | None, Query()] = None,
     review_status: Annotated[list[ReviewStatus] | None, Query()] = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).cases.list_cases(
         CaseSelector(
@@ -93,8 +95,8 @@ async def list_tags(request: Request) -> object:
 @router.get("/targets")
 async def list_targets(
     request: Request,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).targets.list_targets(limit=limit, offset=offset)
 
@@ -146,11 +148,30 @@ async def delete_target(request: Request, target_id: str) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/targets/{target_id}/export/preview")
+async def preview_target_export(request: Request, target_id: str) -> object:
+    return await services(request).reporting.export_preview(target_id)
+
+
+@router.get("/targets/{target_id}/export")
+async def export_target_data(
+    request: Request,
+    target_id: str,
+    export_format: Annotated[
+        Literal["json", "markdown", "html"],
+        Query(alias="format"),
+    ] = "json",
+) -> Response:
+    reporting = services(request).reporting
+    bundle = await reporting.target_export(target_id)
+    return _download_response(reporting.render_target_export(bundle, export_format))
+
+
 @router.get("/execution-profiles")
 async def list_execution_profiles(
     request: Request,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).profiles.list_profiles(limit=limit, offset=offset)
 
@@ -193,8 +214,8 @@ async def list_samples(
     request: Request,
     sample_status: SampleStatus | None = None,
     tool_name: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).samples.list_samples(
         status=sample_status,
@@ -257,8 +278,8 @@ async def get_run_cases_schema() -> dict[str, object]:
 async def list_runs(
     request: Request,
     target_id: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).runs.list_runs(
         target_id=target_id,
@@ -272,12 +293,28 @@ async def get_run(request: Request, run_id: str) -> object:
     return await services(request).runs.get_run(run_id)
 
 
+@router.get("/runs/{run_id}/report")
+async def get_run_report(
+    request: Request,
+    run_id: str,
+    report_format: Annotated[
+        Literal["json", "markdown"],
+        Query(alias="format"),
+    ] = "json",
+) -> object:
+    reporting = services(request).reporting
+    report = await reporting.run_report(run_id)
+    if report_format == "markdown":
+        return _download_response(reporting.render_run_report(report))
+    return report
+
+
 @router.get("/runs/{run_id}/case-runs")
 async def list_case_runs(
     request: Request,
     run_id: str,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).runs.list_case_runs(
         run_id,
@@ -296,8 +333,8 @@ async def list_case_run_events(
     request: Request,
     case_run_id: str,
     event_types: Annotated[list[RunEventType] | None, Query()] = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: EventLimit = 100,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).runs.list_case_run_events(
         case_run_id,
@@ -319,3 +356,11 @@ async def submit_external_verdict(
 @router.post("/runs/{run_id}/cancel")
 async def cancel_run(request: Request, run_id: str) -> object:
     return await services(request).runs.cancel_run(run_id)
+
+
+def _download_response(document: RenderedDocument) -> Response:
+    return Response(
+        content=document.content,
+        media_type=document.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{document.filename}"'},
+    )

@@ -13,6 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
+from .api_params import EventLimit, EventSequence, PageLimit, PageOffset
 from .assistant.decision_models import DecisionKind, DecisionStatus
 from .assistant.decision_schemas import DecisionCancel, DecisionConfirmation
 from .assistant.models import ActorType
@@ -42,7 +43,11 @@ def services(request: Request) -> ServiceContainer:
 
 
 def principal(request: Request) -> str:
-    return request.headers.get("x-agentrig-principal", "web-user")[:300]
+    header = services(request).settings.server.trusted_principal_header
+    if header is None:
+        return "web-user"
+    value = request.headers.get(header, "").strip()
+    return value[:300] if value else "web-user"
 
 
 @router.post(
@@ -67,8 +72,8 @@ async def create_session(
 @router.get("/assistant/sessions")
 async def list_sessions(
     request: Request,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).assistant.list_sessions(limit=limit, offset=offset)
 
@@ -123,8 +128,8 @@ async def send_message(
 async def list_events(
     request: Request,
     session_id: str,
-    after_seq: int = 0,
-    limit: int = 100,
+    after_seq: EventSequence = 0,
+    limit: EventLimit = 100,
 ) -> object:
     return await services(request).assistant.list_events(
         session_id,
@@ -139,8 +144,8 @@ async def list_decisions(
     session_id: str,
     decision_status: DecisionStatus | None = None,
     decision_kind: DecisionKind | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).decisions.list_for_session(
         session_id,
@@ -191,7 +196,7 @@ async def cancel_decision(
 async def stream_events(
     request: Request,
     session_id: str,
-    after_seq: int = 0,
+    after_seq: EventSequence = 0,
 ) -> StreamingResponse:
     container = services(request)
     await container.assistant.get_session(session_id)
@@ -307,8 +312,8 @@ async def get_agent_invocation(request: Request, invocation_id: str) -> object:
 @router.get("/agent-invocations")
 async def list_all_agent_invocations(
     request: Request,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).agent_invocations.list_all(
         limit=limit,
@@ -320,8 +325,8 @@ async def list_all_agent_invocations(
 async def list_agent_invocations(
     request: Request,
     session_id: str,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     await services(request).assistant.get_session(session_id)
     return await services(request).agent_invocations.list_for_session(
@@ -350,8 +355,8 @@ async def create_target_chat(request: Request, value: TargetChatCreate) -> objec
 async def list_target_chats(
     request: Request,
     target_id: str | None = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: PageLimit = 50,
+    offset: PageOffset = 0,
 ) -> object:
     return await services(request).target_chats.list_sessions(
         target_id=target_id,

@@ -1,4 +1,4 @@
-import { apiRequest, jsonBody } from "./client";
+import { apiDownload, apiRequest, jsonBody, type ApiFile } from "./client";
 
 export interface Page<T> {
   items: T[];
@@ -72,7 +72,7 @@ export interface Sample {
 
 export interface Run {
   id: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
   resolved_case_ids: string[];
   target_snapshots: Array<{ id?: string; version?: string | null; [key: string]: unknown }>;
   total_count: number;
@@ -109,6 +109,61 @@ export interface CaseRun {
   evaluations?: Array<Record<string, unknown>>;
   [key: string]: unknown;
 }
+
+export interface RunReport {
+  schema_version: "agentrig.run-report.v1";
+  generated_at: string;
+  run: {
+    id: string;
+    status: Run["status"];
+    resolved_case_ids: string[];
+    total_count: number;
+    completed_count: number;
+    failed_count: number;
+    skipped_count: number;
+    cancelled_count: number;
+    created_at: string;
+    finished_at: string | null;
+    error_code: string | null;
+    error_message: string | null;
+  };
+  targets: Array<{ id: string; name: string; version: string | null }>;
+  outcomes: {
+    total: number;
+    evaluated: number;
+    pass_count: number;
+    fail_count: number;
+    inconclusive_count: number;
+    awaiting_verdict_count: number;
+    evaluation_error_count: number;
+  };
+  failures: Array<{
+    id: string;
+    case_id: string;
+    version: string | null;
+    repeat_index: number;
+    status: string;
+    evaluation_state: string;
+    error_code: string | null;
+    error_message: string | null;
+    evaluation_summary: string | null;
+  }>;
+}
+
+export interface TargetExportPreview {
+  schema_version: "agentrig.export-preview.v1";
+  target_id: string;
+  counts: {
+    runs: number;
+    test_cases: number;
+    samples: number;
+    total_records: number;
+  };
+  max_export_records: number;
+  within_limit: boolean;
+}
+
+export type TargetExportFormat = "json" | "markdown" | "html";
 
 export async function getPage<T>(path: string): Promise<Page<T>> {
   return apiRequest<Page<T>>(path);
@@ -154,4 +209,31 @@ export async function putOne<T>(path: string, value: unknown): Promise<T> {
     method: "PUT",
     ...jsonBody(value),
   });
+}
+
+export function getRunReport(runId: string): Promise<RunReport> {
+  return apiRequest<RunReport>(`/api/runs/${encodeURIComponent(runId)}/report`);
+}
+
+export function downloadRunReport(runId: string): Promise<ApiFile> {
+  return apiDownload(
+    `/api/runs/${encodeURIComponent(runId)}/report?format=markdown`,
+  );
+}
+
+export function getTargetExportPreview(
+  targetId: string,
+): Promise<TargetExportPreview> {
+  return apiRequest<TargetExportPreview>(
+    `/api/targets/${encodeURIComponent(targetId)}/export/preview`,
+  );
+}
+
+export function downloadTargetExport(
+  targetId: string,
+  format: TargetExportFormat,
+): Promise<ApiFile> {
+  return apiDownload(
+    `/api/targets/${encodeURIComponent(targetId)}/export?format=${encodeURIComponent(format)}`,
+  );
 }

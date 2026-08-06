@@ -83,3 +83,39 @@ export async function apiRequest<T>(
 export function jsonBody(value: unknown): Pick<RequestInit, "body"> {
   return { body: JSON.stringify(value) };
 }
+
+export interface ApiFile {
+  blob: Blob;
+  filename: string | null;
+}
+
+export async function apiDownload(path: string): Promise<ApiFile> {
+  const response = await fetch(resolveApiUrl(path), {
+    credentials: "same-origin",
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(authRequiredEvent));
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let payload: unknown = text;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        // Keep the response text as the structured error fallback.
+      }
+    }
+    throw new ApiError(
+      typeof payload === "object" && payload && "message" in payload
+        ? String((payload as { message: unknown }).message)
+        : `请求失败 (${response.status})`,
+      response.status,
+      payload,
+    );
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? null;
+  return { blob: await response.blob(), filename };
+}

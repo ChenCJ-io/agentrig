@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import Settings
+from ..errors import AgentRigError, ErrorCode
 from .schemas import ComponentTimeouts, ExecutionProfileConfig, ProfileView
 
 
@@ -49,6 +50,15 @@ class ProfileResolver:
         if repeat_count is not None:
             clean_overrides["repeat_count"] = repeat_count
         resolved = ExecutionProfileConfig.model_validate({**base, **clean_overrides})
+        if resolved.repeat_count > self._settings.execution.max_repeat_count:
+            raise AgentRigError(
+                ErrorCode.VALIDATION_ERROR,
+                "repeat_count exceeds the deployment limit",
+                details={
+                    "repeat_count": resolved.repeat_count,
+                    "max_repeat_count": self._settings.execution.max_repeat_count,
+                },
+            )
         if resolved.concurrency > self._settings.execution.max_concurrency:
             resolved = resolved.model_copy(
                 update={"concurrency": self._settings.execution.max_concurrency}

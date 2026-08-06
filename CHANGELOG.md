@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 持久化数据库启动前强制校验 Alembic revision，避免 ORM 自动建表与迁移历史分叉。
+- Run 选择、重复展开、CaseRun 数量及 API 分页增加部署级上限。
+- V2 调用方身份默认不再信任客户端自报 Header，仅允许可信代理显式配置身份 Header。
+- Target HTTP(S) 出站增加 URL、私网地址、DNS 解析和主机 allowlist 校验。
+- Run 报告与 Target 数据导出改由服务端遍历完整分页生成，统一脱敏并拒绝超限或并发变化下的残缺文件。
+- 本机比赛脚本不再包含个人绝对路径，并统一文档、PPT 与实际 11 项 Skill 清单。
+- CI 增加锁定 Python 运行时依赖和前端依赖漏洞审计。
+
 ## [0.2.0a0] - 2026-08-01
 
 首个 V2 alpha：在保持 V1 Core 兼容的基础上加入智能评测助手和 AgentTeams 三 Agent 协作。

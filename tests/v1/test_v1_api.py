@@ -164,6 +164,42 @@ def test_http_crud_async_run_and_structured_errors() -> None:
         detail = client.get(f"/api/case-runs/{case_runs[0]['id']}").json()
         assert detail["evaluation_state"] == "pass"
 
+        report = client.get(f"/api/runs/{run_id}/report")
+        assert report.status_code == 200
+        assert report.json()["schema_version"] == "agentrig.run-report.v1"
+        assert report.json()["outcomes"]["pass_count"] == 1
+        markdown_report = client.get(
+            f"/api/runs/{run_id}/report",
+            params={"format": "markdown"},
+        )
+        assert markdown_report.status_code == 200
+        assert "attachment;" in markdown_report.headers["content-disposition"]
+        assert "case_api_v1" in markdown_report.text
+
+        export_preview = client.get("/api/targets/target_api_v1/export/preview")
+        assert export_preview.status_code == 200
+        assert export_preview.json()["counts"] == {
+            "runs": 1,
+            "test_cases": 1,
+            "samples": 0,
+            "total_records": 2,
+        }
+        exported = client.get(
+            "/api/targets/target_api_v1/export",
+            params={"format": "json"},
+        )
+        assert exported.status_code == 200
+        assert "attachment;" in exported.headers["content-disposition"]
+        assert exported.json()["schema_version"] == "agentrig.export.v1"
+        assert len(exported.json()["scope"]["runs"]) == 1
+        assert (
+            client.get(
+                "/api/targets/target_api_v1/export",
+                params={"format": "xml"},
+            ).status_code
+            == 422
+        )
+
         approved = client.post(
             "/api/test-cases/case_api_v1/review",
             params={"review_status": "approved"},
@@ -183,6 +219,9 @@ def test_http_crud_async_run_and_structured_errors() -> None:
         assert invalid.status_code == 422
         assert invalid.json()["code"] == "validation_error"
         assert invalid.json()["details"]["errors"]
+        assert client.get("/api/test-cases?limit=0").status_code == 422
+        assert client.get("/api/test-cases?limit=201").status_code == 422
+        assert client.get("/api/test-cases?offset=-1").status_code == 422
 
 
 def test_api_token_protects_v1_http_and_mcp(

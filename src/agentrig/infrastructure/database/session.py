@@ -9,7 +9,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import event
+from sqlalchemy import event, inspect, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -19,6 +20,10 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 from .orm import Base
+
+
+class DatabaseSchemaError(RuntimeError):
+    """数据库未迁移到与当前代码匹配的 Alembic revision。"""
 
 
 def normalize_database_url(url: str) -> str:
@@ -74,6 +79,12 @@ class Database:
         if self.url.startswith("sqlite+aiosqlite:"):
             event.listen(self.engine.sync_engine, "connect", self._configure_sqlite)
 
+    @property
+    def is_ephemeral(self) -> bool:
+        """内存 SQLite 仅用于测试/Demo，可直接由 ORM metadata 建表。"""
+
+        return self.url == "sqlite+aiosqlite:///:memory:"
+
     @staticmethod
     def _configure_sqlite(dbapi_connection: object, _connection_record: object) -> None:
         cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
@@ -84,6 +95,43 @@ class Database:
     async def create_schema(self) -> None:
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+
+    async def initialize_schema(self) -> None:
+        """测试内存库自动建表；持久化数据库必须已由 Alembic 迁移。"""
+
+        if self.is_ephemeral:
+            await self.create_schema()
+            return
+        await self.require_current_schema()
+
+    async def require_current_schema(self) -> None:
+        """拒绝未初始化、未纳入 Alembic 或 revision 落后的持久化数据库。"""
+
+        from .migrations import migration_heads
+
+        expected = set(migration_heads())
+        async with self.engine.connect() as connection:
+            current = set(await connection.run_sync(self._schema_revisions))
+        if current == expected:
+            return
+        if not current:
+            raise DatabaseSchemaError(
+                "database schema is not initialized by Alembic; "
+                "run `agentrig db upgrade` before starting the service"
+            )
+        raise DatabaseSchemaError(
+            "database schema revision mismatch: "
+            f"current={sorted(current)!r}, expected={sorted(expected)!r}; "
+            "run `agentrig db upgrade` before starting the service"
+        )
+
+    @staticmethod
+    def _schema_revisions(connection: Connection) -> tuple[str, ...]:
+        inspector = inspect(connection)
+        if not inspector.has_table("alembic_version"):
+            return ()
+        rows = connection.execute(text("SELECT version_num FROM alembic_version"))
+        return tuple(str(value) for value in rows.scalars())
 
     async def drop_schema(self) -> None:
         async with self.engine.begin() as connection:

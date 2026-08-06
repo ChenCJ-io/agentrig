@@ -6,7 +6,10 @@ import json
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
-from agentrig.app import app
+from agentrig.app import create_app
+from agentrig.bootstrap import ServiceContainer
+from agentrig.config import Settings
+from agentrig.infrastructure.database import Database
 
 
 def _jsonrpc(req_id: int, method: str, params: dict | None = None) -> dict:
@@ -25,6 +28,11 @@ def _parse_sse_json(body: str) -> dict:
 
 
 async def test_mcp_ping() -> None:
+    services = ServiceContainer.build(
+        Settings(),
+        database=Database("sqlite+aiosqlite:///:memory:"),
+    )
+    app = create_app(services)
     # LifespanManager 驱动 FastAPI lifespan，启动 MCP session manager 的
     # task group（ASGITransport 本身不跑 lifespan）。
     async with LifespanManager(app):

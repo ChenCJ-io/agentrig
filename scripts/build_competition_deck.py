@@ -592,12 +592,13 @@ def build() -> Presentation:
         7,
         "SKILL + MCP",
         "可复用能力，不是一次性 Prompt",
-        "10 个 Skill + 三套最小权限 MCP 工具集",
+        "11 个 Skill + 三套最小权限 MCP 工具集",
     )
     groups = [
         (
-            "MANAGER / 5",
+            "MANAGER / 6",
             [
+                "adaptive-evaluation",
                 "plan-evaluation",
                 "execute-evaluation-plan",
                 "diagnose-run",
@@ -607,7 +608,7 @@ def build() -> Presentation:
             COBALT,
         ),
         ("WORKERS / 2", ["simulate-tool-result", "judge-evidence"], GREEN),
-        ("CORE / 3", ["run-evaluations", "build-test-cases", "collect-tool-samples"], AMBER),
+        ("CORE / 3", ["run-test-cases", "build-test-case", "harvest-tool-samples"], AMBER),
     ]
     x_positions = [0.7, 5.0, 8.62]
     widths = [3.95, 3.28, 3.98]
@@ -888,7 +889,7 @@ def build() -> Presentation:
     )
     stats = [
         ("3+", "Agent identities"),
-        ("10", "Versioned Skills"),
+        ("11", "Versioned Skills"),
         ("4", "Target Drivers"),
         ("3", "Evaluator types"),
     ]

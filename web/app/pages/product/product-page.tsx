@@ -48,8 +48,12 @@ import { Link, useLocation, useNavigate } from "react-router";
 
 import {
   createOne,
+  downloadRunReport,
+  downloadTargetExport,
   getOne,
   getPage,
+  getRunReport,
+  getTargetExportPreview,
   postAction,
   type CaseRun,
   type ExecutionProfile,
@@ -57,6 +61,7 @@ import {
   type Sample,
   type Target,
   type TargetCheck,
+  type TargetExportFormat,
   type TestCase,
 } from "~/api/v1";
 import {
@@ -921,22 +926,33 @@ function comparisonChangeLabel(value: string) { const labels: Record<string, str
 function comparisonRoleLabel(value: string) { return value === "baseline" ? "基线版本" : value === "candidate" ? "候选版本" : value; }
 
 function ReportsPage({ targetId }: { targetId: string }) {
-  const { runs, target } = useTargetData(targetId);
+  const pageSize = 50;
+  const [offset, setOffset] = useState(0);
+  const target = useQuery({ queryKey: ["product", "target", targetId], queryFn: () => getOne<Target>(`/api/targets/${encodeURIComponent(targetId)}`) });
+  const runs = useQuery({ queryKey: ["product", "report-runs", targetId, offset], queryFn: () => getPage<Run>(`/api/runs?target_id=${encodeURIComponent(targetId)}&limit=${pageSize}&offset=${offset}`), refetchInterval: 5_000 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  useEffect(() => { if (!selectedId && runs.data?.items[0]) setSelectedId(runs.data.items[0].id); }, [runs.data, selectedId]);
+  useEffect(() => {
+    if (runs.data && !runs.data.items.some((item) => item.id === selectedId)) {
+      setSelectedId(runs.data.items[0]?.id ?? null);
+    }
+  }, [runs.data, selectedId]);
   const selected = runs.data?.items.find((item) => item.id === selectedId) ?? null;
-  const caseRuns = useQuery({ queryKey: ["product", "report", selectedId], queryFn: () => getPage<CaseRun>(`/api/runs/${encodeURIComponent(selectedId!)}/case-runs?limit=200`), enabled: Boolean(selectedId) });
-  const outcomes = summarizeOutcomes(caseRuns.data?.items ?? []);
-  function downloadReport() {
-    if (!selected) return;
-    const targetName = target.data?.name ?? targetId;
-    const failures = (caseRuns.data?.items ?? []).filter((item) => item.evaluation_state === "fail" || item.error_code);
-    const markdown = [`# ${targetName} 评测报告`, "", `- 运行编号：\`${selected.id}\``, `- 执行状态：${labelFor(selected.status)}`, `- 生成时间：${new Date().toISOString()}`, `- 通过率：${percentage(outcomes.pass, outcomes.total)}`, `- 通过 / 未通过 / 证据不足：${outcomes.pass} / ${outcomes.fail} / ${outcomes.inconclusive}`, `- 执行错误：${selected.failed_count}`, "", "## 执行范围", "", ...selected.resolved_case_ids.map((id) => `- \`${id}\``), "", "## 主要失败", "", ...(failures.length ? failures.map((item) => `- **${item.case_id}** — ${item.error_message || String(item.summary?.evaluation_summary ?? labelFor(item.evaluation_state))}`) : ["无失败或执行错误。"]), "", `> 根据 AgentRig 不可变运行事实生成。被测 Agent：\`${targetId}\`。`].join("\n");
-    downloadText(`agentrig-${targetId}-${selected.id}.md`, markdown, "text/markdown;charset=utf-8");
-  }
+  const report = useQuery({ queryKey: ["product", "report", selectedId], queryFn: () => getRunReport(selectedId!), enabled: Boolean(selectedId), refetchInterval: selected && ["queued", "running"].includes(selected.status) ? 2_000 : false });
+  const outcomes = {
+    pass: report.data?.outcomes.pass_count ?? 0,
+    fail: report.data?.outcomes.fail_count ?? 0,
+    inconclusive: report.data?.outcomes.inconclusive_count ?? 0,
+    total: report.data?.outcomes.evaluated ?? 0,
+  };
+  const failures = report.data?.failures ?? [];
+  const download = useMutation({
+    mutationFn: () => downloadRunReport(selectedId!),
+    onSuccess: (file) => downloadFile(file, `agentrig-${targetId}-${selectedId}-report.md`),
+  });
   return <ProductWorkspace>
-    <PageIntro eyebrow="评测管理 · 冻结报告" title="评测报告" description="把一次真实运行的范围、结果、失败与证据组织为可验收结论。" actions={<Button disabled={!selected || caseRuns.isLoading} icon={<Download />} onClick={downloadReport}>导出 Markdown</Button>} />
-    <div className={styles.reportWorkspace}><Surface title="报告目录" eyebrow={`${runs.data?.total ?? 0} 份运行报告`} className={styles.reportList}><div className={styles.masterList}>{runs.data?.items.map((run) => <button className={selectedId === run.id ? styles.selectedMaster : ""} key={run.id} onClick={() => setSelectedId(run.id)} type="button"><span><strong>Run {shortId(run.id)}</strong><small>{formatDate(run.created_at)} · {run.resolved_case_ids.length} 个用例</small></span><Status value={run.status} /></button>)}</div></Surface><article className={styles.reportDocument}>{selected ? <><header><div><span className="eyebrow">AgentRig 评测验收报告</span><h1>{target.data?.name ?? targetId} 评测验收报告</h1><p>Run {selected.id}</p></div><Status value={outcomes.fail ? "fail" : outcomes.total ? "pass" : selected.status} /></header><section className={styles.reportSummary}><div><small>执行状态</small><strong>{labelFor(selected.status)}</strong><span>{formatDate(selected.finished_at ?? selected.created_at)}</span></div><div><small>已评测</small><strong>{outcomes.total}</strong><span>计划 {selected.total_count} 个 CaseRun</span></div><div><small>通过率</small><strong>{percentage(outcomes.pass, outcomes.total)}</strong><span>{outcomes.pass} 个通过 · {outcomes.fail} 个未通过</span></div><div><small>证据不足</small><strong>{outcomes.inconclusive}</strong><span>无法形成可靠结论</span></div></section><ReportSection number="01" title="执行范围"><div className={styles.reportScope}><div><span>被测 Agent</span><strong>{target.data?.name ?? targetId}</strong></div><div><span>测试用例</span><strong>{selected.resolved_case_ids.length}</strong></div><div><span>运行编号</span><code>{selected.id}</code></div><div><span>资产快照</span><strong>已冻结</strong></div></div></ReportSection><ReportSection number="02" title="结果分布"><div className={styles.outcomeBand}><div data-tone="success"><strong>{outcomes.pass}</strong><span>通过</span></div><div data-tone="danger"><strong>{outcomes.fail}</strong><span>未通过</span></div><div data-tone="warning"><strong>{outcomes.inconclusive}</strong><span>证据不足</span></div><div><strong>{selected.failed_count}</strong><span>执行错误</span></div></div></ReportSection><ReportSection number="03" title="主要失败">{caseRuns.data?.items.filter((item) => item.evaluation_state === "fail" || item.error_code).map((item) => <Link className={styles.reportFailure} key={item.id} to={`/targets/${encodeURIComponent(targetId)}/evaluation/runs/${selected.id}`}><span><XCircle size={13} /></span><div><strong>{item.case_id}</strong><p>{item.error_message || String(item.summary?.evaluation_summary ?? "权威评判结果为未通过")}</p></div><ChevronRight size={13} /></Link>)}{!caseRuns.data?.items.some((item) => item.evaluation_state === "fail" || item.error_code) ? <p className={styles.reportPositive}><CheckCircle2 size={14} /> 当前报告没有失败或执行错误。</p> : null}</ReportSection><footer><span>由不可变运行事实生成</span><Link to={`/targets/${encodeURIComponent(targetId)}/evaluation/runs/${selected.id}`}>打开完整证据 <ExternalLink size={12} /></Link></footer></> : <EmptyState icon={ClipboardCheck} title="选择一份运行报告">报告根据真实 Run 和 CaseRun 动态生成。</EmptyState>}</article></div>
+    <PageIntro eyebrow="评测管理 · 冻结报告" title="评测报告" description="把一次真实运行的范围、结果、失败与证据组织为可验收结论。" actions={<Button disabled={!selected || ["queued", "running"].includes(selected.status) || report.isLoading || download.isPending} icon={<Download />} onClick={() => download.mutate()}>导出 Markdown</Button>} />
+    {download.error ? <QueryFailure value={download.error} /> : null}
+    <div className={styles.reportWorkspace}><Surface title="报告目录" eyebrow={`${runs.data?.total ?? 0} 份运行报告`} actions={<div><Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))} size="sm">上一页</Button><Button disabled={offset + pageSize >= (runs.data?.total ?? 0)} onClick={() => setOffset(offset + pageSize)} size="sm">下一页</Button></div>} className={styles.reportList}><div className={styles.masterList}>{runs.data?.items.map((run) => <button className={selectedId === run.id ? styles.selectedMaster : ""} key={run.id} onClick={() => setSelectedId(run.id)} type="button"><span><strong>Run {shortId(run.id)}</strong><small>{formatDate(run.created_at)} · {run.resolved_case_ids.length} 个用例</small></span><Status value={run.status} /></button>)}</div></Surface><article className={styles.reportDocument}>{report.error ? <QueryFailure value={report.error} /> : selected ? <><header><div><span className="eyebrow">AgentRig 评测验收报告</span><h1>{target.data?.name ?? targetId} 评测验收报告</h1><p>Run {selected.id}</p></div><Status value={outcomes.fail ? "fail" : outcomes.total ? "pass" : selected.status} /></header><section className={styles.reportSummary}><div><small>执行状态</small><strong>{labelFor(selected.status)}</strong><span>{formatDate(selected.finished_at ?? selected.created_at)}</span></div><div><small>已评测</small><strong>{outcomes.total}</strong><span>计划 {selected.total_count} 个 CaseRun</span></div><div><small>通过率</small><strong>{percentage(outcomes.pass, outcomes.total)}</strong><span>{outcomes.pass} 个通过 · {outcomes.fail} 个未通过</span></div><div><small>证据不足</small><strong>{outcomes.inconclusive}</strong><span>无法形成可靠结论</span></div></section><ReportSection number="01" title="执行范围"><div className={styles.reportScope}><div><span>被测 Agent</span><strong>{target.data?.name ?? targetId}</strong></div><div><span>测试用例</span><strong>{selected.resolved_case_ids.length}</strong></div><div><span>运行编号</span><code>{selected.id}</code></div><div><span>资产快照</span><strong>已冻结</strong></div></div></ReportSection><ReportSection number="02" title="结果分布"><div className={styles.outcomeBand}><div data-tone="success"><strong>{outcomes.pass}</strong><span>通过</span></div><div data-tone="danger"><strong>{outcomes.fail}</strong><span>未通过</span></div><div data-tone="warning"><strong>{outcomes.inconclusive}</strong><span>证据不足</span></div><div><strong>{selected.failed_count}</strong><span>执行错误</span></div></div></ReportSection><ReportSection number="03" title="主要失败">{failures.map((item) => <Link className={styles.reportFailure} key={item.id} to={`/targets/${encodeURIComponent(targetId)}/evaluation/runs/${selected.id}`}><span><XCircle size={13} /></span><div><strong>{item.case_id}</strong><p>{item.error_message || item.evaluation_summary || "权威评判结果为未通过"}</p></div><ChevronRight size={13} /></Link>)}{!failures.length ? <p className={styles.reportPositive}><CheckCircle2 size={14} /> 当前报告没有失败或执行错误。</p> : null}</ReportSection><footer><span>由完整 CaseRun 集合生成 · {report.data?.outcomes.total ?? 0} 条</span><Link to={`/targets/${encodeURIComponent(targetId)}/evaluation/runs/${selected.id}`}>打开完整证据 <ExternalLink size={12} /></Link></footer></> : <EmptyState icon={ClipboardCheck} title="选择一份运行报告">报告根据真实 Run 和 CaseRun 动态生成。</EmptyState>}</article></div>
   </ProductWorkspace>;
 }
 
@@ -1002,24 +1018,19 @@ function ProblemsPage({ targetId }: { targetId: string }) {
 }
 
 function ExportPage({ targetId }: { targetId: string }) {
-  const { runs, cases, samples } = useTargetData(targetId);
-  const [format, setFormat] = useState("json");
+  const preview = useQuery({ queryKey: ["product", "export-preview", targetId], queryFn: () => getTargetExportPreview(targetId) });
+  const [format, setFormat] = useState<TargetExportFormat>("json");
   const [notice, setNotice] = useState<string | null>(null);
-  const recordCount = (runs.data?.total ?? 0) + (cases.data?.total ?? 0) + (samples.data?.total ?? 0);
-  function downloadExport() {
-    const payload = { schema_version: "agentrig.export.v1", target_id: targetId, generated_at: new Date().toISOString(), scope: { runs: runs.data?.items ?? [], cases: cases.data?.items ?? [], samples: samples.data?.items ?? [] }, redaction: "保留密钥配置引用，排除解析后的密钥值" };
-    if (format === "markdown") {
-      const markdown = [`# AgentRig 证据导出`, "", `- 被测 Agent：\`${targetId}\``, `- 生成时间：${payload.generated_at}`, `- 运行：${payload.scope.runs.length}`, `- 测试用例：${payload.scope.cases.length}`, `- 结果样本：${payload.scope.samples.length}`, `- 脱敏策略：${payload.redaction}`, "", "## 评测运行", "", ...payload.scope.runs.map((run) => `- \`${run.id}\` · ${labelFor(run.status)} · ${run.resolved_case_ids.length} 个用例`), "", "## 测试用例", "", ...payload.scope.cases.map((item) => `- \`${item.id}\` · ${item.name} · ${labelFor(item.review_status)}`), "", "## 结果样本", "", ...payload.scope.samples.map((item) => `- \`${item.id}\` · ${item.name} · ${labelFor(item.status)}`)].join("\n");
-      downloadText(`agentrig-${targetId}-export.md`, markdown, "text/markdown;charset=utf-8");
-    } else if (format === "html") {
-      const body = `<h1>AgentRig 证据导出</h1><dl><dt>被测 Agent</dt><dd>${escapeHtml(targetId)}</dd><dt>生成时间</dt><dd>${escapeHtml(payload.generated_at)}</dd><dt>记录数量</dt><dd>${recordCount}</dd></dl><h2>评测运行</h2><ul>${payload.scope.runs.map((run) => `<li><code>${escapeHtml(run.id)}</code> · ${escapeHtml(labelFor(run.status))}</li>`).join("")}</ul><h2>测试用例</h2><ul>${payload.scope.cases.map((item) => `<li><code>${escapeHtml(item.id)}</code> · ${escapeHtml(item.name)}</li>`).join("")}</ul><h2>结果样本</h2><ul>${payload.scope.samples.map((item) => `<li><code>${escapeHtml(item.id)}</code> · ${escapeHtml(item.name)}</li>`).join("")}</ul><p>${escapeHtml(payload.redaction)}</p>`;
-      downloadText(`agentrig-${targetId}-export.html`, `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>AgentRig 证据导出</title><style>body{max-width:960px;margin:40px auto;font:14px system-ui;color:#1b1d1c}code{background:#f1f3f2;padding:2px 4px}dt{font-weight:700}dd{margin:0 0 8px}</style><body>${body}</body></html>`, "text/html;charset=utf-8");
-    } else {
-      downloadText(`agentrig-${targetId}-export.json`, JSON.stringify(payload, null, 2), "application/json");
-    }
-    setNotice(`已生成脱敏 ${format.toUpperCase()} 导出文件。`);
-  }
-  return <ProductWorkspace><PageIntro eyebrow="观测与分析 · 安全导出" title="数据导出" description="先预览数据范围和脱敏策略，再生成可审计的数据包。" /><div className={styles.exportGrid}><Surface title="导出配置" eyebrow="范围与格式"><div className={styles.exportForm}><label>被测 Agent<input readOnly value={targetId} /></label><label>数据范围<select><option>运行、用例与结果样本</option></select></label><label>导出格式<select onChange={(event) => setFormat(event.target.value)} value={format}><option value="json">JSON 证据包</option><option value="markdown">Markdown 评测报告</option><option value="html">独立 HTML 评测报告</option></select></label><label>脱敏策略<select><option>默认安全脱敏策略</option></select></label></div></Surface><Surface title="导出预览" eyebrow="数据估算"><div className={styles.exportPreview}><div><span>记录数量</span><strong>{recordCount}</strong><small>当前本地数据库可见记录</small></div><div><span>文件格式</span><strong>{format.toUpperCase()}</strong><small>可移植导出文件</small></div><div><span>明文密钥</span><strong className={styles.successText}>已排除</strong><small>只保留 env: 配置引用</small></div></div><div className={styles.redactionList}><p><Check size={12} />移除 Authorization 请求头</p><p><Check size={12} />不解析 Secret Reference</p><p><Check size={12} />不导出 Matrix Access Token</p><p><Check size={12} />保留 Evidence ID 与 Hash</p></div>{notice ? <div className={styles.noticeBar}><CheckCircle2 size={13} />{notice}</div> : null}<Button icon={<Download />} onClick={downloadExport} variant="primary">生成并下载</Button></Surface></div></ProductWorkspace>;
+  const recordCount = preview.data?.counts.total_records ?? 0;
+  const download = useMutation({
+    mutationFn: () => downloadTargetExport(targetId, format),
+    onSuccess: (file) => {
+      downloadFile(file, `agentrig-${targetId}-export.${format === "markdown" ? "md" : format}`);
+      setNotice(`已由服务端生成完整脱敏 ${format.toUpperCase()} 导出文件。`);
+    },
+    onError: () => setNotice(null),
+  });
+  return <ProductWorkspace><PageIntro eyebrow="观测与分析 · 安全导出" title="数据导出" description="先预览完整数据范围和脱敏策略，再由服务端生成可审计的数据包。" />{preview.error ? <QueryFailure value={preview.error} /> : null}{download.error ? <QueryFailure value={download.error} /> : null}<div className={styles.exportGrid}><Surface title="导出配置" eyebrow="范围与格式"><div className={styles.exportForm}><label>被测 Agent<input readOnly value={targetId} /></label><label>数据范围<select><option>全部运行、用例与结果样本</option></select></label><label>导出格式<select onChange={(event) => setFormat(event.target.value as TargetExportFormat)} value={format}><option value="json">JSON 证据包</option><option value="markdown">Markdown 评测报告</option><option value="html">独立 HTML 评测报告</option></select></label><label>脱敏策略<select><option>服务端统一证据脱敏策略</option></select></label></div></Surface><Surface title="导出预览" eyebrow="完整数据估算"><div className={styles.exportPreview}><div><span>记录数量</span><strong>{recordCount}</strong><small>{preview.data ? `${preview.data.counts.runs} 运行 · ${preview.data.counts.test_cases} 用例 · ${preview.data.counts.samples} 样本` : "正在统计完整范围"}</small></div><div><span>文件格式</span><strong>{format.toUpperCase()}</strong><small>可移植导出文件</small></div><div><span>明文密钥</span><strong className={styles.successText}>已排除</strong><small>只保留 env: 配置引用</small></div></div><div className={styles.redactionList}><p><Check size={12} />服务端递归移除敏感字段</p><p><Check size={12} />不解析 Secret Reference</p><p><Check size={12} />数据变化时中止并要求重试</p><p><Check size={12} />超出部署上限时拒绝残缺导出</p></div>{preview.data && !preview.data.within_limit ? <div className={styles.noticeBar}><CircleAlert size={13} />当前 {recordCount} 条记录超过部署上限 {preview.data.max_export_records}，请调整范围或部署配置。</div> : null}{notice ? <div className={styles.noticeBar}><CheckCircle2 size={13} />{notice}</div> : null}<Button disabled={download.isPending || preview.isLoading || !preview.data?.within_limit} icon={<Download />} onClick={() => download.mutate()} variant="primary">{download.isPending ? "正在生成…" : "生成并下载"}</Button></Surface></div></ProductWorkspace>;
 }
 
 function EvaluatorTeamsPage() {
@@ -1083,17 +1094,13 @@ function problemRows(items: CaseRun[]) {
   return [...grouped.values()].sort((a, b) => b.count - a.count);
 }
 
-function downloadText(filename: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
+function downloadFile(file: { blob: Blob; filename: string | null }, fallback: string) {
+  const url = URL.createObjectURL(file.blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = file.filename ?? fallback;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-function escapeHtml(value: string) {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function pretty(value: unknown) { return JSON.stringify(value, null, 2); }

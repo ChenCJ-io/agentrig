@@ -3,15 +3,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections.abc import Iterator
-from contextlib import contextmanager
-from importlib.resources import as_file, files
-from pathlib import Path
 
 import uvicorn
-from alembic.config import Config
 
 from .config import get_settings
+from .infrastructure.database.migrations import migration_config
 
 
 def main() -> None:
@@ -44,37 +40,12 @@ def main() -> None:
         raise SystemExit(asyncio.run(run_demo()))
     elif args.cmd == "db":
         from alembic import command
-        with _migration_config() as config:
+        with migration_config() as config:
             if args.action == "upgrade":
                 command.upgrade(config, "head")
             elif args.action == "downgrade":
                 command.downgrade(config, "-1")
             else:
                 command.current(config, verbose=True)
-
-
-@contextmanager
-def _migration_config() -> Iterator[Config]:
-    """定位源码树或 wheel 内随包发布的 Alembic 资源。"""
-
-    repository_root = Path(__file__).resolve().parents[2]
-    source_config = repository_root / "alembic.ini"
-    source_migrations = repository_root / "migrations"
-    if source_config.is_file() and source_migrations.is_dir():
-        config = Config(str(source_config))
-        config.set_main_option("script_location", str(source_migrations))
-        yield config
-        return
-
-    package = files("agentrig")
-    with (
-        as_file(package.joinpath("alembic.ini")) as config_path,
-        as_file(package.joinpath("migrations")) as migrations_path,
-    ):
-        config = Config(str(config_path))
-        config.set_main_option("script_location", str(migrations_path))
-        yield config
-
-
 if __name__ == "__main__":
     main()

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
-LASSIST_DIR=${LASSIST_DIR:-"/Users/chenchunjie/Desktop/Project/lassist-v1-develop"}
+LASSIST_DIR=${LASSIST_DIR:-}
 LOCAL_ENV="$ROOT_DIR/.env.local-agentteams"
 STATE_DIR="$ROOT_DIR/.agentrig/local-demo"
 RUNTIME_ENV="$STATE_DIR/runtime.env"
@@ -37,6 +37,7 @@ prepare_files() {
   require_command jq
   require_command screen
   require_command uv
+  test -n "$LASSIST_DIR" || die "set LASSIST_DIR to the local lassist checkout"
   test -f "$LOCAL_ENV" || die "missing $LOCAL_ENV"
   test -f "$CONFIG_FILE" || {
     mkdir -p "$STATE_DIR"

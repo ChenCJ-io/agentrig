@@ -67,7 +67,7 @@ async def run() -> None:
         ),
     )
     services = ServiceContainer.build(
-        Settings(),
+        Settings(target_network={"allowed_hosts": ["demo-agent.test"]}),
         database=Database("sqlite+aiosqlite:///:memory:"),
         drivers=drivers,
         model_client=DemoJudgeModel(),

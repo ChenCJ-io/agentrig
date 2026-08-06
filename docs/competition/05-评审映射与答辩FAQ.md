@@ -6,7 +6,7 @@
 |---|---:|---|---|
 | 场景价值与行业可复制性 | 25% | Driver/Provider/Evaluator 可替换；支持不同 Agent 协议 | 从 lassist 说明扩展到客服、研发、运维 Agent 的方式 |
 | 多 Agent 协同与自主闭环 | 25% | 三 Identity、Matrix 投递、Invocation 状态机、用户确认 | 展示三角色实时状态和双向 event ID |
-| Skill 工程体系与生态复用 | 25% | 10 个 Skills；角色包；Schema、失败、重试和安全合同 | 打开核心 Skill 清单并演示触发链 |
+| Skill 工程体系与生态复用 | 25% | 11 个 Skills；角色包；Schema、失败、重试和安全合同 | 打开核心 Skill 清单并演示触发链 |
 | 工程落地与安全可审计 | 20% | 一键部署、MCP 隔离、RunEvent/Evaluation、脱敏、幂等 | 展示成功与失败 Run 证据及权限边界 |
 | 开放/开源贡献 | 5% | MIT、README、接口契约、示例、测试、安全与贡献指南 | 展示公共仓库和全新环境启动命令 |
 

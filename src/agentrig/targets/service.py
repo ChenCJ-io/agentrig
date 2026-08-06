@@ -8,6 +8,7 @@ import httpx
 
 from ..errors import AgentRigError, ErrorCode
 from ..identifiers import new_id
+from ..infrastructure.http_policy import TargetHttpPolicy
 from ..infrastructure.secrets import SecretResolver
 from .drivers import DriverPrepareContext, DriverRegistry
 from .options import merge_target_options
@@ -22,10 +23,12 @@ class TargetService:
         *,
         drivers: DriverRegistry | None = None,
         secrets: SecretResolver | None = None,
+        http_policy: TargetHttpPolicy | None = None,
     ) -> None:
         self._repository = repository
         self._drivers = drivers
         self._secrets = secrets
+        self._http_policy = http_policy or TargetHttpPolicy()
 
     async def create(self, value: TargetCreate) -> TargetView:
         target_id = value.id or new_id("target")
@@ -141,6 +144,7 @@ class TargetService:
         if endpoint and endpoint.startswith(("http://", "https://")):
             healthcheck_url = str(options.get("healthcheck_url") or endpoint)
             try:
+                await self._http_policy.authorize_url(healthcheck_url)
                 async with httpx.AsyncClient(timeout=timeout_seconds) as client:
                     response = await client.get(healthcheck_url)
                 message = f"HTTP endpoint responded with {response.status_code}"
@@ -164,19 +168,48 @@ class TargetService:
             message=message,
         )
 
+    async def authorize_execution(
+        self,
+        target: TargetView,
+        *,
+        version: str | None,
+    ) -> None:
+        version_configs = (
+            target.versions
+            if version is None
+            else [item for item in target.versions if item.version == version]
+        )
+        endpoints = {
+            item.endpoint if item.endpoint is not None else target.endpoint
+            for item in version_configs
+        }
+        if not version_configs:
+            endpoints.add(target.endpoint)
+        for endpoint in endpoints:
+            if endpoint is not None:
+                await self._http_policy.authorize_url(endpoint)
+
     def _validate_for_deployment(self, value: TargetCreate) -> None:
         if self._drivers is None:
             return
-        option_sets = (
+        endpoint_and_options = (
             [
-                merge_target_options(value.options, version.options)
+                (
+                    version.endpoint if version.endpoint is not None else value.endpoint,
+                    merge_target_options(value.options, version.options),
+                )
                 for version in value.versions
             ]
             if value.versions
-            else [value.options]
+            else [(value.endpoint, value.options)]
         )
-        for options in option_sets:
+        for endpoint, options in endpoint_and_options:
             try:
+                if endpoint is not None:
+                    self._http_policy.validate_url(endpoint)
+                healthcheck_url = options.get("healthcheck_url")
+                if healthcheck_url is not None:
+                    self._http_policy.validate_url(str(healthcheck_url))
                 self._drivers.validate_stored_configuration(
                     value.driver_type,
                     options=options,

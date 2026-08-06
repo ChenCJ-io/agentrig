@@ -13,9 +13,20 @@ default_concurrency = 1
 max_concurrency = 4
 default_case_timeout_seconds = 600
 default_component_timeout_seconds = 180
+max_repeat_count = 20
+max_cases_per_run = 200
+max_planned_case_runs = 1000
 real_tool_allowlist = []
 python_driver_allowlist = []
 subprocess_allowlist = []
+
+[target_network]
+allow_private_networks = false
+allowed_hosts = ["localhost", "127.0.0.1", "::1", "host.docker.internal"]
+
+[reporting]
+max_report_case_runs = 10000
+max_export_records = 10000
 
 [assistant]
 sse_poll_interval_seconds = 0.5

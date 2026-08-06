@@ -65,7 +65,7 @@ SQLite/PostgreSQL：Case / Plan / Run / RunEvent / Evaluation / Invocation
 
 ## 07｜Skill 与 MCP：可复用能力，不是一次性 Prompt
 
-- 5 个 Manager Skills：规划、执行、诊断、用例草稿、Target 配置。
+- 6 个 Manager Skills：证据化决策、规划、执行、诊断、用例草稿、Target 配置。
 - 2 个 Worker Skills：工具结果模拟、证据裁决。
 - 3 个 Core Skills：运行、用例构建、样本收集。
 - 每个比赛核心 Skill 定义触发条件、输入输出、依赖工具、失败、重试、安全边界和版本合同。
@@ -101,7 +101,7 @@ SQLite/PostgreSQL：Case / Plan / Run / RunEvent / Evaluation / Invocation
 - Driver 支持 Pixcake HTTP-SSE、OpenAI compatible、ACP、subprocess。
 - SQLite 用于本机体验，Repository 可切换 PostgreSQL。
 - AgentTeams 是可替换协作 Adapter；Core 无模型、无 AgentTeams 仍可运行。
-- 提供一键部署、示例配置、10 个 Skills、接口契约、安全文档和自动测试。
+- 提供一键部署、示例配置、11 个 Skills、接口契约、安全文档和自动测试。
 
 ## 12｜路线图与愿景
 

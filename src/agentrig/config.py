@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -31,10 +31,12 @@ class ServerConfig(BaseSettings):
     """HTTP 服务绑定配置。"""
 
     host: str = "127.0.0.1"
-    port: int = 8000
+    port: int = Field(default=8000, ge=1, le=65_535)
     # 非空时 /api /mcp /proxy 需 Authorization: Bearer <token>（公网暴露务必设置）
     api_token_ref: str | None = None
     log_level: str = "INFO"
+    # 默认忽略调用方自报身份。仅在可信反向代理会剥离并重写该 Header 时配置。
+    trusted_principal_header: str | None = None
 
     @field_validator("api_token_ref")
     @classmethod
@@ -42,6 +44,18 @@ class ServerConfig(BaseSettings):
         if value is not None and (not value.startswith("env:") or value == "env:"):
             raise ValueError("api_token_ref must use env:VARIABLE_NAME")
         return value
+
+    @field_validator("trusted_principal_header")
+    @classmethod
+    def principal_header_is_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if not normalized or any(
+            not (character.isalnum() or character == "-") for character in normalized
+        ):
+            raise ValueError("trusted_principal_header must be a valid HTTP header name")
+        return normalized
 
 
 class DatabaseConfig(BaseSettings):
@@ -52,16 +66,27 @@ class DatabaseConfig(BaseSettings):
     """
 
     url: str = ""
+
+
 class ExecutionConfig(BaseSettings):
     """进程内 Scheduler 与外部组件的部署上限。"""
 
-    default_concurrency: int = 4
-    max_concurrency: int = 20
-    default_case_timeout_seconds: float = 300.0
-    default_component_timeout_seconds: float = 60.0
-    real_tool_allowlist: list[str] = []
-    python_driver_allowlist: list[str] = []
-    subprocess_allowlist: list[str] = []
+    default_concurrency: int = Field(default=4, ge=1)
+    max_concurrency: int = Field(default=20, ge=1)
+    default_case_timeout_seconds: float = Field(default=300.0, gt=0)
+    default_component_timeout_seconds: float = Field(default=60.0, gt=0)
+    max_repeat_count: int = Field(default=20, ge=1)
+    max_cases_per_run: int = Field(default=200, ge=1)
+    max_planned_case_runs: int = Field(default=1_000, ge=1)
+    real_tool_allowlist: list[str] = Field(default_factory=list)
+    python_driver_allowlist: list[str] = Field(default_factory=list)
+    subprocess_allowlist: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def concurrency_defaults_fit_deployment_limit(self) -> ExecutionConfig:
+        if self.default_concurrency > self.max_concurrency:
+            raise ValueError("default_concurrency cannot exceed max_concurrency")
+        return self
 
 
 class EvidenceConfig(BaseSettings):
@@ -74,8 +99,8 @@ class EvidenceConfig(BaseSettings):
         "token",
         "secret",
     ]
-    sensitive_paths: list[str] = []
-    max_event_payload_bytes: int = 1_000_000
+    sensitive_paths: list[str] = Field(default_factory=list)
+    max_event_payload_bytes: int = Field(default=1_000_000, ge=1_024)
 
 
 class ProxyConfig(BaseSettings):
@@ -86,18 +111,47 @@ class ProxyConfig(BaseSettings):
         AGENTRIG_PROXY__BACKENDS='{"echo":"http://localhost:9001/mcp"}'
     """
 
-    backends: dict[str, str] = {}
+    backends: dict[str, str] = Field(default_factory=dict)
     # 被测 Agent 可访问的 Proxy 地址。留空时按 server.host/server.port 推导；
     # 容器、远端 Target 或反向代理部署应显式配置。
     public_url: str = ""
 
 
+class TargetNetworkConfig(BaseSettings):
+    """Target HTTP 出站边界；显式 allowlist 可放行受信私网主机。"""
+
+    allow_private_networks: bool = False
+    allowed_hosts: list[str] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1", "::1"]
+    )
+
+    @field_validator("allowed_hosts")
+    @classmethod
+    def allowed_host_patterns_are_valid(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for item in value:
+            host = item.strip().lower().rstrip(".")
+            if not host or "://" in host or "/" in host:
+                raise ValueError("allowed_hosts entries must be hostnames without scheme or path")
+            if "*" in host and (not host.startswith("*.") or host.count("*") != 1):
+                raise ValueError("allowed_hosts only supports a leading '*.' wildcard")
+            normalized.append(host)
+        return list(dict.fromkeys(normalized))
+
+
+class ReportingConfig(BaseSettings):
+    """服务端报告与导出的内存和响应规模边界。"""
+
+    max_report_case_runs: int = Field(default=10_000, ge=1, le=100_000)
+    max_export_records: int = Field(default=10_000, ge=1, le=100_000)
+
+
 class AssistantConfig(BaseSettings):
     """V2 助手事件流与确认策略的部署上限。"""
 
-    sse_poll_interval_seconds: float = 0.5
-    sse_heartbeat_seconds: float = 15.0
-    max_message_chars: int = 100_000
+    sse_poll_interval_seconds: float = Field(default=0.5, gt=0)
+    sse_heartbeat_seconds: float = Field(default=15.0, gt=0)
+    max_message_chars: int = Field(default=100_000, ge=1, le=1_000_000)
 
 
 class AdaptiveDecisionConfig(BaseSettings):
@@ -121,7 +175,7 @@ class MatrixConfig(BaseSettings):
     curator_user_id: str = ""
     judge_user_id: str = ""
     default_worker_room_id: str = ""
-    request_timeout_seconds: float = 15.0
+    request_timeout_seconds: float = Field(default=15.0, gt=0)
 
     @field_validator("access_token_ref")
     @classmethod
@@ -175,6 +229,8 @@ class Settings(BaseSettings):
     execution: ExecutionConfig = ExecutionConfig()
     evidence: EvidenceConfig = EvidenceConfig()
     proxy: ProxyConfig = ProxyConfig()
+    target_network: TargetNetworkConfig = Field(default_factory=TargetNetworkConfig)
+    reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     assistant: AssistantConfig = Field(default_factory=AssistantConfig)
     adaptive_decisions: AdaptiveDecisionConfig = Field(
         default_factory=AdaptiveDecisionConfig

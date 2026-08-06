@@ -32,7 +32,7 @@ Key；控制方也可以关闭 Evidence Judge，自行读取 CaseRun 后调用
 - V2 会话事件流、EvaluationPlan 状态机、AgentInvocation 生命周期与断线恢复。
 - V2.1 结构化 DecisionRecord、证据存在性校验、Core 策略门禁、并发幂等和质量指标。
 - Matrix Bridge、AgentTeams 三角色部署包和 Manager/Worker 独立 MCP 权限面。
-- HTTP/SSE API、Streamable HTTP MCP、React 管理界面和 10 份控制/协作 Skill。
+- HTTP/SSE API、Streamable HTTP MCP、React 管理界面和 11 份控制/协作 Skill。
 
 ## 快速开始
 
@@ -44,6 +44,9 @@ cd web && npm ci && npm run build && cd ..
 uv run agentrig db upgrade
 uv run agentrig serve
 ```
+
+持久化数据库不会再由 ORM 静默补表：服务启动时会校验 Alembic revision，未初始化或版本
+落后会直接报错，请先执行 `uv run agentrig db upgrade`。内存 SQLite 测试库仍会自动建表。
 
 默认地址：
 
@@ -93,6 +96,8 @@ host = "127.0.0.1"
 port = 8000
 # 公网或共享环境建议启用；这里只保存环境变量引用。
 # api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
+# 仅当可信反向代理会剥离并重写身份 Header 时启用。
+# trusted_principal_header = "x-authenticated-user"
 
 [database]
 url = "sqlite+aiosqlite:///./.agentrig/agentrig.db"
@@ -102,13 +107,35 @@ public_url = "http://127.0.0.1:8000/proxy"
 backends = { business = "http://127.0.0.1:9001/mcp/" }
 
 [execution]
+default_concurrency = 4
+max_concurrency = 20
+max_repeat_count = 20
+max_cases_per_run = 200
+max_planned_case_runs = 1000
 real_tool_allowlist = []
 python_driver_allowlist = []
 subprocess_allowlist = []
+
+[target_network]
+allow_private_networks = false
+# 本地开发默认允许以下三个主机；共享/生产环境应收窄为实际 Target 主机。
+allowed_hosts = ["localhost", "127.0.0.1", "::1"]
+
+[reporting]
+# 超限时明确拒绝，避免浏览器静默下载不完整报告或证据包。
+max_report_case_runs = 10000
+max_export_records = 10000
 ```
 
 Target 和模型凭据只保存 `env:VARIABLE_NAME` 引用，不接受明文 Key。Real Tool 还需要部署
 allowlist、ExecutionProfile Provider 链和用户授权同时成立。
+
+Target 的 HTTP(S) 地址在保存和每次运行前都会经过出站策略校验。未显式放行时，链路本地、
+回环、私网和解析到非公网地址的主机会被拒绝；生产环境不要使用
+`allow_private_networks = true`，应在 `allowed_hosts` 中逐项配置受信主机（支持 `*.example.com`）。
+
+评测报告和 JSON/Markdown/HTML 数据导出由服务端遍历完整分页生成，并复用运行证据脱敏器。
+生成期间数据集合发生变化会返回可重试冲突；超过 `[reporting]` 上限会明确拒绝，不会截断文件。
 
 本地 ACP Target 的启动脚本必须先由部署管理员加入 `subprocess_allowlist`。编码 Agent
 可通过 MCP 的 `list_driver_types` 查看 Driver 是否已部署就绪，再用

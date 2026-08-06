@@ -56,7 +56,7 @@ async def run() -> None:
         lambda: HttpSseDriver(transport=httpx.MockTransport(agent_endpoint)),
     )
     services = ServiceContainer.build(
-        Settings(),
+        Settings(target_network={"allowed_hosts": ["demo-agent.test"]}),
         database=Database("sqlite+aiosqlite:///:memory:"),
         drivers=drivers,
     )

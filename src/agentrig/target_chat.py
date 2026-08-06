@@ -185,6 +185,7 @@ class TargetChatService:
                     f"target version is not configured: {version}",
                     details={"target_id": target.id, "version": version},
                 )
+        await self._targets.authorize_execution(target, version=version)
 
         endpoint = (
             version_config.endpoint

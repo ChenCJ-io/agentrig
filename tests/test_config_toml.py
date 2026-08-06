@@ -59,3 +59,36 @@ def test_no_toml_file_falls_back_to_defaults(monkeypatch: pytest.MonkeyPatch) ->
     s = Settings()
     assert s.environment == "dev"
     assert s.server.port == 8000
+
+
+def test_execution_limits_reject_unsafe_defaults() -> None:
+    with pytest.raises(ValueError, match="default_concurrency"):
+        Settings(execution={"default_concurrency": 5, "max_concurrency": 4})
+    with pytest.raises(ValueError):
+        Settings(execution={"max_repeat_count": 0})
+    with pytest.raises(ValueError):
+        Settings(assistant={"sse_poll_interval_seconds": 0})
+    with pytest.raises(ValueError):
+        Settings(reporting={"max_export_records": 0})
+    with pytest.raises(ValueError):
+        Settings(reporting={"max_report_case_runs": 100_001})
+
+
+def test_trusted_principal_header_is_normalized() -> None:
+    settings = Settings(server={"trusted_principal_header": "X-Verified-User"})
+    assert settings.server.trusted_principal_header == "x-verified-user"
+
+    with pytest.raises(ValueError, match="valid HTTP header"):
+        Settings(server={"trusted_principal_header": "bad header"})
+
+
+def test_target_network_allowlist_is_normalized_and_rejects_unsafe_patterns() -> None:
+    settings = Settings(
+        target_network={"allowed_hosts": ["API.EXAMPLE.COM.", "api.example.com"]}
+    )
+    assert settings.target_network.allowed_hosts == ["api.example.com"]
+
+    with pytest.raises(ValueError, match="leading"):
+        Settings(target_network={"allowed_hosts": ["api.*.example.com"]})
+    with pytest.raises(ValueError, match="without scheme"):
+        Settings(target_network={"allowed_hosts": ["https://api.example.com"]})
