@@ -157,9 +157,50 @@ jobs:
           uv run --frozen agentrig db downgrade
           uv run --frozen agentrig db upgrade
 
+  reference-demo:
+    name: Public reference demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Run one-command reference acceptance
+        run: scripts/reference_demo.sh all --profile reference-ci
+
+      - name: Stop reference services
+        if: always()
+        run: scripts/reference_demo.sh down
+
+      - name: Upload reference evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: reference-evidence-${{ github.sha }}
+          path: |
+            .agentrig/reference-demo/latest-runs.json
+            .agentrig/reference-demo/latest-evidence.json
+            .agentrig/reference-demo/evidence/**
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+
   package:
     name: Package smoke test
-    needs: [backend, quality, frontend, postgresql]
+    needs: [backend, quality, frontend, postgresql, reference-demo]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

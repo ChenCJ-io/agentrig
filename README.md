@@ -80,9 +80,11 @@ uv run agentrig demo
 显式恢复三种场景：
 
 ```bash
-uv run uvicorn examples.reference_target.app:app --host 127.0.0.1 --port 8091 --workers 1
-uv run pytest -q tests/reference_target
+scripts/reference_demo.sh all --profile reference-ci
 ```
+
+该命令会启动 AgentRig 与公开 Target，执行成功、A/B 策略回归和显式恢复场景，并生成带
+`SHA256SUMS` 的紧凑证据包；详见 Reference Target 文档。
 
 本仓库已提供 lassist/Pixcake + AgentTeams v1.1.2 + DeepSeek V4 Flash 的本机
 一键演示配置。真实 Key 只放在被 Git 忽略的 `.env.local-agentteams`：

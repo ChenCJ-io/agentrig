@@ -152,9 +152,12 @@ The repository also includes a model-free, network-free
 policy-regression, and explicit-recovery scenarios:
 
 ```bash
-uv run uvicorn examples.reference_target.app:app --host 127.0.0.1 --port 8091 --workers 1
-uv run pytest -q tests/reference_target
+scripts/reference_demo.sh all --profile reference-ci
 ```
+
+The command starts AgentRig and the public target, verifies success, A/B policy
+regression, and explicit recovery, then exports a compact evidence bundle with
+`SHA256SUMS`. See the Reference Target document for subcommands and artifacts.
 
 See [docs](./docs/README.md) for architecture and module boundaries, and
 [skills](./skills/README.md) for controller workflows. AgentTeams packaging and deployment

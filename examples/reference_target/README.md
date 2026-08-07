@@ -4,7 +4,53 @@
 lassist/Pixcake 的私有业务逻辑；用途是在干净环境中复现 AgentRig 的协议、受控工具、规则评判、
 A/B 回归和失败恢复链路。
 
-## 启动
+## 一键复现
+
+要求 Python 3.12+、uv、Node.js 20+、npm 和 curl。首次安装依赖需要访问相应的软件源；Target
+及场景执行本身不访问外部服务，也不需要 Docker、私有仓库或模型 Key。
+
+```bash
+scripts/reference_demo.sh all --profile reference-ci
+```
+
+`all` 会依次完成锁定依赖安装、Web 构建、SQLite migration、两个回环服务启动、幂等种子、
+服务和能力验证、三个场景执行、结论校验及脱敏证据导出。默认地址为：
+
+| 服务 | 地址 |
+|---|---|
+| AgentRig Web/API | `http://127.0.0.1:8020` |
+| Reference Target | `http://127.0.0.1:8091` |
+
+运行状态保存在被 Git 忽略的 `.agentrig/reference-demo/`：
+
+- `latest-runs.json`：已核验的场景与 Run/CaseRun ID；
+- `evidence/reference-demo-*/reference-evidence.json`：紧凑证据包；
+- `reference-evidence.md`：可读摘要；
+- `SHA256SUMS`：JSON/Markdown 完整性校验；
+- `agentrig.db` 和 `logs/`：可继续查询的本地状态与排障日志。
+
+可拆分执行：
+
+```bash
+scripts/reference_demo.sh setup
+scripts/reference_demo.sh verify
+scripts/reference_demo.sh run --scenario all
+scripts/reference_demo.sh evidence
+scripts/reference_demo.sh status
+scripts/reference_demo.sh down
+```
+
+`setup` 和种子操作可重复执行；每次 `run` 都创建新的不可变 Run。`down` 只停止 PID 文件确认属于
+本 Demo 的两个进程，保留数据库、日志和证据。端口和状态目录可通过
+`AGENTRIG_REFERENCE_SERVER_PORT`、`AGENTRIG_REFERENCE_TARGET_PORT` 和
+`AGENTRIG_REFERENCE_STATE_DIR` 覆盖。
+
+当前公开入口交付的是完全确定性的 `reference-ci`。需要第三方凭据与 Matrix 的
+`reference-agentteams` 完整协作模式是后续实施切片，不能用 CI 结果冒充三 Agent 协作证据。
+
+## 仅启动 Target
+
+协议开发时也可以单独启动靶场：
 
 ```bash
 uv sync --extra dev
@@ -118,5 +164,5 @@ uv run pytest -q tests/reference_target tests/v1/test_drivers.py
 5. 恢复使用新 Run，第一次失败记录保持不变；
 6. HTTP 错误正文和连接异常细节不会被投影到安全错误消息。
 
-统一的 `scripts/reference_demo.sh` 编排入口属于下一实施切片；当前实现已提供它将复用的 Target、
-Profile、TestCase 和端到端验收基线。
+GitHub Actions 的 `Public reference demo` job 会从 checkout 直接运行同一个 `all` 命令并上传证据
+artifact，避免文档命令与实际验收路径分叉。
