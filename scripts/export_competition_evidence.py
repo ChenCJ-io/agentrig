@@ -65,6 +65,146 @@ def compact_evaluation(value: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def compact_plan(value: dict[str, Any]) -> dict[str, Any]:
+    """Keep plan provenance while excluding prompts, runtime config, and submit controls."""
+
+    selection = value.get("selection")
+    safe_selection: dict[str, Any] = {}
+    if isinstance(selection, dict):
+        safe_selection = pick(selection, "case_ids", "profile_id", "repeat_count")
+        targets = selection.get("targets")
+        if isinstance(targets, list):
+            safe_selection["targets"] = [
+                pick(item, "role", "target_id", "version")
+                for item in targets
+                if isinstance(item, dict)
+            ]
+
+    preview = value.get("preview")
+    safe_preview: dict[str, Any] = {}
+    if isinstance(preview, dict):
+        safe_preview = pick(
+            preview,
+            "resolved_case_ids",
+            "planned_case_runs",
+            "primary_evaluators",
+            "providers",
+        )
+        skipped_items = preview.get("skipped_items")
+        if isinstance(skipped_items, list):
+            safe_preview["skipped_items"] = [
+                pick(
+                    item,
+                    "case_id",
+                    "target_role",
+                    "version",
+                    "repeat_index",
+                    "comparison_pair_id",
+                    "code",
+                )
+                for item in skipped_items
+                if isinstance(item, dict)
+            ]
+
+    confirmation = value.get("confirmation")
+    safe_confirmation = (
+        pick(
+            confirmation,
+            "required",
+            "confirmation_event_id",
+            "confirmed_at",
+        )
+        if isinstance(confirmation, dict)
+        else {}
+    )
+    return {
+        **pick(
+            value,
+            "id",
+            "session_id",
+            "source_turn_id",
+            "parent_plan_id",
+            "origin_decision_id",
+            "revision",
+            "status",
+            "selection_hash",
+            "run_id",
+            "created_at",
+            "updated_at",
+            "confirmed_at",
+            "submitted_at",
+        ),
+        "selection": safe_selection,
+        "preview": safe_preview,
+        "confirmation": safe_confirmation,
+    }
+
+
+def compact_run(value: dict[str, Any]) -> dict[str, Any]:
+    """Exclude frozen endpoints, device metadata, model config, and error text."""
+
+    target_snapshots = value.get("target_snapshots")
+    targets = (
+        [
+            pick(item, "id", "name", "driver_type", "version")
+            for item in target_snapshots
+            if isinstance(item, dict)
+        ]
+        if isinstance(target_snapshots, list)
+        else []
+    )
+    return {
+        **pick(
+            value,
+            "id",
+            "status",
+            "resolved_case_ids",
+            "total_count",
+            "completed_count",
+            "failed_count",
+            "skipped_count",
+            "cancelled_count",
+            "created_at",
+            "started_at",
+            "finished_at",
+            "error_code",
+        ),
+        "targets": targets,
+    }
+
+
+def compact_case_run(value: dict[str, Any]) -> dict[str, Any]:
+    summary = value.get("summary")
+    return {
+        **pick(
+            value,
+            "id",
+            "run_id",
+            "case_id",
+            "version",
+            "repeat_index",
+            "comparison_pair_id",
+            "comparison_role",
+            "status",
+            "primary_evaluator",
+            "evaluation_state",
+            "error_code",
+            "created_at",
+            "started_at",
+            "finished_at",
+        ),
+        "summary": (
+            pick(summary, "turn_count", "tool_call_count")
+            if isinstance(summary, dict)
+            else {}
+        ),
+        "events": [compact_run_event(item) for item in value.get("events", [])],
+        "evaluations": [
+            compact_evaluation(item) for item in value.get("evaluations", [])
+        ],
+    }
+
+
 def build_bundle(base_url: str, session_id: str | None) -> dict[str, Any]:
     health = get_json(base_url, "/api/v2/agentteams/health")
     if session_id is None:
@@ -98,13 +238,16 @@ def build_bundle(base_url: str, session_id: str | None) -> dict[str, Any]:
     case_runs: list[dict[str, Any]] = []
     active_plan_id = session.get("active_plan_id")
     if isinstance(active_plan_id, str):
-        plan = get_json(
+        raw_plan = get_json(
             base_url,
             f"/api/v2/evaluation-plans/{quote(active_plan_id, safe='')}",
         )
-        run_id = plan.get("run_id")
+        plan = compact_plan(raw_plan)
+        run_id = raw_plan.get("run_id")
         if isinstance(run_id, str):
-            run = get_json(base_url, f"/api/runs/{quote(run_id, safe='')}")
+            run = compact_run(
+                get_json(base_url, f"/api/runs/{quote(run_id, safe='')}")
+            )
             page = get_json(
                 base_url,
                 f"/api/runs/{quote(run_id, safe='')}/case-runs?limit=100",
@@ -115,29 +258,7 @@ def build_bundle(base_url: str, session_id: str | None) -> dict[str, Any]:
                     base_url,
                     f"/api/case-runs/{quote(case_run_id, safe='')}",
                 )
-                case_runs.append(
-                    {
-                        **pick(
-                            detail,
-                            "id",
-                            "run_id",
-                            "case_id",
-                            "target_id",
-                            "status",
-                            "evaluation_state",
-                            "error_code",
-                            "error_message",
-                            "summary",
-                            "created_at",
-                            "started_at",
-                            "finished_at",
-                        ),
-                        "events": [compact_run_event(item) for item in detail.get("events", [])],
-                        "evaluations": [
-                            compact_evaluation(item) for item in detail.get("evaluations", [])
-                        ],
-                    }
-                )
+                case_runs.append(compact_case_run(detail))
 
     return {
         "schema_version": "agentrig.competition-evidence.v1",
@@ -231,7 +352,6 @@ def build_bundle(base_url: str, session_id: str | None) -> dict[str, Any]:
                 "assigned_agent",
                 "deadline",
                 "error_code",
-                "error_message",
                 "retryable",
                 "created_at",
                 "started_at",
