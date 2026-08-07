@@ -141,22 +141,41 @@ class HttpSseDriver:
         client_options: dict[str, Any] = {"timeout": session.state["timeout"]}
         if self._transport is not None:
             client_options["transport"] = self._transport
-        async with httpx.AsyncClient(**client_options) as client:
-            async with client.stream(
-                "POST",
-                str(session.state["endpoint"]),
-                json=payload,
-                headers=session.state["headers"],
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    event = parse_sse_line(line)
-                    if event is None:
-                        continue
-                    if event.type is DriverEventType.SESSION_STARTED and event.session_id:
-                        session.id = event.session_id
-                        session.state["session_id"] = event.session_id
-                    yield event
+        try:
+            async with httpx.AsyncClient(**client_options) as client:
+                async with client.stream(
+                    "POST",
+                    str(session.state["endpoint"]),
+                    json=payload,
+                    headers=session.state["headers"],
+                ) as response:
+                    try:
+                        response.raise_for_status()
+                    except httpx.HTTPStatusError:
+                        yield DriverEvent(
+                            type=DriverEventType.ERROR,
+                            error=(
+                                "target HTTP request failed with status "
+                                f"{response.status_code}"
+                            ),
+                        )
+                        return
+                    async for line in response.aiter_lines():
+                        event = parse_sse_line(line)
+                        if event is None:
+                            continue
+                        if (
+                            event.type is DriverEventType.SESSION_STARTED
+                            and event.session_id
+                        ):
+                            session.id = event.session_id
+                            session.state["session_id"] = event.session_id
+                        yield event
+        except httpx.RequestError as exc:
+            yield DriverEvent(
+                type=DriverEventType.ERROR,
+                error=f"target HTTP request failed: {type(exc).__name__}",
+            )
 
 
 def parse_sse_line(line: str) -> DriverEvent | None:
@@ -182,25 +201,46 @@ def parse_sse_line(line: str) -> DriverEvent | None:
         if isinstance(nested_data, dict)
         else cast("dict[str, Any]", raw)
     )
+    request_id_value = data.get("request_id") or raw.get("request_id")
+    request_id = str(request_id_value) if request_id_value else None
+    if event_type == "request_started":
+        return DriverEvent(
+            type=DriverEventType.REQUEST_STARTED,
+            request_id=request_id,
+            request_kind=str(data.get("request_kind") or "chat"),
+        )
+    if event_type == "request_completed":
+        return DriverEvent(
+            type=DriverEventType.REQUEST_COMPLETED,
+            request_id=request_id,
+            request_kind=str(data.get("request_kind") or "chat"),
+            request_status=str(data.get("request_status") or "completed"),
+            duration_ms=data.get("duration_ms"),
+            ttft_ms=data.get("ttft_ms"),
+        )
     if event_type in {"session_created", "session_started"}:
         return DriverEvent(
             type=DriverEventType.SESSION_STARTED,
             session_id=data.get("session_id"),
+            request_id=request_id,
         )
     if event_type in {"text_delta", "assistant_text_delta"}:
         return DriverEvent(
             type=DriverEventType.ASSISTANT_TEXT_DELTA,
             text=str(data.get("text", "")),
+            request_id=request_id,
         )
     if event_type == "assistant_message_completed":
         return DriverEvent(
             type=DriverEventType.ASSISTANT_MESSAGE_COMPLETED,
             text=str(data.get("text", "")),
             refusal=bool(data.get("refusal", False)),
+            request_id=request_id,
         )
     if event_type == "tool_calls":
         return DriverEvent(
             type=DriverEventType.TOOL_CALLS,
+            request_id=request_id,
             tool_calls=[
                 ToolCall(
                     id=str(item.get("id") or item.get("tool_call_id") or ""),
@@ -212,12 +252,17 @@ def parse_sse_line(line: str) -> DriverEvent | None:
             ],
         )
     if event_type == "usage":
-        return DriverEvent(type=DriverEventType.USAGE, usage=data)
+        return DriverEvent(
+            type=DriverEventType.USAGE,
+            request_id=request_id,
+            usage={key: value for key, value in data.items() if key != "request_id"},
+        )
     if event_type in {"done", "completed"}:
-        return DriverEvent(type=DriverEventType.COMPLETED)
+        return DriverEvent(type=DriverEventType.COMPLETED, request_id=request_id)
     if event_type == "error":
         return DriverEvent(
             type=DriverEventType.ERROR,
+            request_id=request_id,
             error=str(data.get("message") or data.get("error") or "unknown driver error"),
         )
     return None

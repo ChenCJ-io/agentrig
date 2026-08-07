@@ -147,6 +147,15 @@ Run the dependency-free vertical demo with:
 uv run agentrig demo
 ```
 
+The repository also includes a model-free, network-free
+[Public Reference Target](./examples/reference_target/README.md) for reproducible success,
+policy-regression, and explicit-recovery scenarios:
+
+```bash
+uv run uvicorn examples.reference_target.app:app --host 127.0.0.1 --port 8091 --workers 1
+uv run pytest -q tests/reference_target
+```
+
 See [docs](./docs/README.md) for architecture and module boundaries, and
 [skills](./skills/README.md) for controller workflows. AgentTeams packaging and deployment
 instructions live in [deploy/agentteams](./deploy/agentteams/README.md).

@@ -75,6 +75,15 @@ url = "http://127.0.0.1:8000/mcp/"
 uv run agentrig demo
 ```
 
+仓库还提供不依赖私有项目、模型或网络的
+[Public Reference Target](./examples/reference_target/README.md)，用于稳定复现成功、策略回归和
+显式恢复三种场景：
+
+```bash
+uv run uvicorn examples.reference_target.app:app --host 127.0.0.1 --port 8091 --workers 1
+uv run pytest -q tests/reference_target
+```
+
 本仓库已提供 lassist/Pixcake + AgentTeams v1.1.2 + DeepSeek V4 Flash 的本机
 一键演示配置。真实 Key 只放在被 Git 忽略的 `.env.local-agentteams`：
 

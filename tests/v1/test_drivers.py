@@ -44,8 +44,13 @@ def context(
 
 
 def test_http_sse_parser_normalizes_supported_events() -> None:
+    request_started = parse_sse_line(
+        'data: {"type":"request_started","data":{'
+        '"request_id":"r1","request_kind":"chat"}}'
+    )
     session = parse_sse_line(
-        'data: {"type":"session_created","data":{"session_id":"s1"}}'
+        'data: {"type":"session_created","data":{'
+        '"session_id":"s1","request_id":"r1"}}'
     )
     call = parse_sse_line(
         'data: {"type":"tool_calls","data":{"tool_calls":['
@@ -56,10 +61,22 @@ def test_http_sse_parser_normalizes_supported_events() -> None:
         'data: {"type":"assistant_message_completed",'
         '"data":{"text":"cannot comply","refusal":true}}'
     )
+    request_completed = parse_sse_line(
+        'data: {"type":"request_completed","data":{'
+        '"request_id":"r1","request_kind":"chat",'
+        '"request_status":"completed","duration_ms":1.5}}'
+    )
+    assert request_started is not None
+    assert request_started.type is DriverEventType.REQUEST_STARTED
+    assert request_started.request_id == "r1"
     assert session is not None and session.type is DriverEventType.SESSION_STARTED
+    assert session.request_id == "r1"
     assert call is not None and call.tool_calls[0].arguments == {"q": "x"}
     assert done is not None and done.type is DriverEventType.COMPLETED
     assert refusal is not None and refusal.refusal is True
+    assert request_completed is not None
+    assert request_completed.type is DriverEventType.REQUEST_COMPLETED
+    assert request_completed.duration_ms == 1.5
     assert HttpSseDriver().capabilities().tool_result_injection is True
 
 
@@ -207,6 +224,33 @@ async def test_http_driver_injects_scoped_proxy_configuration() -> None:
         "url": "http://agentrig.test/proxy",
         "headers": {"X-AgentRig-Proxy-Scope": "scope_1"},
     }
+
+
+async def test_http_driver_normalizes_http_failure_without_response_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(503, text="private upstream diagnostic")
+
+    driver = HttpSseDriver(transport=httpx.MockTransport(handler))
+    session = await driver.prepare(context())
+    events = [event async for event in driver.send_user_message(session, "hello")]
+
+    assert [event.type for event in events] == [DriverEventType.ERROR]
+    assert events[0].error == "target HTTP request failed with status 503"
+    assert "private upstream diagnostic" not in (events[0].error or "")
+
+
+async def test_http_driver_normalizes_transport_failure() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("private connection detail", request=request)
+
+    driver = HttpSseDriver(transport=httpx.MockTransport(handler))
+    session = await driver.prepare(context())
+    events = [event async for event in driver.send_user_message(session, "hello")]
+
+    assert [event.type for event in events] == [DriverEventType.ERROR]
+    assert events[0].error == "target HTTP request failed: ConnectError"
+    assert "private connection detail" not in (events[0].error or "")
 
 
 async def test_pixcake_driver_sends_required_identity_on_each_request() -> None:
