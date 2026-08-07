@@ -156,8 +156,16 @@ scripts/reference_demo.sh all --profile reference-ci
 ```
 
 The command starts AgentRig and the public target, verifies success, A/B policy
-regression, and explicit recovery, then exports a compact evidence bundle with
-`SHA256SUMS`. See the Reference Target document for subcommands and artifacts.
+regression, and explicit recovery, then exports a submission-oriented directory with an
+`agentrig.release-evidence.v1` manifest, compact run evidence, a CycloneDX 1.6 SBOM,
+public configuration, dependency-lock snapshots, and `SHA256SUMS`. From a clean checkout,
+run the strict offline gate with:
+
+```bash
+scripts/reference_demo.sh validate-evidence --require-clean-source
+```
+
+See the Reference Target document for subcommands and artifact details.
 
 See [docs](./docs/README.md) for architecture and module boundaries, and
 [skills](./skills/README.md) for controller workflows. AgentTeams packaging and deployment
@@ -166,7 +174,7 @@ instructions live in [deploy/agentteams](./deploy/agentteams/README.md).
 ## Validation
 
 ```bash
-uv run ruff check src tests examples
+uv run ruff check src tests scripts examples
 uv run mypy src/agentrig
 uv run pytest
 cd web && npm run typecheck && npm run build

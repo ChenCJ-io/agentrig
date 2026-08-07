@@ -14,7 +14,7 @@ scripts/reference_demo.sh all --profile reference-ci
 ```
 
 `all` 会依次完成锁定依赖安装、Web 构建、SQLite migration、两个回环服务启动、幂等种子、
-服务和能力验证、三个场景执行、结论校验及脱敏证据导出。默认地址为：
+服务和能力验证、三个场景执行、结论校验、脱敏证据导出及离线完整性校验。默认地址为：
 
 | 服务 | 地址 |
 |---|---|
@@ -24,9 +24,14 @@ scripts/reference_demo.sh all --profile reference-ci
 运行状态保存在被 Git 忽略的 `.agentrig/reference-demo/`：
 
 - `latest-runs.json`：已核验的场景与 Run/CaseRun ID；
+- `latest-evidence.json`：只含相对路径的最新证据指针；
 - `evidence/reference-demo-*/reference-evidence.json`：紧凑证据包；
 - `reference-evidence.md`：可读摘要；
-- `SHA256SUMS`：JSON/Markdown 完整性校验；
+- `release-evidence.json`：版本、Git SHA、组件版本、产物 Hash、场景 Run ID 和证据指针；
+- `sbom.cdx.json`：从 Python/npm 锁文件生成的 CycloneDX 1.6 运行时 SBOM；
+- `public-config.json`：不含 Secret 值和本机数据库路径的公开配置；
+- `reference-runs.json`、`uv.lock`、`web-package-lock.json`：场景和依赖输入快照；
+- `SHA256SUMS`：上述 7 个产物及 release manifest 的 SHA-256；
 - `agentrig.db` 和 `logs/`：可继续查询的本地状态与排障日志。
 
 可拆分执行：
@@ -36,6 +41,7 @@ scripts/reference_demo.sh setup
 scripts/reference_demo.sh verify
 scripts/reference_demo.sh run --scenario all
 scripts/reference_demo.sh evidence
+scripts/reference_demo.sh validate-evidence
 scripts/reference_demo.sh status
 scripts/reference_demo.sh down
 ```
@@ -44,6 +50,17 @@ scripts/reference_demo.sh down
 本 Demo 的两个进程，保留数据库、日志和证据。端口和状态目录可通过
 `AGENTRIG_REFERENCE_SERVER_PORT`、`AGENTRIG_REFERENCE_TARGET_PORT` 和
 `AGENTRIG_REFERENCE_STATE_DIR` 覆盖。
+
+`validate-evidence` 不访问网络，会校验 manifest 契约、精确版本和 Git SHA、所有产物 Hash、
+`SHA256SUMS`、SBOM、公开配置以及 Run/CaseRun 交叉引用，并拒绝 JSON 产物中的敏感字段。开发中的
+脏工作区可以执行普通校验；CI 和正式提交必须在干净 checkout 中执行：
+
+```bash
+scripts/reference_demo.sh validate-evidence --require-clean-source
+```
+
+`release-evidence.json` 中 `agentteams` 为 `null` 是有意的：它如实表示本包是无模型的
+`reference-ci` 证据，而不是三 Agent/Matrix 协作证据。
 
 当前公开入口交付的是完全确定性的 `reference-ci`。需要第三方凭据与 Matrix 的
 `reference-agentteams` 完整协作模式是后续实施切片，不能用 CI 结果冒充三 Agent 协作证据。
@@ -164,5 +181,5 @@ uv run pytest -q tests/reference_target tests/v1/test_drivers.py
 5. 恢复使用新 Run，第一次失败记录保持不变；
 6. HTTP 错误正文和连接异常细节不会被投影到安全错误消息。
 
-GitHub Actions 的 `Public reference demo` job 会从 checkout 直接运行同一个 `all` 命令并上传证据
-artifact，避免文档命令与实际验收路径分叉。
+GitHub Actions 的 `Public reference demo` job 会从干净 checkout 直接运行同一个 `all` 命令，
+追加 `--require-clean-source` 严格校验并上传完整证据 artifact，避免文档命令与实际验收路径分叉。

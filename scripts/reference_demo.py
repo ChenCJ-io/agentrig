@@ -27,6 +27,7 @@ from examples.reference_target.agentrig_assets import (
     reference_profile,
     reference_target,
 )
+from scripts.build_reference_release import build_release_bundle
 from scripts.export_competition_evidence import compact_case_run, compact_run
 
 MANIFEST_SCHEMA = "agentrig.reference-demo-runs.v1"
@@ -655,8 +656,9 @@ def export_evidence(
         )
     )
     runs = [_collect_run(api, run_id) for run_id in run_ids]
+    git_metadata = _git_metadata(repository_root)
     source = {
-        **_git_metadata(repository_root),
+        **git_metadata,
         "profile": manifest["profile"],
         "target_id": manifest["target_id"],
         "secret_payloads_included": False,
@@ -685,19 +687,23 @@ def export_evidence(
         encoding="utf-8",
     )
     markdown_path.write_text(_evidence_markdown(bundle), encoding="utf-8")
-    checksum_lines = []
-    for path in (json_path, markdown_path):
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        checksum_lines.append(f"{digest}  {path.name}")
-    (output_dir / "SHA256SUMS").write_text(
-        "\n".join(checksum_lines) + "\n",
-        encoding="utf-8",
+    release_manifest_path = build_release_bundle(
+        output_dir=output_dir,
+        repository_root=repository_root,
+        run_manifest_path=manifest_path,
+        reference_evidence_path=json_path,
+        reference_markdown_path=markdown_path,
+        agentrig_url=api.base_url,
+        target_url=str(manifest["target_url"]),
+        git_sha=str(git_metadata.get("git_sha") or ""),
+        source_dirty=bool(git_metadata.get("source_dirty")),
     )
     _write_json_atomic(
         output_root.parent / "latest-evidence.json",
         {
             "schema_version": "agentrig.reference-evidence-pointer.v1",
             "path": str(output_dir.relative_to(output_root.parent)),
+            "release_manifest": str(release_manifest_path.relative_to(output_root.parent)),
             "generated_at": bundle["generated_at"],
         },
     )

@@ -22,6 +22,7 @@ PROFILE="reference-ci"
 SCENARIO="all"
 SKIP_INSTALL=${AGENTRIG_REFERENCE_SKIP_INSTALL:-0}
 SKIP_WEB_VERIFY=${AGENTRIG_REFERENCE_SKIP_WEB_VERIFY:-0}
+REQUIRE_CLEAN_SOURCE=0
 STARTED_TARGET=0
 STARTED_AGENTRIG=0
 
@@ -297,6 +298,49 @@ export_demo_evidence() {
   log "evidence export complete; pointer: $STATE_DIR/latest-evidence.json"
 }
 
+validate_demo_evidence() {
+  local relative_manifest release_manifest expected_sha
+  test -f "$STATE_DIR/latest-evidence.json" || die "export evidence before validation"
+  test -x "$PYTHON" || die "run setup first; Python environment is missing"
+  require_command git
+  relative_manifest=$("$PYTHON" - "$STATE_DIR/latest-evidence.json" <<'PY'
+import json
+import sys
+from pathlib import PurePosixPath
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    pointer = json.load(source)
+value = pointer.get("release_manifest")
+if not isinstance(value, str):
+    raise SystemExit("latest evidence pointer is missing release_manifest")
+candidate = PurePosixPath(value)
+if (
+    candidate.is_absolute()
+    or ".." in candidate.parts
+    or value != candidate.as_posix()
+    or value in {"", "."}
+):
+    raise SystemExit("release_manifest must be a normalized relative POSIX path")
+print(value)
+PY
+)
+  release_manifest="$STATE_DIR/$relative_manifest"
+  expected_sha=$(git -C "$ROOT_DIR" rev-parse HEAD)
+  if test "$REQUIRE_CLEAN_SOURCE" = 1; then
+    test -z "$(git -C "$ROOT_DIR" status --porcelain)" \
+      || die "current source tree is dirty; strict evidence validation refused"
+    (cd "$ROOT_DIR" && "$PYTHON" -m scripts.build_reference_release validate \
+      "$release_manifest" \
+      --expected-git-sha "$expected_sha" \
+      --require-clean-source)
+  else
+    (cd "$ROOT_DIR" && "$PYTHON" -m scripts.build_reference_release validate \
+      "$release_manifest" \
+      --expected-git-sha "$expected_sha")
+  fi
+  log "ReleaseEvidence validation passed: $release_manifest"
+}
+
 down_demo() {
   stop_owned_process "$AGENTRIG_PID_FILE" "$AGENTRIG_PATTERN" "AgentRig"
   stop_owned_process "$TARGET_PID_FILE" "$TARGET_PATTERN" "Reference Target"
@@ -326,6 +370,7 @@ Commands:
   verify      Check HTTP health, migrations, assets, Target capabilities, and Web
   run         Run and verify the selected deterministic scenario(s)
   evidence    Export a compact JSON/Markdown evidence bundle with SHA256SUMS
+  validate-evidence  Offline-check ReleaseEvidence, artifact hashes, SBOM, and Run IDs
   down        Stop only processes owned by this demo; preserve data and evidence
   status      Show service and artifact status
   all         Run setup, verify, all scenarios, and evidence export
@@ -333,6 +378,7 @@ Commands:
 Options:
   --profile reference-ci
   --scenario success|policy-regression|recovery|all
+  --require-clean-source
 
 Environment overrides:
   AGENTRIG_REFERENCE_STATE_DIR
@@ -365,6 +411,10 @@ while test "$#" -gt 0; do
       usage
       exit 0
       ;;
+    --require-clean-source)
+      REQUIRE_CLEAN_SOURCE=1
+      shift
+      ;;
     *)
       die "unknown option: $1"
       ;;
@@ -383,9 +433,10 @@ case "$command_name" in
   verify) verify_demo ;;
   run) run_demo ;;
   evidence) export_demo_evidence ;;
+  validate-evidence) validate_demo_evidence ;;
   down) down_demo ;;
   status) show_status ;;
-  all) setup_demo; verify_demo; run_demo; export_demo_evidence ;;
+  all) setup_demo; verify_demo; run_demo; export_demo_evidence; validate_demo_evidence ;;
   help) usage ;;
   *) usage; exit 2 ;;
 esac

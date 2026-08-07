@@ -56,7 +56,7 @@ jobs:
         run: uv sync --frozen --extra dev
 
       - name: Run Ruff
-        run: uv run --frozen ruff check src tests examples
+        run: uv run --frozen ruff check src tests scripts examples
 
       - name: Run mypy
         run: uv run --frozen mypy src/agentrig
@@ -180,6 +180,9 @@ jobs:
 
       - name: Run one-command reference acceptance
         run: scripts/reference_demo.sh all --profile reference-ci
+
+      - name: Validate submission-ready ReleaseEvidence
+        run: scripts/reference_demo.sh validate-evidence --require-clean-source
 
       - name: Stop reference services
         if: always()

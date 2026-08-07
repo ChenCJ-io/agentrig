@@ -83,8 +83,15 @@ uv run agentrig demo
 scripts/reference_demo.sh all --profile reference-ci
 ```
 
-该命令会启动 AgentRig 与公开 Target，执行成功、A/B 策略回归和显式恢复场景，并生成带
-`SHA256SUMS` 的紧凑证据包；详见 Reference Target 文档。
+该命令会启动 AgentRig 与公开 Target，执行成功、A/B 策略回归和显式恢复场景，并生成可离线
+验真的提交证据目录：`agentrig.release-evidence.v1` manifest、紧凑运行证据、CycloneDX 1.6
+SBOM、公开配置、依赖锁文件快照和 `SHA256SUMS`。在干净 checkout 中可执行严格验收：
+
+```bash
+scripts/reference_demo.sh validate-evidence --require-clean-source
+```
+
+产物和子命令详见 Reference Target 文档。
 
 本仓库已提供 lassist/Pixcake + AgentTeams v1.1.2 + DeepSeek V4 Flash 的本机
 一键演示配置。真实 Key 只放在被 Git 忽略的 `.env.local-agentteams`：
@@ -183,7 +190,7 @@ AgentRig 会把服务 Token 和 CaseRun 的短期 Scope 一起注入 ACP MCP 配
 ## 开发校验
 
 ```bash
-uv run ruff check src tests examples
+uv run ruff check src tests scripts examples
 uv run mypy src/agentrig
 uv run pytest
 cd web && npm run typecheck && npm run test:coverage && npm run e2e && npm run build
