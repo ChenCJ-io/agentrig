@@ -50,10 +50,11 @@ an individual is officially representing the community in public spaces.
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at the contact
-listed in [SECURITY.md](./SECURITY.md) or via GitHub's reporting tools.
-All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior should not
+be posted in a public issue. Use GitHub's private reporting or Report Abuse
+tools to contact the repository owner. [SECURITY.md](./SECURITY.md) is reserved
+for product vulnerabilities, not community-conduct reports. All conduct reports
+will be handled as privately and fairly as the available channel permits.
 
 ## Attribution
 

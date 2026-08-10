@@ -1907,12 +1907,13 @@ Plan、Matrix、Invocation、Run、CaseRun、Event 和 Evaluation 逐层验证�
 
 ## 26. `0.2.0a0` 实现状态
 
-截至 2026-08-01，本方案对应的仓库实现已经包括：六张 V2 表及迁移、Assistant/Event/Turn、
+截至 2026-08-10，本方案对应的仓库实现已经包括：六张 V2 表及迁移、Assistant/Event/Turn、
 EvaluationPlan 全状态机、AgentInvocation 生命周期、三角色最小权限 MCP、Matrix Bridge、
-本地/AgentTeams 双适配器、Run 终态回投、SSE 断线续传、计划编辑/确认/提交界面、七项 Skill、
-三角色 AgentTeams 包及固定 `v1.1.2` 的部署覆盖层。
+本地/AgentTeams 双适配器、Run 终态回投、SSE 断线续传、计划编辑/确认/提交界面、八项
+AgentTeams Skill 与三项 Core Skill、三角色 AgentTeams 包及固定 `v1.1.2` 的部署覆盖层。
 
-默认自动化使用本地数据库和 Matrix/Worker 合同替身，不需要外部账户。带真实凭据的
-AgentTeams/Matrix、SLS、AgentScope/Pixcake 和 Goose/ACP 比赛环境复验仍属于部署验收，不应把
-Mock 合同测试描述成真实比赛运行证据。部署者必须按第 21、22 节补齐外部验收记录后，才能宣布
-比赛环境整体完成。
+默认自动化使用本地数据库和 Matrix/Worker 合同替身，不需要外部账户。真实
+AgentTeams/Matrix/lassist-Pixcake 三角色链路已按[本机演示与验收](./04-本机演示与验收.md)完成
+复验，成功、策略失败和超时恢复记录见[真实运行证据报告](./competition/07-真实运行证据报告.md)。
+其他私有 Target、模型或云服务仍必须在各自部署环境单独验收；不得用 Mock 合同测试或无模型
+Reference CI 冒充真实三 Agent 协作证据。

@@ -149,7 +149,7 @@ def pill(slide, value, x, y, w, *, fill=COBALT_SOFT, color=COBALT, line_color=No
         size=8,
         color=color,
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
         align=PP_ALIGN.CENTER,
         valign=MSO_ANCHOR.MIDDLE,
     )
@@ -162,7 +162,7 @@ def base_slide(prs: Presentation, index: int, kicker: str, title_value: str, sub
     background.fore_color.rgb = rgb(CANVAS)
     rect(slide, 0, 0, 0.12, 7.5, fill=COBALT, line=COBALT)
     text(
-        slide, kicker, 0.55, 0.38, 6.4, 0.24, size=8, color=COBALT, bold=True, font="IBM Plex Mono"
+        slide, kicker, 0.55, 0.38, 6.4, 0.24, size=8, color=COBALT, bold=True, font="Courier New"
     )
     text(slide, title_value, 0.55, 0.72, 11.9, 0.55, size=25, color=INK, bold=True)
     if subtitle:
@@ -177,7 +177,49 @@ def base_slide(prs: Presentation, index: int, kicker: str, title_value: str, sub
         0.18,
         size=7,
         color=FAINT,
-        font="IBM Plex Mono",
+        font="Courier New",
+    )
+    return slide
+
+
+def appendix_slide(
+    prs: Presentation,
+    index: int,
+    kicker: str,
+    title_value: str,
+    subtitle: str = "",
+):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    background = slide.background.fill
+    background.solid()
+    background.fore_color.rgb = rgb(CANVAS)
+    rect(slide, 0, 0, 0.12, 7.5, fill=GRAPHITE, line=GRAPHITE)
+    text(
+        slide,
+        kicker,
+        0.55,
+        0.38,
+        6.4,
+        0.24,
+        size=8,
+        color=GRAPHITE,
+        bold=True,
+        font="Courier New",
+    )
+    text(slide, title_value, 0.55, 0.72, 11.9, 0.55, size=25, color=INK, bold=True)
+    if subtitle:
+        text(slide, subtitle, 0.57, 1.29, 11.8, 0.35, size=10, color=MUTED)
+    line(slide, 0.55, 1.72, 12.8, 1.73)
+    text(
+        slide,
+        f"AGENTRIG / GOAI 2026                         APPENDIX {index:02d} / 03",
+        0.55,
+        7.18,
+        12.1,
+        0.18,
+        size=7,
+        color=FAINT,
+        font="Courier New",
     )
     return slide
 
@@ -195,7 +237,7 @@ def card_title(slide, number, title_value, description, x, y, w, h, *, accent=CO
         size=8,
         color=accent,
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
     )
     text(slide, title_value, x + 0.18, y + 0.5, w - 0.35, 0.35, size=14, color=INK, bold=True)
     text(slide, description, x + 0.18, y + 0.98, w - 0.35, h - 1.1, size=9.5, color=MUTED)
@@ -234,7 +276,7 @@ def build() -> Presentation:
         size=10,
         color=WHITE,
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
     )
     pill(
         slide,
@@ -286,7 +328,7 @@ def build() -> Presentation:
         0.2,
         size=8,
         color="737A76",
-        font="IBM Plex Mono",
+        font="Courier New",
     )
 
     # 02
@@ -349,7 +391,7 @@ def build() -> Presentation:
             size=8,
             color=COBALT,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, label, x + 0.16, 3.12, 1.42, 0.28, size=14, color=INK, bold=True)
         text(slide, detail, x + 0.16, 3.55, 1.42, 0.42, size=8.5, color=MUTED)
@@ -446,7 +488,7 @@ def build() -> Presentation:
             size=7,
             color=FAINT,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, boundary, x + 0.22, 5.28, 3.25, 0.34, size=10, color=MUTED)
     text(
@@ -494,7 +536,7 @@ def build() -> Presentation:
         size=8,
         color="8E9691",
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
     )
     text(slide, "协作事件", 6.52, 3.24, 1.6, 0.32, size=17, color=WHITE, bold=True)
     text(slide, "映射", 8.27, 3.24, 0.8, 0.32, size=12, color="8E9691", align=PP_ALIGN.CENTER)
@@ -561,7 +603,7 @@ def build() -> Presentation:
             size=8,
             color=accent,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(
             slide,
@@ -573,7 +615,7 @@ def build() -> Presentation:
             size=12,
             color=INK,
             bold=idx == 4,
-            font="IBM Plex Mono" if idx == 4 else "PingFang SC",
+            font="Courier New" if idx == 4 else "PingFang SC",
         )
     pill(
         slide,
@@ -625,7 +667,7 @@ def build() -> Presentation:
             size=9,
             color=accent,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         for item_index, item in enumerate(items):
             y = 2.82 + item_index * 0.56
@@ -639,7 +681,7 @@ def build() -> Presentation:
                 0.15,
                 size=6.5,
                 color=FAINT,
-                font="IBM Plex Mono",
+                font="Courier New",
             )
             text(
                 slide,
@@ -651,11 +693,11 @@ def build() -> Presentation:
                 size=8.5,
                 color=GRAPHITE,
                 bold=True,
-                font="IBM Plex Mono",
+                font="Courier New",
             )
     text(
         slide,
-        "每个核心 Skill 定义：触发条件 · 输入输出 · 工具依赖 · 失败 · 重试 · 安全边界 · 版本合同",
+        "每个核心 Skill：输入输出 · 调用条件 · 依赖 · 失败 · 安全 · 验证 · 复用 · 版本/回滚",
         0.7,
         6.31,
         11.9,
@@ -695,7 +737,7 @@ def build() -> Presentation:
             size=8,
             color=accent,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, name, x + 0.18, 3.02, 1.84, 0.3, size=15, color=INK, bold=True)
         text(slide, detail, x + 0.18, 3.65, 1.84, 0.72, size=10, color=MUTED)
@@ -739,7 +781,7 @@ def build() -> Presentation:
             size=9,
             color=color,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
             align=PP_ALIGN.CENTER,
         )
         if idx < 2:
@@ -767,7 +809,7 @@ def build() -> Presentation:
         size=9,
         color="8E9691",
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
         align=PP_ALIGN.CENTER,
     )
     text(
@@ -780,7 +822,7 @@ def build() -> Presentation:
         size=25,
         color=WHITE,
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
         align=PP_ALIGN.CENTER,
     )
     controls = [
@@ -805,7 +847,7 @@ def build() -> Presentation:
             size=7,
             color=COBALT,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, detail, x + 1.02, y + 0.11, width - 1.16, 0.36, size=8.5, color=MUTED)
 
@@ -828,7 +870,7 @@ def build() -> Presentation:
         size=8,
         color="8E9691",
         bold=True,
-        font="IBM Plex Mono",
+        font="Courier New",
     )
     demo_items = [
         ("01", "成功闭环", "apply_image_prompt → Curator → Rule 3/3 → Judge pass"),
@@ -847,7 +889,7 @@ def build() -> Presentation:
             size=7,
             color=COBALT,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, name, 1.3, y - 0.02, 1.9, 0.24, size=12, color=WHITE, bold=True)
         text(slide, detail, 1.3, y + 0.33, 2.08, 0.46, size=8.5, color="BFC5C1")
@@ -915,7 +957,7 @@ def build() -> Presentation:
             size=25,
             color=INK,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, label, x + 1.1, 2.42, 1.35, 0.25, size=9, color=MUTED)
     engineering = [
@@ -923,8 +965,8 @@ def build() -> Presentation:
         ("DRIVERS", "Pixcake HTTP-SSE · OpenAI compatible · ACP · subprocess"),
         ("STORAGE", "SQLite 本机一键体验；Repository 可切 PostgreSQL"),
         ("EXTENSION", "Driver / Provider / Evaluator / Skill / Adapter 均为契约"),
-        ("DELIVERY", "一键部署 · 示例配置 · 安全文档 · 自动化测试"),
-        ("LICENSE", "MIT License · 可执行代码包 · 可重复构建角色包"),
+        ("CONTEXT", "会话记忆 · 共享状态 · 轨迹可观测（3/4）"),
+        ("DELIVERY", "MIT · 一键部署 · 确定性角色包 · 测试/安全文档"),
     ]
     for idx, (label, detail) in enumerate(engineering):
         x = 0.7 + (idx % 2) * 6.12
@@ -940,7 +982,7 @@ def build() -> Presentation:
             size=7,
             color=COBALT,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(slide, detail, x + 1.12, y + 0.16, 4.5, 0.24, size=9, color=GRAPHITE)
 
@@ -971,7 +1013,7 @@ def build() -> Presentation:
             size=8,
             color=accent,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         text(
             slide,
@@ -983,7 +1025,7 @@ def build() -> Presentation:
             size=22,
             color=INK,
             bold=True,
-            font="IBM Plex Mono",
+            font="Courier New",
         )
         line(slide, x + 0.24, 3.62, x + 3.47, 3.63)
         text(slide, detail, x + 0.24, 3.93, 3.12, 1.05, size=11, color=MUTED)
@@ -1008,6 +1050,311 @@ def build() -> Presentation:
         fill=INK,
         color=WHITE,
         line_color=INK,
+    )
+
+    # Appendix 01: official Agent Identity fields
+    slide = appendix_slide(
+        prs,
+        1,
+        "APPENDIX / AGENT IDENTITY",
+        "附录 A：三个 Agent 的完整身份合同",
+        "Name / Role / Capabilities / Inputs / Outputs / Dependencies / Decision Boundary / Trace",
+    )
+    identities = [
+        (
+            "evaluation-manager",
+            "Evaluation Manager",
+            COBALT,
+            [
+                ("CAPABILITIES", "资产选择 · 计划/审批 · 诊断/用例草稿"),
+                ("INPUTS", "Session/Turn/Event · 用户目标 · 权威资产事实"),
+                ("OUTPUTS", "Plan/Decision/Run 引用 · 证据诊断"),
+                ("DEPENDENCIES", "6 Manager Skills · manager MCP · Core"),
+                ("DECISION BOUNDARY", "不能原始 run_cases；确认/提交绑定用户 event + revision"),
+                ("TRACE", "AssistantEvent · ManagerDecision · Plan/Run · Matrix IDs"),
+            ],
+        ),
+        (
+            "simulation-curator",
+            "Simulation Curator",
+            GREEN,
+            [
+                ("CAPABILITIES", "生成最小合理、Schema 合法的受控结果"),
+                ("INPUTS", "invocation/hash/deadline · tool/args/schema · 脱敏历史"),
+                ("OUTPUTS", "CuratorGeneration 或分类结构化失败"),
+                ("DEPENDENCIES", "simulate-tool-result · Curator 三工具 MCP"),
+                ("DECISION BOUNDARY", "看不到 rubric/预期；不调真实工具；不枚举任务"),
+                ("TRACE", "Invocation 状态 · hashes · Matrix IDs · RunEvent ref"),
+            ],
+        ),
+        (
+            "evidence-judge",
+            "Evidence Judge",
+            AMBER,
+            [
+                ("CAPABILITIES", "独立 pass/fail/inconclusive · 引用真实 event ID"),
+                ("INPUTS", "invocation/hash/deadline · 冻结 rubric · Rule · 脱敏证据"),
+                ("OUTPUTS", "JudgeOutput · criteria · summary · evidence refs"),
+                ("DEPENDENCIES", "judge-evidence · Judge 三工具 MCP"),
+                ("DECISION BOUNDARY", "不造证据/改 Rule；证据不足必须 inconclusive"),
+                ("TRACE", "Invocation 状态 · hashes · Matrix IDs · Evaluation ID"),
+            ],
+        ),
+    ]
+    for idx, (name, role, accent, fields) in enumerate(identities):
+        x = 0.62 + idx * 4.12
+        rect(slide, x, 2.0, 3.82, 4.78, fill=WHITE, line=LINE)
+        rect(slide, x, 2.0, 3.82, 0.08, fill=accent, line=accent)
+        text(
+            slide,
+            name,
+            x + 0.2,
+            2.29,
+            3.4,
+            0.2,
+            size=7,
+            color=accent,
+            bold=True,
+            font="Courier New",
+        )
+        text(slide, role, x + 0.2, 2.61, 3.4, 0.3, size=16, color=INK, bold=True)
+        for field_index, (label, detail) in enumerate(fields):
+            y = 3.13 + field_index * 0.58
+            text(
+                slide,
+                label,
+                x + 0.2,
+                y,
+                1.08,
+                0.16,
+                size=6.2,
+                color=accent,
+                bold=True,
+                font="Courier New",
+            )
+            text(slide, detail, x + 1.18, y - 0.02, 2.39, 0.38, size=7.5, color=GRAPHITE)
+
+    # Appendix 02: official Skill contract fields
+    slide = appendix_slide(
+        prs,
+        2,
+        "APPENDIX / SKILL CONTRACT",
+        "附录 B：11 个 Skill 如何被工程化",
+        "不只列名称：定义调用、输入输出、失败、安全、验证、版本与复用",
+    )
+    rect(slide, 0.65, 2.0, 4.02, 4.78, fill=INK, line=INK)
+    text(
+        slide,
+        "11 VERSIONED SKILLS",
+        0.92,
+        2.3,
+        3.5,
+        0.22,
+        size=8,
+        color="8E9691",
+        bold=True,
+        font="Courier New",
+    )
+    skill_groups = [
+        (
+            "MANAGER / 6",
+            "adaptive-evaluation\nplan-evaluation\nexecute-evaluation-plan\ndiagnose-run\nbuild-test-case-draft\nconfigure-test-target",
+            COBALT,
+        ),
+        ("WORKERS / 2", "simulate-tool-result\njudge-evidence", GREEN),
+        ("CORE / 3", "run-test-cases\nbuild-test-case\nharvest-tool-samples", AMBER),
+    ]
+    group_y = 2.72
+    for label, values, accent in skill_groups:
+        line_count = values.count("\n") + 1
+        group_height = 0.38 + line_count * 0.27
+        text(
+            slide,
+            label,
+            0.92,
+            group_y,
+            1.15,
+            0.18,
+            size=6.8,
+            color=accent,
+            bold=True,
+            font="Courier New",
+        )
+        text(
+            slide,
+            values,
+            2.02,
+            group_y - 0.03,
+            2.25,
+            group_height,
+            size=7.2,
+            color=WHITE,
+            bold=True,
+            font="Courier New",
+        )
+        group_y += group_height + 0.23
+    rect(slide, 4.98, 2.0, 7.72, 2.75, fill=WHITE, line=LINE)
+    text(
+        slide,
+        "OFFICIAL CONTRACT FIELDS",
+        5.25,
+        2.3,
+        3.2,
+        0.2,
+        size=8,
+        color=COBALT,
+        bold=True,
+        font="Courier New",
+    )
+    contract_fields = [
+        "名称 / 类型",
+        "使用场景",
+        "输入参数",
+        "输出结果",
+        "调用条件",
+        "依赖工具",
+        "失败处理",
+        "安全边界",
+        "验证 / 复用",
+        "版本 / 回滚",
+    ]
+    for field_index, value in enumerate(contract_fields):
+        col = field_index % 2
+        row = field_index // 2
+        x = 5.25 + col * 3.55
+        y = 2.76 + row * 0.36
+        rect(slide, x, y, 3.25, 0.27, fill=SURFACE, line=LINE)
+        text(
+            slide,
+            f"{field_index + 1:02d}",
+            x + 0.1,
+            y + 0.08,
+            0.28,
+            0.1,
+            size=5.5,
+            color=FAINT,
+            font="Courier New",
+        )
+        text(slide, value, x + 0.43, y + 0.05, 2.62, 0.14, size=7, color=GRAPHITE, bold=True)
+    rect(slide, 4.98, 5.02, 7.72, 1.76, fill=COBALT_SOFT, line="C8D4FF")
+    text(
+        slide,
+        "VERSION / RELEASE / ROLLBACK",
+        5.25,
+        5.29,
+        3.4,
+        0.18,
+        size=7.5,
+        color=COBALT,
+        bold=True,
+        font="Courier New",
+    )
+    text(
+        slide,
+        "当前随 AgentRig 0.2.0a0 进入 Git 版本管理；确定性构建三角色包，\n"
+        "AgentTeams 基线锁定 v1.1.2；回滚完整 Release + 角色包，不单独热替换 Prompt。",
+        5.25,
+        5.71,
+        7.05,
+        0.72,
+        size=9.5,
+        color=GRAPHITE,
+        bold=True,
+    )
+    text(
+        slide,
+        "完整逐 Skill 字段表：docs/competition/08-Skill-清单.md",
+        5.25,
+        6.47,
+        6.9,
+        0.18,
+        size=7,
+        color=MUTED,
+        font="Courier New",
+    )
+
+    # Appendix 03: context and current verification evidence
+    slide = appendix_slide(
+        prs,
+        3,
+        "APPENDIX / VERIFICATION",
+        "上下文能力与当前可验证证据",
+        "赛题要求 4 选 2；AgentRig 实现记忆、共享状态和轨迹可观测 3 项",
+    )
+    capabilities = [
+        ("01", "Agent 记忆", "Session / Turn / Event\n恢复 Plan 与 Run 上下文", GREEN, GREEN_SOFT, "IMPLEMENTED"),
+        ("02", "知识库 RAG", "当前场景不需要\n未为数量堆叠检索链", FAINT, SURFACE, "NOT NEEDED"),
+        ("03", "共享状态", "Plan / Invocation / Run\n权威状态机", COBALT, COBALT_SOFT, "IMPLEMENTED"),
+        ("04", "轨迹可观测", "RunEvent / Evaluation / Decision\nMatrix IDs / hashes", AMBER, AMBER_SOFT, "IMPLEMENTED"),
+    ]
+    for idx, (number, name, detail, accent, fill, state_value) in enumerate(capabilities):
+        x = 0.63 + idx * 3.12
+        rect(slide, x, 2.02, 2.86, 1.67, fill=fill, line=LINE)
+        text(
+            slide,
+            number,
+            x + 0.16,
+            2.22,
+            0.35,
+            0.16,
+            size=6.5,
+            color=accent,
+            bold=True,
+            font="Courier New",
+        )
+        text(slide, name, x + 0.16, 2.52, 2.46, 0.27, size=13, color=INK, bold=True)
+        text(slide, detail, x + 0.16, 2.91, 2.48, 0.48, size=8.2, color=MUTED)
+        text(
+            slide,
+            state_value,
+            x + 1.7,
+            2.22,
+            0.96,
+            0.14,
+            size=5.8,
+            color=accent,
+            bold=True,
+            font="Courier New",
+            align=PP_ALIGN.RIGHT,
+        )
+    evidence_cards = [
+        ("134", "后端测试通过", "6 skipped / 1 deprecation warning", COBALT),
+        ("3", "参考场景验证", "success / policy regression / recovery", GREEN),
+        ("0", "Git 历史密钥命中", "Gitleaks 8.29.1 + official fixture sanity", AMBER),
+        ("2", "Worker 双向回执", "Curator + Judge / Matrix event IDs", COBALT),
+        ("3/3", "成功场景 Rule", "Evidence Judge 独立 pass", GREEN),
+        ("2/3", "策略回归 Rule", "Judge 引用同一违规事件 fail", CORAL),
+    ]
+    for idx, (value, label, detail, accent) in enumerate(evidence_cards):
+        x = 0.63 + (idx % 3) * 4.14
+        y = 4.12 + (idx // 3) * 1.17
+        rect(slide, x, y, 3.86, 0.92, fill=WHITE, line=LINE)
+        rect(slide, x, y, 0.05, 0.92, fill=accent, line=accent)
+        text(
+            slide,
+            value,
+            x + 0.18,
+            y + 0.2,
+            0.92,
+            0.34,
+            size=20,
+            color=INK,
+            bold=True,
+            font="Courier New",
+        )
+        text(slide, label, x + 1.12, y + 0.16, 2.48, 0.22, size=9.5, color=GRAPHITE, bold=True)
+        text(slide, detail, x + 1.12, y + 0.49, 2.48, 0.22, size=7.2, color=MUTED)
+    text(
+        slide,
+        "边界：云端 OTel/SLS、Kubernetes、公开 Release/Tag 与最终视频仍按提交清单闭环，不伪装为已完成。",
+        0.63,
+        6.56,
+        12.0,
+        0.28,
+        size=9.5,
+        color=CORAL,
+        bold=True,
+        align=PP_ALIGN.CENTER,
     )
     return prs
 

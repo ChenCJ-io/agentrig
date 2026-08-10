@@ -1,42 +1,112 @@
-# AgentRig
+<h1 align="center">AgentRig</h1>
 
-[English](./README.en.md) | 中文
+<p align="center"><strong>让每一次 AI Agent 变更都经过可复现、可审计、可回归的验证。</strong></p>
 
-> 面向 AI Agent 的 MCP 原生回归测试台。
+<p align="center">
+  MCP 原生的多 Agent 回归评测与受控发布门禁基础设施
+</p>
 
-AgentRig V2 在 V1 确定性评测内核上增加智能评测助手：AgentTeams Manager 把自然语言目标
-整理成可预览、确认和幂等提交的 EvaluationPlan；Simulation Curator 与 Evidence Judge
-作为两个职责隔离的 Worker，在准确的执行节点接受任务。AgentRig 仍负责运行、权限、证据和
-评判事实，AgentTeams 负责多 Agent 协作，不替代 V1 Core。
+<p align="center">
+  <a href="https://github.com/ChenCJ-io/agentrig/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ChenCJ-io/agentrig/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white">
+  <img alt="MCP native" src="https://img.shields.io/badge/MCP-native-5B5BD6">
+  <img alt="Status: competition preview" src="https://img.shields.io/badge/status-competition%20preview-2563EB">
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-16A34A"></a>
+</p>
 
-两个专业 Agent 既可使用 V1 本地模型适配器，也可切换到 AgentTeams Worker：
+<p align="center">
+  <a href="#五分钟复现">五分钟复现</a> ·
+  <a href="#工作原理">工作原理</a> ·
+  <a href="./docs/README.md">文档中心</a> ·
+  <a href="./docs/competition/README.md">GOAI 2026 参赛材料</a> ·
+  <a href="./README.en.md">English</a>
+</p>
 
-- **Simulation Curator**：在 Fixture 和 approved Sample 未命中时，根据当前 CaseRun
-  上下文生成并校验工具结果。
-- **Evidence Judge**：根据 rubric 和已存档证据输出 pass、fail 或 inconclusive。
+<p align="center">
+  <img src="./docs/competition/assets/agentrig-assistant.png" width="100%" alt="AgentRig 智能评测助手展示 Manager、Simulation Curator、Evidence Judge 与可追溯运行证据">
+</p>
 
-AgentTeams 默认关闭，因此原有 V1 HTTP、MCP、Web 和 CLI 行为保持兼容。Core 模式无需模型
-Key；控制方也可以关闭 Evidence Judge，自行读取 CaseRun 后调用
-`submit_external_verdict`。
+<p align="center"><sub>真实本机验收界面：Manager 编排评测，Curator 提供受控工具结果，Judge 基于冻结证据裁决。</sub></p>
 
-## 已实现能力
+Agent 上线后的风险通常不来自“接口能否调用”，而来自模型、提示词、工具、上下文和依赖变化后，
+行为是否仍然满足业务与安全约束。AgentRig 将自然语言评测目标转换为**可预览、必须确认、幂等
+提交**的执行计划，并保存从工具调用到最终裁决的完整证据链。
 
-- 单用例、批量、多版本、重复和双 Target A/B 共用一个异步 `run_cases`。
-- stdio ACP（官方 Python SDK）、HTTP/SSE、Pixcake HTTP/SSE、OpenAI-compatible、
-  allowlisted Python Driver，以及实验性 JSONL subprocess Driver。
-- controlled、CaseRun 级 MCP proxy、observe-only 三种工具控制方式。
-- ACP Target 可按 CaseRun 注入 MCP Proxy，并隔离 Agent 的运行目录、会话数据和日志。
-- Fixture → Sample → Simulation Curator → Real Tool 可配置 Provider 顺序。
-- Rule、Evidence Judge、External Controller 分别存档，主评判器决定当前状态。
-- SQLite / PostgreSQL async SQLAlchemy、17 张表、Alembic 迁移和运行快照。
-- V2 会话事件流、EvaluationPlan 状态机、AgentInvocation 生命周期与断线恢复。
-- V2.1 结构化 DecisionRecord、证据存在性校验、Core 策略门禁、并发幂等和质量指标。
-- Matrix Bridge、AgentTeams 三角色部署包和 Manager/Worker 独立 MCP 权限面。
-- HTTP/SSE API、Streamable HTTP MCP、React 管理界面和 11 份控制/协作 Skill。
+它刻意分开两件事：**AgentTeams 负责谁与谁协作，AgentRig Core 负责什么事实已经发生。**
+任何 Agent 都不能通过一段看似成功的文本改写运行事实，也不能绕过确认、权限或证据门禁。
 
-## 快速开始
+> AgentRig 是 [GOAI 2026 Agent Infra 新智基座](./docs/competition/README.md)参赛项目。
+> 仓库包含三 Agent Identity、11 项 Skill、真实运行证据、演示脚本与可重复构建的方案材料。
 
-要求 Python 3.12+、[uv](https://docs.astral.sh/uv/)；构建 Web 需要 Node.js 20+。
+## 为什么是 AgentRig
+
+| 常见问题 | AgentRig 的处理方式 |
+|---|---|
+| 回答看起来正确，但过程无法复核 | 保存不可变运行快照、RunEvent、工具结果、评判记录与引用 |
+| 多 Agent 对话很多，却无法证明真正协作 | 保存 Matrix 请求/响应 event ID、角色 invocation、输入输出 Hash 和终态 |
+| 工具调用难以稳定复现 | 按 Fixture → Sample → Simulation Curator → Real Tool 的受控 Provider 链执行 |
+| “执行完成”被误当成“测试通过” | 分离运行状态、Rule、Evidence Judge 与外部控制方结论；`completed ≠ pass` |
+| 模型或协作运行时故障后记录丢失 | 以数据库事实链为准，支持幂等重试、断线恢复和显式失败投影 |
+| Agent 获得过多控制权限 | Manager、Curator、Judge 使用职责隔离的 MCP 工具面和独立凭据 |
+
+## 工作原理
+
+```mermaid
+flowchart LR
+    U[用户目标] --> M[AgentTeams Manager]
+    M --> P[EvaluationPlan 预览]
+    P -->|用户确认| G{AgentRig Core Gate}
+    G --> T[被测 Agent]
+    T -->|缺少可靠工具结果| C[Simulation Curator]
+    T --> E[(不可变运行证据)]
+    C --> E
+    E --> R[Deterministic Rules]
+    E --> J[Evidence Judge]
+    R --> V[可追溯结论]
+    J --> V
+```
+
+| 角色 | 负责 | 明确不负责 |
+|---|---|---|
+| **Manager** | 理解目标、查询资产、形成计划、解释结果 | 绕过用户确认、直接写入评判事实 |
+| **Simulation Curator** | 在可靠样本缺失时生成并校验受控工具结果 | 调用真实业务工具、决定最终 pass/fail |
+| **Evidence Judge** | 依据 rubric 和冻结证据独立裁决并引用事件 | 修改 RunEvent、补造不存在的证据 |
+| **AgentRig Core** | 执行、权限、状态机、证据、Rule 与审计事实 | 依赖模型或聊天文本才能保持正确性 |
+
+## 已验证的场景
+
+| 场景 | 预期 | 可核验证据 |
+|---|---|---|
+| **成功回归** | 受控工具调用完成，Rule 3/3，Judge `pass` | 工具事件、Curator/Judge invocation、Matrix 双向 event ID |
+| **策略回归** | Candidate 未先确认即执行，明确判 `fail` | A/B 差异、Rule 2/3、Judge 引用同一违规事件 |
+| **显式恢复** | 第一次 503/超时保持失败；新 Run 恢复通过 | 两个不可变 Run、错误分类、未覆盖的历史证据 |
+
+完整结果见[真实 AgentTeams 运行证据](./docs/competition/07-真实运行证据报告.md)；无需模型和私有
+依赖的公开复现路径见 [Public Reference Target](./examples/reference_target/README.md)。
+
+## 五分钟复现
+
+### 路径 A：公开确定性 Demo（推荐）
+
+只需 Python 3.12+、[uv](https://docs.astral.sh/uv/) 和 Node.js 20+；场景运行不需要模型 Key、
+Docker 或私有项目。
+
+```bash
+git clone https://github.com/ChenCJ-io/agentrig.git
+cd agentrig
+scripts/reference_demo.sh all --profile reference-ci
+```
+
+脚本会从干净环境完成依赖安装、Web 构建、数据库迁移、服务启动、三个场景执行、证据导出及
+离线完整性校验。完成后访问 `http://127.0.0.1:8020`，产物位于
+`.agentrig/reference-demo/evidence/`。
+
+```bash
+scripts/reference_demo.sh validate-evidence --require-clean-source
+scripts/reference_demo.sh down
+```
+
+### 路径 B：最小本地服务
 
 ```bash
 uv sync --extra dev
@@ -45,149 +115,43 @@ uv run agentrig db upgrade
 uv run agentrig serve
 ```
 
-持久化数据库不会再由 ORM 静默补表：服务启动时会校验 Alembic revision，未初始化或版本
-落后会直接报错，请先执行 `uv run agentrig db upgrade`。内存 SQLite 测试库仍会自动建表。
+默认入口：Web `http://127.0.0.1:8000/`、HTTP API `/api/`、Streamable HTTP MCP `/mcp/`。
+配置、鉴权和网络边界见[快速开始与安全部署](./docs/08-快速开始与安全部署.md)。
 
-默认地址：
+### 路径 C：完整三 Agent 验收
 
-| 入口 | 地址 |
+真实 AgentTeams v1.1.2、Matrix、lassist/Pixcake 与模型的本机联调需要 Docker 和部署侧凭据。
+按[本机演示与验收](./docs/04-本机演示与验收.md)执行；Secret 只写入被 Git 忽略的本机环境文件。
+
+## 核心能力
+
+| 领域 | 能力 |
 |---|---|
-| Web | `http://127.0.0.1:8000/` |
-| HTTP API | `http://127.0.0.1:8000/api/` |
-| V2 助手 API | `http://127.0.0.1:8000/api/v2/` |
-| 编码 Agent MCP | `http://127.0.0.1:8000/mcp/` |
-| Manager MCP | `http://127.0.0.1:8000/mcp/manager/` |
-| Curator / Judge MCP | `http://127.0.0.1:8000/mcp/curator/`、`/mcp/judge/` |
-| 被测 Agent 工具 Proxy | `http://127.0.0.1:8000/proxy` |
+| **评测编排** | 单用例、批量、多版本、重复运行、双 Target A/B、计划预览与确认 |
+| **Agent 接入** | ACP、HTTP/SSE、Pixcake、OpenAI-compatible、allowlisted Python/JSONL Driver |
+| **工具控制** | controlled、CaseRun 级 MCP proxy、observe-only；Fixture/Sample/Curator/Real Tool 链 |
+| **评判体系** | Deterministic Rule、Evidence Judge、External Controller 分层存档 |
+| **多 Agent 协作** | Manager/Curator/Judge 三角色、Matrix Bridge、隔离 MCP 权限面、11 项 Skill |
+| **证据与恢复** | 不可变快照、append-only RunEvent、结果引用、幂等状态机、断线恢复 |
+| **工程与安全** | SQLite/PostgreSQL、Alembic、Secret 引用、出站策略、脱敏、SBOM 与校验和 |
+| **交付界面** | React 管理界面、HTTP API、MCP、CLI、JSON/Markdown/HTML 报告 |
 
-Codex MCP 配置：
+## 文档导航
 
-```toml
-[mcp_servers.agentrig]
-url = "http://127.0.0.1:8000/mcp/"
-# 启用 server.api_token_ref 时取消下一行注释；Codex 从环境变量读取 Token。
-# bearer_token_env_var = "AGENTRIG_ACCESS_TOKEN"
-```
+| 想做什么 | 从这里开始 |
+|---|---|
+| 运行第一个可复现场景 | [快速开始与安全部署](./docs/08-快速开始与安全部署.md) |
+| 理解系统边界和数据流 | [总体架构](./docs/00-总体架构.md) |
+| 接入新的被测 Agent | [V1 实现与接入](./docs/01-核心Agent价值复核与讨论交接.md) |
+| 部署三 Agent 协作环境 | [AgentTeams 部署包](./deploy/agentteams/README.md) |
+| 编排 MCP 工作流 | [Skill 目录](./skills/README.md) |
+| 复核比赛证据与材料 | [GOAI 2026 交付中心](./docs/competition/README.md) |
+| 查看全部权威文档 | [文档中心](./docs/README.md) |
 
-首次可先跑不依赖外部服务的纵向验收：
+## 质量门禁
 
-```bash
-uv run agentrig demo
-```
-
-仓库还提供不依赖私有项目、模型或网络的
-[Public Reference Target](./examples/reference_target/README.md)，用于稳定复现成功、策略回归和
-显式恢复三种场景：
-
-```bash
-scripts/reference_demo.sh all --profile reference-ci
-```
-
-该命令会启动 AgentRig 与公开 Target，执行成功、A/B 策略回归和显式恢复场景，并生成可离线
-验真的提交证据目录：`agentrig.release-evidence.v1` manifest、紧凑运行证据、CycloneDX 1.6
-SBOM、公开配置、依赖锁文件快照和 `SHA256SUMS`。在干净 checkout 中可执行严格验收：
-
-```bash
-scripts/reference_demo.sh validate-evidence --require-clean-source
-```
-
-产物和子命令详见 Reference Target 文档。
-
-本仓库已提供 lassist/Pixcake + AgentTeams v1.1.2 + DeepSeek V4 Flash 的本机
-一键演示配置。真实 Key 只放在被 Git 忽略的 `.env.local-agentteams`：
-
-```bash
-scripts/local_demo.sh all
-```
-
-命令会保留本地 SQLite 和 AgentTeams Docker volume，可重复运行。完成后直接访问
-`http://127.0.0.1:8010/targets/target_lassist_local/assistant`。完整搭建、交互和验收说明见
-[本机演示与验收](./docs/04-本机演示与验收.md)。
-
-## 最小配置
-
-`agentrig.toml`：
-
-```toml
-[server]
-host = "127.0.0.1"
-port = 8000
-# 公网或共享环境建议启用；这里只保存环境变量引用。
-# api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
-# 仅当可信反向代理会剥离并重写身份 Header 时启用。
-# trusted_principal_header = "x-authenticated-user"
-
-[database]
-url = "sqlite+aiosqlite:///./.agentrig/agentrig.db"
-
-[proxy]
-public_url = "http://127.0.0.1:8000/proxy"
-backends = { business = "http://127.0.0.1:9001/mcp/" }
-
-[execution]
-default_concurrency = 4
-max_concurrency = 20
-max_repeat_count = 20
-max_cases_per_run = 200
-max_planned_case_runs = 1000
-real_tool_allowlist = []
-python_driver_allowlist = []
-subprocess_allowlist = []
-
-[target_network]
-allow_private_networks = false
-# 本地开发默认允许以下三个主机；共享/生产环境应收窄为实际 Target 主机。
-allowed_hosts = ["localhost", "127.0.0.1", "::1"]
-
-[reporting]
-# 超限时明确拒绝，避免浏览器静默下载不完整报告或证据包。
-max_report_case_runs = 10000
-max_export_records = 10000
-```
-
-Target 和模型凭据只保存 `env:VARIABLE_NAME` 引用，不接受明文 Key。Real Tool 还需要部署
-allowlist、ExecutionProfile Provider 链和用户授权同时成立。
-
-Target 的 HTTP(S) 地址在保存和每次运行前都会经过出站策略校验。未显式放行时，链路本地、
-回环、私网和解析到非公网地址的主机会被拒绝；生产环境不要使用
-`allow_private_networks = true`，应在 `allowed_hosts` 中逐项配置受信主机（支持 `*.example.com`）。
-
-评测报告和 JSON/Markdown/HTML 数据导出由服务端遍历完整分页生成，并复用运行证据脱敏器。
-生成期间数据集合发生变化会返回可重试冲突；超过 `[reporting]` 上限会明确拒绝，不会截断文件。
-
-本地 ACP Target 的启动脚本必须先由部署管理员加入 `subprocess_allowlist`。编码 Agent
-可通过 MCP 的 `list_driver_types` 查看 Driver 是否已部署就绪，再用
-`get_target_schema(driver_type="acp")` 获取完整 options Schema 和无凭据示例。
-`check_target` 会检查 command、cwd、allowlist、Secret 引用和隔离配置，并实际完成一次
-不发送 prompt 的 ACP initialize/session 探针。
-
-如启用访问鉴权，先设置实际 Token，再在配置中引用：
-
-```bash
-export AGENTRIG_ACCESS_TOKEN='replace-with-a-random-token'
-```
-
-浏览器首次收到 401 时会自动显示“设置访问令牌”对话框，也可以从右上角用户菜单打开。
-令牌只保存在当前浏览器的本地存储中。Codex 需继承同名环境变量，并在 MCP 配置中设置
-`bearer_token_env_var`。
-
-容器内 ACP Agent 需要访问宿主机上的 Proxy。此时不要继续使用回环地址；应同时启用
-Token，并显式配置容器可达地址：
-
-```toml
-[server]
-host = "0.0.0.0"
-port = 8000
-api_token_ref = "env:AGENTRIG_ACCESS_TOKEN"
-
-[proxy]
-public_url = "http://host.docker.internal:8000/proxy"
-```
-
-AgentRig 会把服务 Token 和 CaseRun 的短期 Scope 一起注入 ACP MCP 配置。不要在
-`agentrig.toml`、Target 或 Codex 配置中写入实际 Token。
-
-## 开发校验
+主分支 CI 覆盖 Python 3.12/3.13、PostgreSQL migration、公开参考场景、wheel 隔离安装、前端
+单元测试、浏览器与可访问性测试、依赖审计和生产构建。
 
 ```bash
 uv run ruff check src tests scripts examples
@@ -196,15 +160,17 @@ uv run pytest
 cd web && npm run typecheck && npm run test:coverage && npm run e2e && npm run build
 ```
 
-架构、接口边界和模块说明见 [docs](./docs/README.md)，编码 Agent 工作流见
-[skills](./skills/README.md)。AgentTeams 比赛环境配置、三角色包构建和部署步骤见
-[deploy/agentteams](./deploy/agentteams/README.md)。
+## 版本与成熟度
 
-## 状态
+当前版本为 `0.2.0a0`，定位为 **GOAI 2026 参赛预览版 / Alpha**。V2 三角色协作闭环、公开
+Reference CI、证据导出与安全边界均已实现并完成本机验收；当前适合评测复现、比赛演示和受控
+试点，尚不是无人值守生产环境的通用 GA 版本。生产试点应保留计划确认、人工审批、最小权限和
+审计门禁。
 
-当前版本为 `0.2.0a0`。V2 实现已落地，并提供真实 AgentTeams、Matrix、lassist 和
-DeepSeek 的本机联调路径；仍处于 Alpha 阶段，不建议直接作为无人值守的生产发布门禁。
+## 参与项目
 
-## License
+提交问题或改进前请阅读[支持指南](./SUPPORT.md)、[贡献指南](./CONTRIBUTING.md)和
+[安全策略](./SECURITY.md)。安全漏洞请使用 GitHub Private Vulnerability Reporting，不要创建
+公开 Issue。
 
-MIT — 见 [LICENSE](./LICENSE)。
+AgentRig 使用 [MIT License](./LICENSE)。

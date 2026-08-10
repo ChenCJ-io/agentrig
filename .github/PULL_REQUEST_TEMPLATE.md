@@ -1,18 +1,32 @@
-## 动机 / Motivation
+## Why / 动机
 
-为什么改？（链接相关 issue）
+<!-- What user or engineering problem does this solve? Link the issue when available. -->
 
-## 改动 / Changes
+## What changed / 改动
 
-做了什么？
+<!-- Summarize the behavior, API, data, UI, documentation, or workflow changes. -->
 
-## 验证 / Verification
+## Boundaries and risk / 边界与风险
 
-- [ ] `uv run ruff check` 过
-- [ ] `uv run mypy` 过
-- [ ] `uv run pytest` 过（或补充了新测试）
-- [ ] 若改 `web/`：`cd web && npm run build` 过
+<!-- What is intentionally out of scope? Note compatibility, migration, permissions, evidence integrity, and rollback. -->
 
-## 关联 issue
+## Verification / 验证
 
-Closes #
+<!-- Replace or extend this list with the commands actually run. -->
+
+- [ ] `uv run ruff check src tests scripts examples`
+- [ ] `uv run mypy src/agentrig`
+- [ ] `uv run pytest`
+- [ ] If `web/` changed: typecheck, coverage, E2E, and build pass
+- [ ] If execution/evidence changed: Reference Demo and evidence validation pass
+- [ ] User-visible behavior includes a screenshot or evidence reference
+- [ ] Documentation and changelog are updated when needed
+- [ ] No secrets, private data, generated caches, or local paths are included
+
+## Evidence / 证据
+
+<!-- Add redacted logs, screenshots, Run IDs, or before/after output. -->
+
+## Related issue
+
+<!-- Closes #123 -->

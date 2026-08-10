@@ -44,8 +44,9 @@ export AGENTRIG_DATABASE__URL='postgresql+asyncpg://user:pass@localhost/agentrig
 uv run agentrig db upgrade
 ```
 
-开发启动时 `ServiceContainer.initialize()` 也会 `create_all`，方便内存测试和首次本地使用；
-正式部署应以 Alembic 为准。
+持久化数据库不会由 ORM 元数据静默补表。服务启动时会校验 Alembic revision；数据库未初始化
+或版本落后时直接失败，并提示先执行 `uv run agentrig db upgrade`。只有隔离的内存测试库会由
+测试装配代码创建表。
 
 共享或公网部署需启用 MCP/HTTP Bearer 鉴权。配置只保存环境变量引用：
 
@@ -264,11 +265,13 @@ backends = { business = "http://127.0.0.1:9001/mcp/" }
 
 ```bash
 uv run agentrig demo
-uv run ruff check src tests examples
+uv run ruff check src tests scripts examples
 uv run mypy src/agentrig
 uv run pytest
 cd web
 npm run typecheck
+npm run test:coverage
+npm run e2e
 npm run build
 ```
 

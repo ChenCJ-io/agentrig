@@ -1,12 +1,20 @@
 [project]
 name = "agentrig"
 version = "0.2.0a0"
-description = "The MCP-native test rig for AI agents."
+description = "Evidence-first, MCP-native regression testing and multi-agent evaluation for AI agents."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
 authors = [{ name = "AgentRig Contributors" }]
-keywords = ["mcp", "agent", "testing", "regression", "llm", "ai", "model-context-protocol"]
+keywords = [
+    "mcp",
+    "ai-agent",
+    "agent-evaluation",
+    "regression-testing",
+    "multi-agent",
+    "llm",
+    "model-context-protocol",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: FastAPI",
@@ -46,6 +54,8 @@ Homepage = "https://github.com/ChenCJ-io/agentrig"
 Repository = "https://github.com/ChenCJ-io/agentrig"
 Issues = "https://github.com/ChenCJ-io/agentrig/issues"
 Changelog = "https://github.com/ChenCJ-io/agentrig/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/ChenCJ-io/agentrig/blob/main/docs/README.md"
+Security = "https://github.com/ChenCJ-io/agentrig/security/policy"
 
 [project.scripts]
 agentrig = "agentrig.cli:main"

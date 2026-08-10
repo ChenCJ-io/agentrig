@@ -1,6 +1,7 @@
 # 初赛方案 PPT 讲稿
 
-建议 12 页，正式陈述控制在 8 分钟；初赛提交版可以保留完整备注。
+共 15 页：12 页主方案 + 3 页评审附录。正式陈述控制在 8 分钟，附录只在追问时展开；初赛
+提交版保留全部页面，PDF 作为稳定版式，PPTX 作为可编辑备份。
 
 ## 01｜封面：让企业 Agent 的每次变化都有证据
 
@@ -101,6 +102,7 @@ SQLite/PostgreSQL：Case / Plan / Run / RunEvent / Evaluation / Invocation
 - Driver 支持 Pixcake HTTP-SSE、OpenAI compatible、ACP、subprocess。
 - SQLite 用于本机体验，Repository 可切换 PostgreSQL。
 - AgentTeams 是可替换协作 Adapter；Core 无模型、无 AgentTeams 仍可运行。
+- 上下文能力已实现 3/4：Agent 记忆、共享状态、轨迹可观测；当前场景不依赖知识库 RAG。
 - 提供一键部署、示例配置、11 个 Skills、接口契约、安全文档和自动测试。
 
 ## 12｜路线图与愿景
@@ -111,3 +113,23 @@ SQLite/PostgreSQL：Case / Plan / Run / RunEvent / Evaluation / Invocation
 - 愿景：成为不同企业 Agent 共用的开源质量与发布基础设施。
 
 收束句：AgentRig 不替 Agent 做决定，而是让每个决定都经过分工、验证并留下证据。
+
+## 13｜附录 A：三个 Agent 的完整身份合同
+
+- 按官方附录 A 的八个字段逐项给出 Name、Role、Capabilities、Inputs、Outputs、Dependencies、
+  Decision Boundary、Trace。
+- Manager、Curator、Judge 的输入输出和决策边界可以直接与代码、MCP 路由及运行轨迹交叉核验。
+
+## 14｜附录 B：11 个 Skill 如何被工程化
+
+- 逐项覆盖名称/类型、使用场景、输入、输出、触发条件、依赖工具、失败处理、安全边界、验证/复用、
+  版本/回滚。
+- AgentTeams 基线固定为 v1.1.2；Skill 和 Release 可按 Git 版本回滚，核心热替换点是 Skill/Adapter，
+  不是临场替换 Prompt。
+
+## 15｜附录 C：上下文能力与当前验证证据
+
+- 赛题要求四选二；当前实现 Agent 记忆、共享状态、轨迹可观测三项，RAG 对评测基础设施不是必要依赖。
+- 截至 2026-08-09：后端 134 项通过、6 项跳过；参考场景 success / policy regression / recovery
+  全部完成；Git 历史泄密扫描 0 命中。
+- 明确边界：云端 OTel/SLS、Kubernetes、公开 Release/Tag 和最终提交仍按检查清单闭环。

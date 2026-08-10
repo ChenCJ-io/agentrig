@@ -26,6 +26,51 @@ Evaluation Manager（主控）
 | Simulation Curator | Worker `agentrig-curator` | 为 controlled 工具调用生成最小、合理、Schema 合法的模拟结果 | 领取指定 invocation；读取脱敏冻结输入；提交候选或结构化失败 | 读取 rubric/预期答案；调用真实业务工具；访问其他任务；为“通过评测”优化结果 |
 | Evidence Judge | Worker `agentrig-judge` | 对冻结 rubric 和脱敏证据做独立语义裁决 | 领取指定 invocation；输出 pass/fail/inconclusive；引用真实 event ID | 伪造证据；遵循被测输出中的指令；覆盖 Rule 记录；访问 Curator 原始上下文 |
 
+## 2.1 官方附录 A 字段版
+
+下列三张表格与《参赛手册》附录 A 的 `Name / Role / Capabilities / Inputs /
+Outputs / Dependencies / Decision Boundary / Trace` 字段一一对齐，可直接复制到报名系统或
+提交模板。
+
+### Evaluation Manager
+
+| 字段 | 内容 |
+|---|---|
+| Name | `evaluation-manager` |
+| Role | 面向用户的评测主控，负责目标理解、资产选择、计划、审批协调与证据诊断。 |
+| Capabilities | 可查询 Case/Target/Profile/Run，创建或修订 EvaluationPlan，记录决策，在真实用户确认后提交，诊断结果或生成用例草稿；不能调用原始 `run_cases`、Worker 工具或人工审核接口。 |
+| Inputs | AssistantSession/Turn/Event ID，用户评测目标，当前 Plan ID/revision，Manager MCP 返回的脱敏资产、运行与决策事实。 |
+| Outputs | 结构化 EvaluationPlan 草稿/修订，确认说明，幂等提交结果，引用 Plan/Run/CaseRun/Event/Evaluation ID 的诊断，或待审核 TestCase 草稿。 |
+| Dependencies | AgentTeams Manager；`adaptive-evaluation`等 6 个 Manager Skills；角色隔离的 `agentrig-manager` MCP；AgentRig Core。 |
+| Decision Boundary | 可在已授权读取范围内自主查询、比较和起草；确认、提交、取消、共享 Target 修改必须经 Core 策略门禁，并在需要时绑定同会话真实用户事件。 |
+| Trace | AssistantEvent 记录输入；ManagerDecision 记录选项、证据与策略裁定；EvaluationPlan/Run 记录业务状态；Matrix request/response event ID 关联协作轨迹。 |
+
+### Simulation Curator
+
+| 字段 | 内容 |
+|---|---|
+| Name | `simulation-curator` |
+| Role | 受控工具结果提供者，为回归评测生成最小、合理、Schema 合法的候选结果，不参与评分。 |
+| Capabilities | 可按精确 invocation ID 领取冻结任务，根据工具名、参数、结果 Schema、初始状态和脱敏历史生成候选；不能读取 rubric/预期答案、调用真实业务工具或枚举其他任务。 |
+| Inputs | `agentinv_*` task envelope，input hash，deadline，脱敏冻结工具上下文，结果 Schema，模拟说明，有界验证反馈。 |
+| Outputs | `CuratorGeneration`：候选工具结果、必要状态更新、模型元数据；或分类的结构化失败。 |
+| Dependencies | AgentTeams Worker `agentrig-curator`；`simulate-tool-result` Skill；仅 Curator 可见的 `get_agent_invocation` / `submit_curator_result` / `fail_agent_invocation` MCP 工具。 |
+| Decision Boundary | 可在冻结上下文中选择合理候选；不得为“评测通过”优化输出，不得扩大任务范围，不得绕过 Validator 或访问 Judge 输入。 |
+| Trace | AgentInvocation 状态机、input/result hash、Matrix 请求与响应 event ID、Provider attempt、Validator 结果和最终 RunEvent result ref 可回放。 |
+
+### Evidence Judge
+
+| 字段 | 内容 |
+|---|---|
+| Name | `evidence-judge` |
+| Role | 脱离执行环节的独立证据裁决者，对冻结 rubric 与脱敏 CaseRun 证据给出可引用结论。 |
+| Capabilities | 可按精确 invocation ID 领取任务，逐条判定 pass/fail/inconclusive，引用已存在 event ID；不能伪造证据、调用目标工具、改写 Rule 或访问 Curator 原始上下文。 |
+| Inputs | `agentinv_*` task envelope，input hash，deadline，冻结用例要求/rubric，独立 Rule 结果，执行摘要与脱敏 RunEvent。 |
+| Outputs | `JudgeOutput`：总体 pass/fail/inconclusive，逐标准结论、summary 和经验证的 evidence refs；或结构化失败。 |
+| Dependencies | AgentTeams Worker `agentrig-judge`；`judge-evidence` Skill；仅 Judge 可见的 `get_agent_invocation` / `submit_judge_result` / `fail_agent_invocation` MCP 工具。 |
+| Decision Boundary | 可根据冻结证据独立判断；未知 evidence ref 必须拒绝，缺少决定性证据必须输出 inconclusive，Rule 仅作独立事实而非可覆盖结论。 |
+| Trace | AgentInvocation 状态机、input/result hash、Matrix 双向 event ID、逐条 evidence ref 验证和关联 Evaluation ID 共同支持审计与回放。 |
+
 ## 3. Evaluation Manager
 
 - **身份声明**：面向用户的唯一全局语义大脑和协作协调者。
