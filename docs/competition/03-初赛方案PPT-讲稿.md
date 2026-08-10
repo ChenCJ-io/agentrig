@@ -1,135 +1,98 @@
 # 初赛方案 PPT 讲稿
 
-共 15 页：12 页主方案 + 3 页评审附录。正式陈述控制在 8 分钟，附录只在追问时展开；初赛
-提交版保留全部页面，PDF 作为稳定版式，PPTX 作为可编辑备份。
+共 15 页：12 页主方案 + 3 页评审附录。正式陈述控制在 8 分钟，附录用于评委追问；提交版
+同时提供 Keynote 终检后的 PDF 稳定版和可编辑 PPTX。
 
-## 01｜封面：让企业 Agent 的每次变化都有证据
+## 01｜让企业 Agent 的每次变化都有证据
 
-- AgentRig：多 Agent 可审计评测基础设施
-- GOAI 2026 · Agent Infra 新智基座
-- 关键词：AgentTeams / MCP / Evaluation / Evidence / Audit
+Agent 不缺一次成功的 Demo，缺的是每次升级后都能回答四个问题：哪里变了、为什么通过、
+证据是什么、能不能安全重跑。AgentRig 是一套多 Agent 可审计评测基础设施：AgentTeams
+负责协作，AgentRig 负责事实、验证与审计。
 
-讲解：Agent 不缺一次成功的 Demo，缺的是每次升级后都能回答“哪里变了、为什么通过、证据
-是什么、能否安全重跑”。
+## 02｜Agent 的风险，不止是回答错一次
 
-## 02｜问题：传统测试方法不适配 Agent
+真正困难的不是看到一次错误，而是事后无法复原它为什么这样做：输出存在随机性，真实工具有
+成本和副作用，Judge 可能脱离运行事实，多轮状态与审批又共同影响行为。AgentRig 的目标是把
+聊天质量问题，变成可以持续验证的工程问题。
 
-- 输出具有随机性，字符串快照既脆弱又无法解释语义。
-- Agent 会调用工具，真实工具昂贵、有副作用，纯 mock 又缺乏合理性。
-- LLM-as-Judge 容易看到预期答案、接受伪造证据或与运行事实脱节。
-- 多轮状态、版本、工具链和审批使问题从“接口测试”升级为“执行治理”。
+## 03｜从一句目标，到一条可审计 Run
 
-讲解：我们解决的不是聊天质量打分，而是企业 Agent 的持续验证基础设施。
+用户只描述目标。Manager 先查询 Case、Target、Profile 与历史 Run，生成可预览、可修订的计划；
+用户确认必须绑定真实 user event 与同一 plan revision；系统随后执行 Rule 和 Judge，保存证据并
+解释结果。关键边界只有一句：没有确认，不产生 Run。
 
-## 03｜用户价值：从一句目标到可审计 Run
+## 04｜三种职责，三条不可越过的边界
 
-1. 用户描述目标，不需要先理解平台数据模型。
-2. Manager 查询现有 Case、Target、Profile 和历史 Run。
-3. 页面预览范围、版本、数量、Provider、Evaluator 和风险。
-4. 用户明确确认后才提交。
-5. 系统执行、验证、裁决并保存证据。
-6. Manager 解释结果或把失败沉淀为新用例草稿。
+- Manager 把目标变成可确认计划，但不能直接调用原始 `run_cases`。
+- Simulation Curator 生成合理、Schema 合法的工具结果，但看不到 rubric 与预期答案。
+- Evidence Judge 基于冻结证据独立裁决，但不能改执行，也不能造证据。
 
-## 04｜三 Agent：职责分离，不为数量而拆分
+这不是为了凑 Agent 数量，而是同时避免越权执行、目标泄漏和执行者自评。
 
-| Agent | 不可替代工作 | 为什么不能合并 |
-|---|---|---|
-| Manager | 目标理解、资产选择、计划、审批、诊断 | 需要全局业务上下文，但不能持有 Worker 越权能力 |
-| Curator | 在看不到 rubric 的前提下生成合理工具结果 | 防止根据预期答案“作弊式模拟” |
-| Judge | 在执行结束后独立裁决并引用证据 | 防止执行者自评和结论污染事实 |
+## 05｜AgentTeams 是运行时事实
 
-## 05｜AgentTeams 如何真实进入系统
+AgentTeams v1.1.2 管理三角色的身份、生命周期和工作区；Matrix 负责定向投递与回执；MinIO 保存
+版本化角色包和 Skills；Higress 隔离三套 MCP route。AgentRig 只保存协作事件与业务 invocation
+之间的 event ID、hash、结果引用和终态映射，Core 不依赖 AgentTeams 的内部类型。
 
-- AgentTeams v1.1.2 管理 Manager/Worker 生命周期、身份和工作区。
-- Matrix 完成定向唤醒、任务投递、进度与最终回执。
-- MinIO 保存 AgentTeams 角色工作区和 Skills。
-- Higress 为三个身份提供相互隔离的 MCP route。
-- AgentRig Adapter 把 AgentTeams 协作投影到业务 invocation，不把框架类型写入 Core。
+## 06｜两条责任链，一份权威事实
 
-讲解：不是在 PPT 中“提到 AgentTeams”，三个身份和双向 Matrix event ID 都可以现场核验。
+协作链从 Web Assistant、Manager、Matrix 到 Curator/Judge；事实链从 EvaluationPlan、Core Run、
+Target/Driver 到 Evidence Store。两层之间只通过 Adapter 合同传递 event、hash 和 status。
+任何 Agent 都不能用聊天文本改写已经发生的 RunEvent。
 
-## 06｜闭环架构：协作层与事实层分离
+## 07｜可复用能力，不是一次性 Prompt
 
-```text
-Web → AgentTeams Manager → Manager MCP → EvaluationPlan
-                                     ↓ 用户确认
-AgentRig Core → lassist/Pixcake → Tool Call
-       │              ▲
-       ├→ Curator Worker ─→ controlled ToolResult
-       └→ Judge Worker  ─→ evidence-linked verdict
-       ↓
-SQLite/PostgreSQL：Case / Plan / Run / RunEvent / Evaluation / Invocation
-```
+AgentRig 提供 11 个版本化 Skill：6 个 Manager、2 个 Worker、3 个 Core。每个比赛核心 Skill
+不只写名称，还定义输入输出、调用条件、依赖、失败处理、安全边界、验证复用和版本回滚。
+Manager、Curator、Judge 使用三套最小权限 MCP 工具集，Prompt 从来不是权限边界。
 
-讲解：AgentTeams 管“谁协作”，AgentRig Core 管“什么是事实”。任一 Agent 不能通过聊天文本
-改写权威运行记录。
+## 08｜结论必须回到证据
 
-## 07｜Skill 与 MCP：可复用能力，不是一次性 Prompt
+Case、Target、Profile 在计划阶段形成冻结快照；运行过程中只追加 RunEvent。Rule Evaluator 做
+确定性断言，Evidence Judge 做语义判断，两份 Evaluation 独立存档。Judge 只能引用本次 Run
+真实存在的 event ID；任何未知 `evidence_ref` 在进入事实库前都会被拒绝。
 
-- 6 个 Manager Skills：证据化决策、规划、执行、诊断、用例草稿、Target 配置。
-- 2 个 Worker Skills：工具结果模拟、证据裁决。
-- 3 个 Core Skills：运行、用例构建、样本收集。
-- 每个比赛核心 Skill 定义触发条件、输入输出、依赖工具、失败、重试、安全边界和版本合同。
-- 三个角色 MCP 工具集物理隔离，Manager 没有原始 `run_cases`，Worker 不能枚举任务。
+## 09｜模型提议，确定性后端放行
 
-## 08｜可信评测：防止“Judge 说通过就通过”
+计划状态严格经过 `draft → confirmed → submitted`，确认绑定 user event 与 plan revision。
+密钥只保存 `env:`/Secret 引用；模型和 Worker 输入统一脱敏；重复提交复用幂等键；超时、取消、
+失败都是显式终态。AgentTeams 故障不会破坏 Core 与既有证据。
 
-- TestCase、Target、Profile 在计划阶段形成不可变快照。
-- Rule Evaluator 提供确定性断言；Judge 提供语义判断，两份结果独立保存。
-- Judge 只能引用本次 Run 中存在的 event ID。
-- Curator 永远看不到 rubric、分数和预期答案。
-- Worker 输出先经过 Pydantic/JSON Schema/证据引用校验，再进入事实库。
+## 10｜真实产品，不是概念图
 
-## 09｜安全、审批与恢复
+页面展示的是本机 lassist/Pixcake Agent 的真实运行：左侧是评测会话，中间是 Manager 诊断和
+证据引用，右侧是三角色状态、当前计划与实际执行路径。成功闭环和策略回归都能追到 Run、
+Evaluation 与 Matrix 双向 event ID。
 
-- draft → confirmed → submitted，确认必须绑定真实用户事件和同一 revision。
-- 密钥只通过 `env:`/Secret 引用，Matrix、日志和 Skill 不保存明文。
-- Redactor 对模型和 Worker 输入统一脱敏。
-- 幂等键防重复提交；超时、取消、失败均为显式终态。
-- AgentTeams 不可用时，智能助手返回 unavailable，但 V1 Core 与已保存证据不受损。
+## 11｜可运行、可替换、可复核
 
-## 10｜真实 Demo：成功、失败与证据
+Core 在无模型、无 AgentTeams 时仍能完成确定性回归。当前快照包含 134 项后端测试、30 项 Web
+单测、2 项 E2E 与 0 项历史密钥命中。Driver 支持 Pixcake、OpenAI-compatible、ACP 和 subprocess；
+Driver、Provider、Evaluator、Skill、Adapter 都是可替换契约，工程包采用 MIT License。
 
-- 被测对象：本机 lassist/Pixcake Agent，不是伪造 Driver。
-- 成功场景：背景增强 → `apply_image_prompt` → Curator 模拟成功 → Judge pass → Rule 3/3。
-- 失败场景：策略要求编辑前二次确认，但被测 Agent 直接调用工具 → Rule/Judge fail。
-- 安全场景：未确认计划不能提交；Worker/MCP 错误保留结构化状态和已有 RunEvent。
-- 页面展示 Session、Plan、三个 Agent、Invocation、Run 和 Matrix 双向 event ID。
+## 12｜从“看起来能跑”到“证据足够发布”
 
-## 11｜工程与开放价值
+当前已完成三 Agent 协作、成功/策略回归证据和开源工程包；下一阶段补齐可执行 Trace 报告、
+恢复/性能指标与版本对比；规模化阶段再进入 PostgreSQL、Kubernetes、OTel/SLS 和发布门禁。
 
-- Python 3.12、FastAPI、SQLAlchemy、React、MCP；MIT License。
-- Driver 支持 Pixcake HTTP-SSE、OpenAI compatible、ACP、subprocess。
-- SQLite 用于本机体验，Repository 可切换 PostgreSQL。
-- AgentTeams 是可替换协作 Adapter；Core 无模型、无 AgentTeams 仍可运行。
-- 上下文能力已实现 3/4：Agent 记忆、共享状态、轨迹可观测；当前场景不依赖知识库 RAG。
-- 提供一键部署、示例配置、11 个 Skills、接口契约、安全文档和自动测试。
+收束句：AgentRig 不替 Agent 做决定，而是让每次变化都留下可核验的证据。
 
-## 12｜路线图与愿景
+## 13｜附录 A：三个 Agent 的身份合同
 
-- 初赛：公开设计、身份清单、真实三 Agent Demo。
-- 复赛：失败/恢复视频、可执行代码包、Trace/运行报告与性能指标。
-- 决赛：PostgreSQL/Kubernetes 部署、OTel/SLS 可观测、跨 Agent 版本对比与发布门禁。
-- 愿景：成为不同企业 Agent 共用的开源质量与发布基础设施。
-
-收束句：AgentRig 不替 Agent 做决定，而是让每个决定都经过分工、验证并留下证据。
-
-## 13｜附录 A：三个 Agent 的完整身份合同
-
-- 按官方附录 A 的八个字段逐项给出 Name、Role、Capabilities、Inputs、Outputs、Dependencies、
-  Decision Boundary、Trace。
-- Manager、Curator、Judge 的输入输出和决策边界可以直接与代码、MCP 路由及运行轨迹交叉核验。
+表格按角色、能力、输入、输出、依赖、决策边界和审计追踪逐项对照。评委可以直接把这些字段与
+Identity 清单、MCP route、Invocation 和 Matrix event ID 交叉核验。
 
 ## 14｜附录 B：11 个 Skill 如何被工程化
 
-- 逐项覆盖名称/类型、使用场景、输入、输出、触发条件、依赖工具、失败处理、安全边界、验证/复用、
-  版本/回滚。
-- AgentTeams 基线固定为 v1.1.2；Skill 和 Release 可按 Git 版本回滚，核心热替换点是 Skill/Adapter，
-  不是临场替换 Prompt。
+左侧给出 11 个 Skill 的完整 inventory，右侧对齐官方合同字段：名称/类型、使用场景、输入、输出、
+调用条件、依赖工具、失败处理、安全边界、验证/复用、版本/回滚。Skill 随 Git 版本管理，
+AgentTeams 基线锁定 v1.1.2；回滚完整 Release 与角色包，不在现场热替换 Prompt。
 
-## 15｜附录 C：上下文能力与当前验证证据
+## 15｜附录 C：上下文能力与验证台账
 
-- 赛题要求四选二；当前实现 Agent 记忆、共享状态、轨迹可观测三项，RAG 对评测基础设施不是必要依赖。
-- 截至 2026-08-09：后端 134 项通过、6 项跳过；参考场景 success / policy regression / recovery
-  全部完成；Git 历史泄密扫描 0 命中。
-- 明确边界：云端 OTel/SLS、Kubernetes、公开 Release/Tag 和最终提交仍按检查清单闭环。
+赛题要求四选二；当前实现 Agent 记忆、共享状态和轨迹可观测三项，RAG 对此评测场景不是必要
+依赖。当前验证台账为：后端 134 passed / 6 skipped，Web 30 unit + 2 E2E，参考场景 3 个，
+Gitleaks 0 命中，Curator/Judge 双向 Matrix 回执可核验。
+
+边界同样明确：云端 OTel/SLS、Kubernetes 与公开 Release/Tag 仍未完成，不写成当前能力。

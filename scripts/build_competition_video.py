@@ -23,11 +23,7 @@ COMPETITION_DIR = ROOT / "docs" / "competition"
 CAPTURE_DIR = COMPETITION_DIR / "assets" / "video"
 DECK_PDF = COMPETITION_DIR / "AgentRig-GOAI-2026-初赛方案.pdf"
 DEFAULT_OUTPUT = (
-    ROOT
-    / "dist"
-    / "competition"
-    / "GOAI-2026-AgentRig-初赛材料"
-    / "AgentRig-GOAI-2026-Demo.mp4"
+    ROOT / "dist" / "competition" / "GOAI-2026-AgentRig-初赛材料" / "AgentRig-GOAI-2026-Demo.mp4"
 )
 
 
@@ -89,7 +85,7 @@ SCENES = (
     ),
     Scene(
         30,
-        "slide-10.png",
+        "07-policy-failure.png",
         "评测平台不应只演示绿灯。接下来切换到二次确认策略场景。这个用例要求图片编辑前先"
         "向用户明确确认；我们会故意保留一次产品策略回归，让失败路径同样可以被复现和审计。",
     ),
@@ -102,7 +98,7 @@ SCENES = (
     ),
     Scene(
         33,
-        "slide-15.png",
+        "slide-09.png",
         "故障也不会被抹掉。首次负向运行触发有界超时后，系统保留已有 RunEvent、Rule 失败和"
         "Curator 回执，不伪造尚未发生的 Judge 结论。修正配置后新建 Run，旧 Attempt 依然可"
         "审计，幂等恢复不会覆盖历史。",
@@ -282,7 +278,9 @@ def split_caption(text: str, max_chars: int = 25) -> list[str]:
     placeholders = {f"§{index}§": term for index, term in enumerate(protected_terms)}
     for placeholder, term in placeholders.items():
         text = text.replace(term, placeholder)
-    clauses = [item.strip() for item in re.findall(r"[^。！？；]+[。！？；]?", text) if item.strip()]
+    clauses = [
+        item.strip() for item in re.findall(r"[^。！？；]+[。！？；]?", text) if item.strip()
+    ]
     cues: list[str] = []
     for clause in clauses:
         remainder = clause
@@ -415,9 +413,7 @@ def main() -> None:
         for index, scene in enumerate(SCENES, start=1):
             print(f"Building scene {index:02d}/{len(SCENES)} ({scene.duration}s)", flush=True)
             audio = work_dir / f"narration-{index:02d}.aiff"
-            narration_durations.append(
-                synthesize_narration(scene, audio, args.voice, args.rate)
-            )
+            narration_durations.append(synthesize_narration(scene, audio, args.voice, args.rate))
             scene_output = work_dir / f"scene-{index:02d}.mp4"
             build_scene(ffmpeg, scene, source_image(scene, work_dir), audio, scene_output)
             scene_files.append(scene_output)

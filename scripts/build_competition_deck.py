@@ -1,4 +1,8 @@
-"""Build the editable GOAI 2026 AgentRig proposal deck."""
+"""Build the editable GOAI 2026 AgentRig proposal deck.
+
+The deck intentionally uses an editorial, evidence-first visual language. Main
+slides make one argument at a time; dense contract details live in appendices.
+"""
 
 from __future__ import annotations
 
@@ -13,31 +17,49 @@ from pptx.util import Inches, Pt
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs/competition/AgentRig-GOAI-2026-初赛方案.pptx"
-SCREENSHOT = ROOT / "docs/competition/assets/agentrig-assistant.png"
+ASSETS = ROOT / "docs/competition/assets"
+ASSISTANT_SCREENSHOT = ASSETS / "agentrig-assistant.png"
+TEAM_SCREENSHOT = ASSETS / "video/03-agentteams-evidence.png"
+SUCCESS_SCREENSHOT = ASSETS / "video/05-success-evidence.png"
 
-INK = "151719"
-GRAPHITE = "252927"
-MUTED = "59615D"
-FAINT = "737B77"
-CANVAS = "F1F3F2"
-SURFACE = "F7F8F7"
+SLIDE_W = 13.333
+SLIDE_H = 7.5
+TOTAL_SLIDES = 15
+
+INK = "141719"
+DARK = "1B1E22"
+TEXT = "2D3330"
+MUTED = "68716C"
+FAINT = "929A95"
+PAPER = "F7F6F2"
 WHITE = "FFFFFF"
-LINE = "D7DDD9"
-COBALT = "2457F5"
+LINE = "D9DCD7"
+COBALT = "315CF5"
 COBALT_SOFT = "E9EEFF"
-GREEN = "237A59"
-GREEN_SOFT = "E8F5EF"
-AMBER = "955900"
-AMBER_SOFT = "FFF4D8"
-CORAL = "B8403A"
-CORAL_SOFT = "FCEBEA"
+GREEN = "20785A"
+GREEN_SOFT = "E8F3EE"
+AMBER = "A86608"
+AMBER_SOFT = "F7EEDC"
+CORAL = "C34A3C"
+CORAL_SOFT = "F8E8E5"
 
 
 def rgb(value: str) -> RGBColor:
     return RGBColor.from_string(value)
 
 
-def rect(slide, x, y, w, h, *, fill=WHITE, line=LINE, radius=False):
+def box(
+    slide,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    *,
+    fill: str = WHITE,
+    stroke: str | None = LINE,
+    radius: bool = False,
+    stroke_width: float = 0.7,
+):
     shape = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE if radius else MSO_SHAPE.RECTANGLE,
         Inches(x),
@@ -47,8 +69,11 @@ def rect(slide, x, y, w, h, *, fill=WHITE, line=LINE, radius=False):
     )
     shape.fill.solid()
     shape.fill.fore_color.rgb = rgb(fill)
-    shape.line.color.rgb = rgb(line)
-    shape.line.width = Pt(0.7)
+    if stroke is None:
+        shape.line.fill.background()
+    else:
+        shape.line.color.rgb = rgb(stroke)
+        shape.line.width = Pt(stroke_width)
     if radius:
         shape.adjustments[0] = 0.08
     return shape
@@ -62,34 +87,36 @@ def text(
     w: float,
     h: float,
     *,
-    size: float = 16,
-    color: str = GRAPHITE,
+    size: float = 15,
+    color: str = TEXT,
     bold: bool = False,
     font: str = "PingFang SC",
     align=PP_ALIGN.LEFT,
     valign=MSO_ANCHOR.TOP,
     margin: float = 0,
+    line_spacing: float = 1.08,
 ):
-    box = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    frame = box.text_frame
+    shape = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    frame = shape.text_frame
     frame.clear()
+    frame.word_wrap = True
     frame.margin_left = frame.margin_right = Inches(margin)
     frame.margin_top = frame.margin_bottom = Inches(margin)
     frame.vertical_anchor = valign
     paragraph = frame.paragraphs[0]
     paragraph.alignment = align
     paragraph.space_after = Pt(0)
-    paragraph.line_spacing = 1.08
+    paragraph.line_spacing = line_spacing
     run = paragraph.add_run()
     run.text = value
     run.font.name = font
     run.font.size = Pt(size)
     run.font.bold = bold
     run.font.color.rgb = rgb(color)
-    return box
+    return shape
 
 
-def rich_lines(
+def paragraphs(
     slide,
     values: Iterable[str],
     x: float,
@@ -97,13 +124,14 @@ def rich_lines(
     w: float,
     h: float,
     *,
-    size: float = 13,
-    color: str = GRAPHITE,
-    bullet: bool = True,
-    gap: float = 7,
+    size: float = 12,
+    color: str = TEXT,
+    gap: float = 8,
+    bullet: bool = False,
+    bold: bool = False,
 ):
-    box = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
-    frame = box.text_frame
+    shape = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    frame = shape.text_frame
     frame.clear()
     frame.word_wrap = True
     frame.margin_left = frame.margin_right = Inches(0)
@@ -113,154 +141,313 @@ def rich_lines(
         paragraph.text = f"•  {value}" if bullet else value
         paragraph.font.name = "PingFang SC"
         paragraph.font.size = Pt(size)
+        paragraph.font.bold = bold
         paragraph.font.color.rgb = rgb(color)
         paragraph.space_after = Pt(gap)
         paragraph.line_spacing = 1.15
-    return box
-
-
-def line(slide, x1, y1, x2, y2, *, color=LINE, width=1.0):
-    shape = slide.shapes.add_shape(
-        MSO_SHAPE.RECTANGLE,
-        Inches(x1),
-        Inches(y1),
-        Inches(max(0.01, x2 - x1)),
-        Inches(max(0.01, y2 - y1)),
-    )
-    shape.fill.solid()
-    shape.fill.fore_color.rgb = rgb(color)
-    shape.line.fill.background()
-    if y2 - y1 <= 0.02:
-        shape.height = Pt(width)
-    if x2 - x1 <= 0.02:
-        shape.width = Pt(width)
     return shape
 
 
-def pill(slide, value, x, y, w, *, fill=COBALT_SOFT, color=COBALT, line_color=None):
-    rect(slide, x, y, w, 0.3, fill=fill, line=line_color or fill, radius=True)
+def rule(slide, x: float, y: float, w: float, *, color: str = LINE, height_pt: float = 0.8):
+    shape = box(slide, x, y, w, 0.01, fill=color, stroke=None)
+    shape.height = Pt(height_pt)
+    return shape
+
+
+def v_rule(slide, x: float, y: float, h: float, *, color: str = LINE, width_pt: float = 0.8):
+    shape = box(slide, x, y, 0.01, h, fill=color, stroke=None)
+    shape.width = Pt(width_pt)
+    return shape
+
+
+def marker(slide, value: str, x: float, y: float, *, fill: str = COBALT, size: float = 0.34):
+    shape = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(y), Inches(size), Inches(size))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = rgb(fill)
+    shape.line.fill.background()
     text(
         slide,
         value,
         x,
-        y + 0.01,
-        w,
-        0.26,
-        size=8,
-        color=color,
+        y,
+        size,
+        size,
+        size=7.5,
+        color=WHITE,
         bold=True,
-        font="Courier New",
+        font="Helvetica Neue",
         align=PP_ALIGN.CENTER,
         valign=MSO_ANCHOR.MIDDLE,
     )
 
 
-def base_slide(prs: Presentation, index: int, kicker: str, title_value: str, subtitle: str = ""):
+def add_picture(slide, path: Path, x: float, y: float, w: float, *, border: bool = True):
+    if not path.exists():
+        box(slide, x, y, w, w / 1.742, fill=WHITE, stroke=LINE)
+        text(
+            slide,
+            f"Missing asset: {path.name}",
+            x + 0.2,
+            y + 0.2,
+            w - 0.4,
+            0.3,
+            size=10,
+            color=CORAL,
+        )
+        return None
+    picture = slide.shapes.add_picture(str(path), Inches(x), Inches(y), width=Inches(w))
+    if border:
+        frame = box(
+            slide,
+            x - 0.01,
+            y - 0.01,
+            w + 0.02,
+            picture.height / Inches(1) + 0.02,
+            fill=WHITE,
+            stroke=LINE,
+        )
+        slide.shapes._spTree.remove(frame._element)
+        slide.shapes._spTree.insert(slide.shapes._spTree.index(picture._element), frame._element)
+    return picture
+
+
+def new_slide(prs: Presentation, index: int, section: str, title_value: str, subtitle: str = ""):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-    background = slide.background.fill
-    background.solid()
-    background.fore_color.rgb = rgb(CANVAS)
-    rect(slide, 0, 0, 0.12, 7.5, fill=COBALT, line=COBALT)
-    text(
-        slide, kicker, 0.55, 0.38, 6.4, 0.24, size=8, color=COBALT, bold=True, font="Courier New"
-    )
-    text(slide, title_value, 0.55, 0.72, 11.9, 0.55, size=25, color=INK, bold=True)
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = rgb(PAPER)
+    text(slide, section, 0.72, 0.36, 4.6, 0.2, size=8.5, color=COBALT, bold=True)
+    text(slide, title_value, 0.72, 0.73, 11.4, 0.53, size=27, color=INK, bold=True)
     if subtitle:
-        text(slide, subtitle, 0.57, 1.29, 11.8, 0.35, size=10, color=MUTED)
-    line(slide, 0.55, 1.72, 12.8, 1.73)
+        text(slide, subtitle, 0.74, 1.29, 11.5, 0.25, size=10.5, color=MUTED)
     text(
         slide,
-        f"AGENTRIG / GOAI 2026                                      {index:02d} / 12",
-        0.55,
-        7.18,
-        12.1,
-        0.18,
-        size=7,
-        color=FAINT,
-        font="Courier New",
-    )
-    return slide
-
-
-def appendix_slide(
-    prs: Presentation,
-    index: int,
-    kicker: str,
-    title_value: str,
-    subtitle: str = "",
-):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    background = slide.background.fill
-    background.solid()
-    background.fore_color.rgb = rgb(CANVAS)
-    rect(slide, 0, 0, 0.12, 7.5, fill=GRAPHITE, line=GRAPHITE)
-    text(
-        slide,
-        kicker,
-        0.55,
+        f"{index:02d}",
+        12.05,
         0.38,
-        6.4,
-        0.24,
-        size=8,
-        color=GRAPHITE,
-        bold=True,
-        font="Courier New",
-    )
-    text(slide, title_value, 0.55, 0.72, 11.9, 0.55, size=25, color=INK, bold=True)
-    if subtitle:
-        text(slide, subtitle, 0.57, 1.29, 11.8, 0.35, size=10, color=MUTED)
-    line(slide, 0.55, 1.72, 12.8, 1.73)
-    text(
-        slide,
-        f"AGENTRIG / GOAI 2026                         APPENDIX {index:02d} / 03",
         0.55,
-        7.18,
-        12.1,
-        0.18,
-        size=7,
+        0.25,
+        size=9,
         color=FAINT,
-        font="Courier New",
+        bold=True,
+        font="Helvetica Neue",
+        align=PP_ALIGN.RIGHT,
     )
+    rule(slide, 0.72, 1.7, 11.9)
+    footer(slide, index)
     return slide
 
 
-def card_title(slide, number, title_value, description, x, y, w, h, *, accent=COBALT):
-    rect(slide, x, y, w, h, fill=WHITE, line=LINE)
-    rect(slide, x, y, 0.05, h, fill=accent, line=accent)
+def footer(slide, index: int, *, dark: bool = False):
+    color = "727A76" if dark else FAINT
+    text(slide, "AgentRig  ·  GOAI 2026", 0.72, 7.16, 3.2, 0.16, size=7.2, color=color)
     text(
         slide,
-        number,
-        x + 0.18,
-        y + 0.17,
-        0.4,
-        0.25,
-        size=8,
-        color=accent,
-        bold=True,
-        font="Courier New",
+        f"{index:02d} / {TOTAL_SLIDES:02d}",
+        11.76,
+        7.16,
+        0.86,
+        0.16,
+        size=7.2,
+        color=color,
+        font="Helvetica Neue",
+        align=PP_ALIGN.RIGHT,
     )
-    text(slide, title_value, x + 0.18, y + 0.5, w - 0.35, 0.35, size=14, color=INK, bold=True)
-    text(slide, description, x + 0.18, y + 0.98, w - 0.35, h - 1.1, size=9.5, color=MUTED)
 
 
 def build() -> Presentation:
     prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+    prs.slide_width = Inches(SLIDE_W)
+    prs.slide_height = Inches(SLIDE_H)
 
-    # 01 cover
+    # 01 — Cover
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     slide.background.fill.solid()
-    slide.background.fill.fore_color.rgb = rgb(INK)
-    rect(slide, 0.6, 0.55, 0.54, 0.54, fill=COBALT, line=COBALT)
+    slide.background.fill.fore_color.rgb = rgb(DARK)
+    box(slide, 0.72, 0.55, 0.42, 0.42, fill=COBALT, stroke=None)
     text(
         slide,
         "A",
-        0.6,
-        0.57,
+        0.72,
         0.54,
-        0.5,
-        size=19,
+        0.42,
+        0.42,
+        size=15,
+        color=WHITE,
+        bold=True,
+        font="Helvetica Neue",
+        align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    text(slide, "AgentRig", 1.32, 0.66, 2.0, 0.24, size=10, color=WHITE, bold=True)
+    text(
+        slide,
+        "GOAI 2026  ·  Agent Infra",
+        9.55,
+        0.66,
+        3.05,
+        0.2,
+        size=8.5,
+        color="A9B0AC",
+        align=PP_ALIGN.RIGHT,
+    )
+    text(
+        slide,
+        "让企业 Agent 的\n每次变化都有证据",
+        0.72,
+        1.48,
+        6.2,
+        1.6,
+        size=35,
+        color=WHITE,
+        bold=True,
+        line_spacing=1.03,
+    )
+    text(slide, "多 Agent 可审计评测基础设施", 0.75, 3.42, 5.7, 0.36, size=17, color="C8CDCA")
+    rule(slide, 0.75, 4.1, 5.65, color="373C39")
+    text(
+        slide,
+        "AgentTeams 负责协作。\nAgentRig 负责事实、验证与审计。",
+        0.75,
+        4.38,
+        5.8,
+        0.83,
+        size=13,
+        color="9FA7A2",
+        line_spacing=1.2,
+    )
+    text(
+        slide,
+        "EVIDENCE BEFORE CONFIDENCE",
+        0.75,
+        5.73,
+        4.5,
+        0.22,
+        size=8.5,
+        color=COBALT,
+        bold=True,
+        font="Helvetica Neue",
+    )
+    add_picture(slide, SUCCESS_SCREENSHOT, 7.1, 1.34, 5.55, border=True)
+    text(
+        slide,
+        "真实 lassist/Pixcake Agent  ·  三角色协作  ·  成功与策略回归证据",
+        7.1,
+        4.66,
+        5.55,
+        0.38,
+        size=8.5,
+        color="A9B0AC",
+    )
+    rule(slide, 7.1, 5.25, 5.55, color="373C39")
+    text(slide, "2026.08  /  v0.2.0a0", 7.1, 5.53, 2.7, 0.2, size=8, color="777F7A")
+    footer(slide, 1, dark=True)
+
+    # 02 — Problem
+    slide = new_slide(
+        prs,
+        2,
+        "问题定义",
+        "Agent 的风险，不止是回答错一次",
+        "真正困难的是：事后能否复原它为什么这样做。",
+    )
+    text(
+        slide,
+        "输出可以看见，\n过程往往不可见。",
+        0.78,
+        2.14,
+        5.7,
+        1.2,
+        size=28,
+        color=INK,
+        bold=True,
+    )
+    text(
+        slide,
+        "没有冻结上下文、执行事件和独立裁决，\n一次“通过”既无法解释，也无法复现。",
+        0.8,
+        3.66,
+        5.6,
+        0.8,
+        size=14,
+        color=MUTED,
+        line_spacing=1.2,
+    )
+    box(slide, 0.78, 5.2, 5.62, 0.94, fill=COBALT, stroke=None)
+    text(
+        slide,
+        "目标：把聊天质量问题，变成可持续验证的工程问题。",
+        1.05,
+        5.45,
+        5.08,
+        0.42,
+        size=13,
+        color=WHITE,
+        bold=True,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    issues = [
+        ("输出", "随机结果让字符串快照失去解释力"),
+        ("工具", "真实调用有成本和副作用；纯 mock 又不可信"),
+        ("裁决", "Judge 可能看见答案、接受伪证据或自说自话"),
+        ("状态", "版本、审批、多轮上下文与恢复共同决定行为"),
+    ]
+    for idx, (label, detail) in enumerate(issues):
+        y = 2.04 + idx * 1.02
+        text(slide, f"0{idx + 1}", 7.05, y + 0.04, 0.42, 0.2, size=8, color=COBALT, bold=True)
+        text(slide, label, 7.58, y, 0.92, 0.3, size=14, color=INK, bold=True)
+        text(slide, detail, 8.62, y + 0.01, 3.75, 0.42, size=11, color=MUTED)
+        rule(slide, 7.05, y + 0.73, 5.4)
+
+    # 03 — Journey
+    slide = new_slide(
+        prs,
+        3,
+        "用户路径",
+        "从一句目标，到一条可审计 Run",
+        "把平台对象藏在自然语言之后，把关键边界留给用户确认。",
+    )
+    xs = [2.05, 6.65, 11.15]
+    phases = [
+        ("01", "计划", "描述目标 → 查询资产\n生成可预览、可修订的计划"),
+        ("02", "确认", "绑定真实 user event\n与同一 plan revision"),
+        ("03", "证明", "执行 → Rule / Judge\n保存证据并解释结果"),
+    ]
+    rule(slide, 1.04, 2.56, 11.15, color="BFC7C2", height_pt=1.2)
+    for idx, (number, label, detail) in enumerate(phases):
+        marker(slide, number, xs[idx] - 0.23, 2.34, fill=COBALT, size=0.46)
+        text(
+            slide,
+            label,
+            xs[idx] - 1.55,
+            3.15,
+            3.1,
+            0.4,
+            size=21,
+            color=INK,
+            bold=True,
+            align=PP_ALIGN.CENTER,
+        )
+        text(
+            slide,
+            detail,
+            xs[idx] - 1.62,
+            3.75,
+            3.24,
+            0.72,
+            size=11.5,
+            color=MUTED,
+            align=PP_ALIGN.CENTER,
+            line_spacing=1.18,
+        )
+    box(slide, 4.33, 5.38, 4.68, 0.78, fill=DARK, stroke=None)
+    text(
+        slide,
+        "没有确认，不产生 Run",
+        4.33,
+        5.39,
+        4.68,
+        0.76,
+        size=17,
         color=WHITE,
         bold=True,
         align=PP_ALIGN.CENTER,
@@ -268,377 +455,244 @@ def build() -> Presentation:
     )
     text(
         slide,
-        "AGENTRIG",
-        1.34,
-        0.72,
-        2.2,
-        0.26,
-        size=10,
-        color=WHITE,
-        bold=True,
-        font="Courier New",
-    )
-    pill(
-        slide,
-        "GOAI 2026 · AGENT INFRA",
-        9.75,
-        0.67,
-        2.75,
-        fill="252927",
-        color="BFC5C1",
-        line_color="343936",
-    )
-    text(
-        slide,
-        "让企业 Agent 的每次变化\n都有证据",
-        0.65,
-        2.02,
-        8.9,
-        1.55,
-        size=37,
-        color=WHITE,
-        bold=True,
-    )
-    text(slide, "多 Agent 可审计评测基础设施", 0.68, 3.8, 6.4, 0.42, size=18, color="BFC5C1")
-    text(
-        slide,
-        "AgentTeams 负责协作，AgentRig 负责事实、验证与审计。",
-        0.68,
-        4.45,
-        7.6,
-        0.32,
-        size=12,
-        color="8E9691",
-    )
-    for value, x, width in [
-        ("AGENTTEAMS", 0.68, 1.42),
-        ("MCP", 2.25, 0.66),
-        ("EVALUATION", 3.08, 1.38),
-        ("EVIDENCE", 4.63, 1.17),
-        ("AUDIT", 5.97, 0.78),
-    ]:
-        pill(slide, value, x, 5.3, width, fill="252927", color="BFC5C1", line_color="343936")
-    line(slide, 0.68, 6.72, 12.65, 6.73, color="343936")
-    text(
-        slide,
-        "2026.08  /  v0.2.0a0",
-        0.68,
-        6.92,
-        3.2,
-        0.2,
-        size=8,
-        color="737A76",
-        font="Courier New",
+        "计划是领域对象，不是提示词里的建议。",
+        4.3,
+        6.42,
+        4.75,
+        0.24,
+        size=10.5,
+        color=MUTED,
+        align=PP_ALIGN.CENTER,
     )
 
-    # 02
-    slide = base_slide(
-        prs, 2, "PROBLEM", "传统测试方法不适配 Agent", "问题已经从“接口断言”升级为“执行治理”"
+    # 04 — Roles
+    slide = new_slide(
+        prs,
+        4,
+        "角色设计",
+        "三种职责，三条不可越过的边界",
+        "分工不是为了凑 Agent 数量，而是隔离知识、权限和裁决。",
     )
-    items = [
-        ("01", "输出不确定", "字符串快照既脆弱，也无法解释语义是否正确。", CORAL),
-        ("02", "工具有副作用", "真实工具昂贵且修改数据；纯 mock 又缺少合理性。", AMBER),
-        ("03", "Judge 不可信", "可能看见预期答案、接受伪证据或脱离运行事实。", COBALT),
-        ("04", "状态跨多轮", "版本、工具链、审批和恢复共同决定最终行为。", GREEN),
+    box(slide, 0.72, 2.02, 4.35, 4.46, fill=DARK, stroke=None)
+    text(slide, "01  /  Manager", 1.03, 2.35, 3.7, 0.24, size=9, color="9EA6A1", bold=True)
+    text(slide, "把目标变成\n可确认的计划", 1.03, 2.9, 3.45, 0.92, size=24, color=WHITE, bold=True)
+    text(slide, "目标理解 · 资产选择 · 计划 · 诊断", 1.03, 4.25, 3.54, 0.3, size=12, color="C8CDCA")
+    rule(slide, 1.03, 4.86, 3.7, color="3A3F3C")
+    text(slide, "边界", 1.03, 5.16, 0.62, 0.2, size=8.5, color=COBALT, bold=True)
+    text(
+        slide, "不能直接调用原始 run_cases", 1.03, 5.55, 3.5, 0.32, size=12, color=WHITE, bold=True
+    )
+    workers = [
+        (
+            2.02,
+            "02  /  Simulation Curator",
+            "生成合理、Schema 合法的工具结果",
+            "看不到 rubric 与预期答案",
+            GREEN,
+        ),
+        (4.32, "03  /  Evidence Judge", "基于冻结证据独立裁决", "不能改执行，也不能造证据", AMBER),
     ]
-    for idx, (number, title_value, description, accent) in enumerate(items):
-        card_title(
-            slide,
-            number,
-            title_value,
-            description,
-            0.62 + idx * 3.08,
-            2.05,
-            2.86,
-            3.75,
-            accent=accent,
-        )
+    for y, role, work, boundary, accent in workers:
+        box(slide, 5.68, y, 6.92, 2.0, fill=WHITE, stroke=LINE)
+        box(slide, 5.68, y, 0.08, 2.0, fill=accent, stroke=None)
+        text(slide, role, 6.02, y + 0.25, 3.5, 0.22, size=9, color=accent, bold=True)
+        text(slide, work, 6.02, y + 0.68, 5.95, 0.34, size=18, color=INK, bold=True)
+        text(slide, f"边界  ·  {boundary}", 6.02, y + 1.35, 5.9, 0.27, size=10.5, color=MUTED)
     text(
         slide,
-        "目标不是再做一个聊天评分器，而是建立企业 Agent 的持续验证基础设施。",
-        0.65,
-        6.13,
-        11.9,
-        0.42,
-        size=16,
+        "隔离的结果：不越权、不泄漏目标、不让执行者自评。",
+        5.72,
+        6.61,
+        6.85,
+        0.24,
+        size=11,
+        color=CORAL,
+        bold=True,
+        align=PP_ALIGN.RIGHT,
+    )
+
+    # 05 — AgentTeams integration
+    slide = new_slide(
+        prs,
+        5,
+        "协作接入",
+        "AgentTeams 不是 PPT 依赖，而是运行时事实",
+        "身份、生命周期、工作区、MCP 路由与双向事件都可以现场核验。",
+    )
+    text(
+        slide,
+        "协作框架拥有协作；\nAgentRig 只接收可审计事件。",
+        0.76,
+        2.12,
+        4.0,
+        0.95,
+        size=21,
+        color=INK,
+        bold=True,
+    )
+    integration = [
+        ("身份与生命周期", "AgentTeams v1.1.2"),
+        ("任务与回执", "Matrix request / response event ID"),
+        ("角色工作区", "MinIO versioned roles + Skills"),
+        ("最小权限工具", "Higress isolated MCP routes"),
+    ]
+    for idx, (name, detail) in enumerate(integration):
+        y = 3.42 + idx * 0.58
+        text(slide, name, 0.78, y, 1.55, 0.22, size=10.5, color=TEXT, bold=True)
+        text(slide, detail, 2.42, y, 2.22, 0.25, size=8.7, color=MUTED)
+        rule(slide, 0.78, y + 0.39, 3.87)
+    box(slide, 0.78, 5.98, 3.86, 0.6, fill=DARK, stroke=None)
+    text(
+        slide,
+        "Core 不依赖 AgentTeams 类型",
+        0.78,
+        5.99,
+        3.86,
+        0.58,
+        size=11,
+        color=WHITE,
+        bold=True,
+        align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    picture = add_picture(slide, TEAM_SCREENSHOT, 5.05, 2.0, 7.55, border=True)
+    if picture:
+        marker(slide, "1", 8.88, 2.46, fill=COBALT)
+        marker(slide, "2", 11.78, 4.78, fill=COBALT)
+    text(
+        slide,
+        "1  三个真实角色    2  Worker 调用、输入/结果 hash 与事件回执",
+        5.05,
+        6.47,
+        7.55,
+        0.24,
+        size=8.7,
+        color=MUTED,
+    )
+
+    # 06 — Architecture
+    slide = new_slide(
+        prs,
+        6,
+        "系统架构",
+        "两条责任链，一份权威事实",
+        "AgentTeams 管“谁在协作”；AgentRig Core 管“究竟发生了什么”。",
+    )
+    text(slide, "协作层", 0.76, 2.04, 0.9, 0.24, size=9, color=GREEN, bold=True)
+    box(slide, 0.72, 2.38, 11.9, 1.2, fill=GREEN_SOFT, stroke=None)
+    collab = [
+        (1.05, "Web Assistant"),
+        (3.72, "Manager"),
+        (6.34, "Matrix"),
+        (9.0, "Curator / Judge"),
+    ]
+    for idx, (x, label) in enumerate(collab):
+        text(slide, label, x, 2.8, 2.12, 0.3, size=14, color=INK, bold=True, align=PP_ALIGN.CENTER)
+        if idx < len(collab) - 1:
+            text(
+                slide,
+                "→",
+                x + 2.2,
+                2.79,
+                0.38,
+                0.3,
+                size=17,
+                color=GREEN,
+                bold=True,
+                align=PP_ALIGN.CENTER,
+            )
+    rule(slide, 0.72, 3.82, 11.9, color=COBALT, height_pt=1.8)
+    box(slide, 5.02, 3.66, 3.28, 0.35, fill=PAPER, stroke=None)
+    text(
+        slide,
+        "Adapter boundary  ·  event / hash / status",
+        5.02,
+        3.72,
+        3.28,
+        0.17,
+        size=7.8,
+        color=COBALT,
+        bold=True,
+        align=PP_ALIGN.CENTER,
+    )
+    text(slide, "事实层", 0.76, 4.16, 0.9, 0.24, size=9, color=COBALT, bold=True)
+    box(slide, 0.72, 4.48, 11.9, 1.78, fill=COBALT_SOFT, stroke=None)
+    fact_nodes = [
+        (1.05, "EvaluationPlan", "确认与 revision"),
+        (4.25, "AgentRig Core", "运行状态机"),
+        (7.45, "Target / Driver", "真实被测对象"),
+        (10.15, "Evidence Store", "Event / Eval / Hash"),
+    ]
+    for idx, (x, label, detail) in enumerate(fact_nodes):
+        text(
+            slide,
+            label,
+            x,
+            4.91,
+            2.02,
+            0.28,
+            size=13.5,
+            color=INK,
+            bold=True,
+            align=PP_ALIGN.CENTER,
+        )
+        text(slide, detail, x, 5.38, 2.02, 0.23, size=9, color=MUTED, align=PP_ALIGN.CENTER)
+        if idx < len(fact_nodes) - 1:
+            text(
+                slide,
+                "→",
+                x + 2.28,
+                5.02,
+                0.5,
+                0.3,
+                size=16,
+                color=COBALT,
+                bold=True,
+                align=PP_ALIGN.CENTER,
+            )
+    text(
+        slide,
+        "任何 Agent 都不能用聊天文本改写 RunEvent。",
+        0.76,
+        6.57,
+        11.82,
+        0.28,
+        size=12,
         color=INK,
         bold=True,
         align=PP_ALIGN.CENTER,
     )
 
-    # 03
-    slide = base_slide(
-        prs, 3, "USER JOURNEY", "从一句目标到可审计 Run", "把平台数据模型隐藏在自然语言交互之后"
-    )
-    steps = [
-        ("01", "描述目标", "自然语言"),
-        ("02", "查询资产", "Case / Target / Profile"),
-        ("03", "预览计划", "范围 / 风险 / 数量"),
-        ("04", "用户确认", "绑定 event + revision"),
-        ("05", "执行验证", "Rule + Judge"),
-        ("06", "解释沉淀", "Evidence / Case Draft"),
-    ]
-    for idx, (number, label, detail) in enumerate(steps):
-        x = 0.58 + idx * 2.08
-        rect(slide, x, 2.55, 1.74, 1.72, fill=WHITE, line=LINE)
-        text(
-            slide,
-            number,
-            x + 0.16,
-            2.72,
-            0.4,
-            0.2,
-            size=8,
-            color=COBALT,
-            bold=True,
-            font="Courier New",
-        )
-        text(slide, label, x + 0.16, 3.12, 1.42, 0.28, size=14, color=INK, bold=True)
-        text(slide, detail, x + 0.16, 3.55, 1.42, 0.42, size=8.5, color=MUTED)
-        if idx < len(steps) - 1:
-            text(
-                slide,
-                "→",
-                x + 1.78,
-                3.16,
-                0.28,
-                0.3,
-                size=17,
-                color=COBALT,
-                bold=True,
-                align=PP_ALIGN.CENTER,
-            )
-    pill(
-        slide,
-        "NO RUN BEFORE CONFIRMATION",
-        4.78,
-        4.75,
-        3.75,
-        fill=AMBER_SOFT,
-        color=AMBER,
-        line_color="EAD39A",
-    )
-    text(
-        slide,
-        "关键边界：计划不是提示词中的“建议”，而是可预览、可修订、可确认的领域对象。",
-        1.2,
-        5.55,
-        10.9,
-        0.52,
-        size=15,
-        color=GRAPHITE,
-        bold=True,
-        align=PP_ALIGN.CENTER,
-    )
-
-    # 04
-    slide = base_slide(
-        prs,
-        4,
-        "AGENT IDENTITY",
-        "三 Agent 职责分离，不为数量而拆分",
-        "不同知识、不同权限、不同可信边界",
-    )
-    roles = [
-        (
-            "01",
-            "Manager",
-            "目标理解 · 资产选择\n计划 · 审批 · 诊断",
-            "不能直接执行原始 run_cases",
-            COBALT,
-        ),
-        (
-            "02",
-            "Simulation Curator",
-            "冻结上下文 · 工具候选\nSchema 合规结果",
-            "看不到 rubric 与预期答案",
-            GREEN,
-        ),
-        (
-            "03",
-            "Evidence Judge",
-            "冻结证据 · 独立裁决\n引用真实 event ID",
-            "不能改执行，也不能造证据",
-            AMBER,
-        ),
-    ]
-    for idx, (number, role, work, boundary, accent) in enumerate(roles):
-        x = 0.72 + idx * 4.18
-        rect(slide, x, 2.12, 3.76, 3.92, fill=WHITE, line=LINE)
-        rect(slide, x, 2.12, 3.76, 0.08, fill=accent, line=accent)
-        pill(
-            slide,
-            number,
-            x + 0.22,
-            2.48,
-            0.54,
-            fill=COBALT_SOFT if accent == COBALT else GREEN_SOFT if accent == GREEN else AMBER_SOFT,
-            color=accent,
-        )
-        text(slide, role, x + 0.22, 2.98, 3.3, 0.36, size=18, color=INK, bold=True)
-        text(slide, work, x + 0.22, 3.63, 3.3, 0.82, size=12, color=GRAPHITE, bold=True)
-        line(slide, x + 0.22, 4.72, x + 3.53, 4.73)
-        text(
-            slide,
-            "BOUNDARY",
-            x + 0.22,
-            4.98,
-            1.2,
-            0.18,
-            size=7,
-            color=FAINT,
-            bold=True,
-            font="Courier New",
-        )
-        text(slide, boundary, x + 0.22, 5.28, 3.25, 0.34, size=10, color=MUTED)
-    text(
-        slide,
-        "合并角色会产生三类风险：越权执行 / 目标泄漏 / 执行者自评",
-        0.72,
-        6.38,
-        11.8,
-        0.34,
-        size=14,
-        color=CORAL,
-        bold=True,
-        align=PP_ALIGN.CENTER,
-    )
-
-    # 05
-    slide = base_slide(
-        prs,
-        5,
-        "AGENTTEAMS",
-        "AgentTeams 如何真实进入系统",
-        "不是 PPT 依赖：身份、生命周期、Skill 和双向事件均可现场核验",
-    )
-    stack = [
-        ("AgentTeams v1.1.2", "Manager / Worker 生命周期与身份", COBALT, COBALT_SOFT),
-        ("Matrix", "定向唤醒 · 任务投递 · 最终回执", GREEN, GREEN_SOFT),
-        ("MinIO", "角色工作区 · 版本化 Skills", AMBER, AMBER_SOFT),
-        ("Higress", "三身份隔离 MCP Routes", CORAL, CORAL_SOFT),
-    ]
-    for idx, (name, detail, accent, soft) in enumerate(stack):
-        y = 2.08 + idx * 1.03
-        rect(slide, 0.72, y, 4.62, 0.78, fill=WHITE, line=LINE)
-        rect(slide, 0.72, y, 0.07, 0.78, fill=accent, line=accent)
-        text(slide, name, 0.98, y + 0.18, 1.75, 0.26, size=12, color=INK, bold=True)
-        text(slide, detail, 2.62, y + 0.2, 2.45, 0.24, size=9, color=MUTED)
-    text(slide, "→", 5.52, 3.37, 0.5, 0.5, size=27, color=COBALT, bold=True, align=PP_ALIGN.CENTER)
-    rect(slide, 6.18, 2.32, 6.2, 3.45, fill=INK, line=INK)
-    text(
-        slide,
-        "AGENTRIG ADAPTER",
-        6.52,
-        2.7,
-        2.8,
-        0.24,
-        size=8,
-        color="8E9691",
-        bold=True,
-        font="Courier New",
-    )
-    text(slide, "协作事件", 6.52, 3.24, 1.6, 0.32, size=17, color=WHITE, bold=True)
-    text(slide, "映射", 8.27, 3.24, 0.8, 0.32, size=12, color="8E9691", align=PP_ALIGN.CENTER)
-    text(slide, "业务 Invocation", 9.22, 3.24, 2.5, 0.32, size=17, color=WHITE, bold=True)
-    line(slide, 6.52, 3.8, 11.98, 3.81, color="343936")
-    rich_lines(
-        slide,
-        ["request_event_id", "response_event_id", "input / result hash", "terminal status"],
-        6.52,
-        4.14,
-        2.3,
-        1.1,
-        size=9,
-        color="BFC5C1",
-        gap=4,
-    )
-    rich_lines(
-        slide,
-        ["run_id / case_run_id", "role / deadline", "result_ref", "error boundary"],
-        9.22,
-        4.14,
-        2.3,
-        1.1,
-        size=9,
-        color="BFC5C1",
-        gap=4,
-    )
-    text(
-        slide,
-        "Core 不依赖 AgentTeams 类型；协作框架可替换，业务事实合同不变。",
-        6.52,
-        5.25,
-        5.45,
-        0.28,
-        size=10,
-        color="8E9691",
-    )
-
-    # 06
-    slide = base_slide(
-        prs,
-        6,
-        "ARCHITECTURE",
-        "协作层与事实层分离",
-        "AgentTeams 管“谁协作”，AgentRig Core 管“什么是事实”",
-    )
-    layers = [
-        ("EXPERIENCE", "Web Assistant / Plan Preview / Evidence Trail", COBALT, COBALT_SOFT),
-        ("COLLABORATION", "Manager  ⇄  Matrix  ⇄  Curator / Judge", GREEN, GREEN_SOFT),
-        ("CONTROL", "EvaluationPlan / Approval / Invocation / MCP Policies", AMBER, AMBER_SOFT),
-        ("EXECUTION", "Drivers  →  lassist/Pixcake  →  Provider Chain", CORAL, CORAL_SOFT),
-        ("FACTS", "Case / Snapshot / RunEvent / Evaluation / Hash", GRAPHITE, WHITE),
-    ]
-    for idx, (name, detail, accent, fill) in enumerate(layers):
-        y = 2.02 + idx * 0.88
-        rect(slide, 0.82, y, 11.72, 0.68, fill=fill, line=LINE if fill != WHITE else GRAPHITE)
-        text(
-            slide,
-            name,
-            1.05,
-            y + 0.2,
-            1.75,
-            0.2,
-            size=8,
-            color=accent,
-            bold=True,
-            font="Courier New",
-        )
-        text(
-            slide,
-            detail,
-            2.88,
-            y + 0.16,
-            8.9,
-            0.26,
-            size=12,
-            color=INK,
-            bold=idx == 4,
-            font="Courier New" if idx == 4 else "PingFang SC",
-        )
-    pill(
-        slide,
-        "IMMUTABLE EVIDENCE BOUNDARY",
-        4.74,
-        6.61,
-        3.82,
-        fill=INK,
-        color=WHITE,
-        line_color=INK,
-    )
-
-    # 07
-    slide = base_slide(
+    # 07 — Skills
+    slide = new_slide(
         prs,
         7,
-        "SKILL + MCP",
+        "Skill 与 MCP",
         "可复用能力，不是一次性 Prompt",
-        "11 个 Skill + 三套最小权限 MCP 工具集",
+        "11 个版本化 Skill；三套最小权限 MCP 工具集。",
     )
+    text(
+        slide, "11", 0.76, 2.02, 1.55, 0.78, size=51, color=COBALT, bold=True, font="Helvetica Neue"
+    )
+    text(
+        slide,
+        "versioned\nskills",
+        0.8,
+        2.92,
+        1.4,
+        0.52,
+        size=11,
+        color=MUTED,
+        bold=True,
+        font="Helvetica Neue",
+    )
+    v_rule(slide, 2.24, 2.02, 3.3, color=LINE)
     groups = [
         (
-            "MANAGER / 6",
+            2.62,
+            4.15,
+            "Manager",
+            "6",
             [
                 "adaptive-evaluation",
                 "plan-evaluation",
@@ -649,564 +703,594 @@ def build() -> Presentation:
             ],
             COBALT,
         ),
-        ("WORKERS / 2", ["simulate-tool-result", "judge-evidence"], GREEN),
-        ("CORE / 3", ["run-test-cases", "build-test-case", "harvest-tool-samples"], AMBER),
+        (7.05, 2.18, "Workers", "2", ["simulate-tool-result", "judge-evidence"], GREEN),
+        (
+            9.55,
+            2.82,
+            "Core",
+            "3",
+            ["run-test-cases", "build-test-case", "harvest-tool-samples"],
+            AMBER,
+        ),
     ]
-    x_positions = [0.7, 5.0, 8.62]
-    widths = [3.95, 3.28, 3.98]
-    for idx, (label, items, accent) in enumerate(groups):
-        x, width = x_positions[idx], widths[idx]
-        rect(slide, x, 2.02, width, 3.95, fill=WHITE, line=LINE)
+    for x, width, name, count, items, accent in groups:
+        text(slide, name, x, 2.08, width - 0.6, 0.28, size=15, color=INK, bold=True)
         text(
             slide,
-            label,
-            x + 0.22,
-            2.28,
-            width - 0.44,
-            0.24,
-            size=9,
+            count,
+            x + width - 0.52,
+            2.08,
+            0.45,
+            0.28,
+            size=14,
             color=accent,
             bold=True,
-            font="Courier New",
+            font="Helvetica Neue",
+            align=PP_ALIGN.RIGHT,
         )
-        for item_index, item in enumerate(items):
-            y = 2.82 + item_index * 0.56
-            rect(slide, x + 0.2, y, width - 0.4, 0.4, fill=SURFACE, line=LINE)
+        rule(slide, x, 2.54, width, color=accent, height_pt=1.4)
+        for idx, item in enumerate(items):
+            y = 2.82 + idx * 0.43
             text(
                 slide,
-                f"{item_index + 1:02d}",
-                x + 0.34,
-                y + 0.12,
-                0.32,
-                0.15,
-                size=6.5,
+                f"{idx + 1:02d}",
+                x,
+                y + 0.01,
+                0.34,
+                0.19,
+                size=7,
                 color=FAINT,
-                font="Courier New",
+                font="Helvetica Neue",
             )
             text(
                 slide,
                 item,
-                x + 0.72,
-                y + 0.09,
-                width - 1.1,
-                0.2,
-                size=8.5,
-                color=GRAPHITE,
+                x + 0.43,
+                y,
+                width - 0.44,
+                0.22,
+                size=9.1,
+                color=TEXT,
                 bold=True,
-                font="Courier New",
+                font="Menlo",
             )
+            rule(slide, x, y + 0.31, width)
+    box(slide, 0.76, 5.86, 11.82, 0.82, fill=DARK, stroke=None)
     text(
         slide,
-        "每个核心 Skill：输入输出 · 调用条件 · 依赖 · 失败 · 安全 · 验证 · 复用 · 版本/回滚",
-        0.7,
-        6.31,
-        11.9,
-        0.4,
-        size=13,
+        "每个核心 Skill 都有工程合同",
+        1.02,
+        6.06,
+        2.45,
+        0.25,
+        size=11,
+        color=WHITE,
+        bold=True,
+    )
+    text(
+        slide,
+        "输入输出  ·  调用条件  ·  依赖  ·  失败  ·  安全  ·  验证复用  ·  版本回滚",
+        3.55,
+        6.06,
+        8.68,
+        0.25,
+        size=10,
+        color="C8CDCA",
+    )
+
+    # 08 — Trusted evaluation
+    slide = new_slide(
+        prs,
+        8,
+        "可信评测",
+        "结论必须回到证据，而不是相信 Judge",
+        "确定性约束与语义判断独立保存，任何未知 evidence_ref 都会被拒绝。",
+    )
+    phase_x = [0.78, 4.18, 8.02]
+    phase_w = [2.68, 3.06, 4.52]
+    titles = [("01", "冻结事实"), ("02", "独立评测"), ("03", "证据报告")]
+    for idx, (number, label) in enumerate(titles):
+        text(slide, number, phase_x[idx], 2.06, 0.38, 0.2, size=8, color=COBALT, bold=True)
+        text(
+            slide,
+            label,
+            phase_x[idx] + 0.46,
+            2.02,
+            phase_w[idx] - 0.46,
+            0.3,
+            size=16,
+            color=INK,
+            bold=True,
+        )
+        rule(
+            slide,
+            phase_x[idx],
+            2.52,
+            phase_w[idx],
+            color=COBALT if idx == 0 else LINE,
+            height_pt=1.2,
+        )
+    paragraphs(
+        slide,
+        ["Case / Target / Profile 快照", "RunEvent / tool call / result", "Curator 看不到 rubric"],
+        0.78,
+        2.9,
+        2.74,
+        2.1,
+        size=11,
+        color=TEXT,
+        gap=12,
+        bullet=True,
+    )
+    box(slide, 4.18, 2.88, 3.06, 0.92, fill=AMBER_SOFT, stroke=None)
+    text(slide, "Rule Evaluator", 4.42, 3.08, 2.6, 0.23, size=13, color=INK, bold=True)
+    text(slide, "结构化断言 · 结果独立存档", 4.42, 3.41, 2.6, 0.19, size=8.5, color=MUTED)
+    box(slide, 4.18, 4.05, 3.06, 0.92, fill=GREEN_SOFT, stroke=None)
+    text(slide, "Evidence Judge", 4.42, 4.25, 2.6, 0.23, size=13, color=INK, bold=True)
+    text(slide, "仅引用本次 Run 的 event ID", 4.42, 4.58, 2.6, 0.19, size=8.5, color=MUTED)
+    text(slide, "→", 7.42, 3.67, 0.36, 0.3, size=20, color=COBALT, bold=True, align=PP_ALIGN.CENTER)
+    box(slide, 8.02, 2.88, 4.52, 2.1, fill=DARK, stroke=None)
+    text(
+        slide,
+        "PASS  3 / 3",
+        8.35,
+        3.18,
+        3.84,
+        0.38,
+        size=23,
+        color=WHITE,
+        bold=True,
+        font="Helvetica Neue",
+    )
+    text(slide, "Rule 与 Judge 的结果互不覆盖", 8.35, 3.83, 3.8, 0.26, size=11, color="C8CDCA")
+    text(
+        slide,
+        "每个 verdict 都能追到 event / hash / evaluator",
+        8.35,
+        4.31,
+        3.84,
+        0.3,
+        size=9.5,
+        color="9FA7A2",
+    )
+    rule(slide, 0.78, 5.51, 11.76)
+    text(
+        slide,
+        "输出进入事实库之前：Pydantic / JSON Schema / hash / evidence reference 全部校验。",
+        0.78,
+        5.86,
+        11.74,
+        0.34,
+        size=12.5,
         color=INK,
         bold=True,
         align=PP_ALIGN.CENTER,
     )
 
-    # 08
-    slide = base_slide(
-        prs,
-        8,
-        "TRUSTED EVALUATION",
-        "防止“Judge 说通过就通过”",
-        "确定性约束与语义判断独立保存，结论必须回到证据",
-    )
-    trust = [
-        ("冻结输入", "Case / Target / Profile\n形成不可变快照", COBALT),
-        ("隔离生成", "Curator 看不到 rubric\n只提交 Schema 候选", GREEN),
-        ("确定性 Rule", "结构化断言先执行\n结果独立存档", AMBER),
-        ("证据 Judge", "只能引用本次 Run\n真实 event ID", CORAL),
-        ("输出校验", "Pydantic / JSON Schema\nHash / Ref validation", GRAPHITE),
-    ]
-    for idx, (name, detail, accent) in enumerate(trust):
-        x = 0.66 + idx * 2.47
-        rect(slide, x, 2.18, 2.2, 3.35, fill=WHITE, line=LINE)
-        rect(slide, x, 2.18, 2.2, 0.08, fill=accent, line=accent)
-        text(
-            slide,
-            f"0{idx + 1}",
-            x + 0.18,
-            2.56,
-            0.4,
-            0.2,
-            size=8,
-            color=accent,
-            bold=True,
-            font="Courier New",
-        )
-        text(slide, name, x + 0.18, 3.02, 1.84, 0.3, size=15, color=INK, bold=True)
-        text(slide, detail, x + 0.18, 3.65, 1.84, 0.72, size=10, color=MUTED)
-        pill(slide, "VERIFIED", x + 0.18, 4.83, 1.08, fill=SURFACE, color=accent, line_color=LINE)
-    text(
-        slide,
-        "Rule / Judge / External 三类 Evaluation 互不覆盖；任何未知 evidence_ref 都会被拒绝。",
-        0.66,
-        6.05,
-        12.0,
-        0.42,
-        size=14,
-        color=GRAPHITE,
-        bold=True,
-        align=PP_ALIGN.CENTER,
-    )
-
-    # 09
-    slide = base_slide(
+    # 09 — Safety and recovery
+    slide = new_slide(
         prs,
         9,
-        "SAFETY + RECOVERY",
-        "审批、安全与恢复",
-        "模型只能提出动作，确定性后端决定动作是否允许发生",
+        "安全与恢复",
+        "模型可以提议，只有确定性后端可以放行",
+        "审批、密钥、重试与失败终态都在 Prompt 之外执行。",
     )
+    text(slide, "计划状态机", 0.78, 2.08, 1.7, 0.24, size=9, color=COBALT, bold=True)
     states = [
-        ("DRAFT", COBALT_SOFT, COBALT),
-        ("CONFIRMED", GREEN_SOFT, GREEN),
-        ("SUBMITTED", AMBER_SOFT, AMBER),
+        (0.78, "DRAFT", "生成 / 修订"),
+        (3.55, "CONFIRMED", "user event + revision"),
+        (6.8, "SUBMITTED", "幂等提交"),
     ]
-    for idx, (state, fill, color) in enumerate(states):
-        x = 0.82 + idx * 2.45
-        rect(slide, x, 2.2, 1.96, 0.68, fill=fill, line=color)
+    for idx, (x, state, detail) in enumerate(states):
+        marker(slide, str(idx + 1), x, 2.72, fill=COBALT if idx < 2 else GREEN, size=0.42)
         text(
             slide,
             state,
-            x,
-            2.39,
-            1.96,
-            0.22,
-            size=9,
-            color=color,
+            x + 0.62,
+            2.72,
+            1.85,
+            0.24,
+            size=12.5,
+            color=INK,
             bold=True,
-            font="Courier New",
-            align=PP_ALIGN.CENTER,
+            font="Helvetica Neue",
         )
+        text(slide, detail, x + 0.62, 3.08, 2.2, 0.21, size=8.8, color=MUTED)
         if idx < 2:
-            text(slide, "→", x + 2.0, 2.37, 0.4, 0.25, size=18, color=FAINT, align=PP_ALIGN.CENTER)
-    text(
-        slide,
-        "确认绑定 AssistantEvent + 同一 Plan Revision",
-        0.82,
-        3.18,
-        6.85,
-        0.34,
-        size=13,
-        color=GRAPHITE,
-        bold=True,
-        align=PP_ALIGN.CENTER,
-    )
-    rect(slide, 8.05, 2.05, 4.42, 1.65, fill=INK, line=INK)
+            rule(slide, x + 2.35, 2.92, 0.75, color=COBALT, height_pt=1.2)
+    box(slide, 9.72, 2.36, 2.84, 1.24, fill=DARK, stroke=None)
     text(
         slide,
         "NO CONFIRMATION",
-        8.4,
-        2.4,
-        3.7,
-        0.22,
-        size=9,
-        color="8E9691",
+        9.72,
+        2.62,
+        2.84,
+        0.2,
+        size=8.5,
+        color="9FA7A2",
         bold=True,
-        font="Courier New",
+        font="Helvetica Neue",
         align=PP_ALIGN.CENTER,
     )
     text(
         slide,
         "NO RUN",
-        8.4,
-        2.82,
-        3.7,
-        0.4,
-        size=25,
+        9.72,
+        2.96,
+        2.84,
+        0.34,
+        size=22,
         color=WHITE,
         bold=True,
-        font="Courier New",
+        font="Helvetica Neue",
         align=PP_ALIGN.CENTER,
     )
+    rule(slide, 0.78, 4.1, 11.78)
     controls = [
-        ("SECRET", "env: / Secret 引用；不进 Matrix、日志和 Skill"),
-        ("REDACTION", "模型与 Worker 输入统一脱敏"),
-        ("IDEMPOTENCY", "重复提交复用幂等键，不重复执行"),
-        ("TERMINAL", "超时、取消、失败都是显式可审计终态"),
-        ("DEGRADE", "AgentTeams 故障不破坏 Core 与既有证据"),
+        ("Secret", "只存 env:/Secret 引用；不进 Matrix、日志和 Skill"),
+        ("Redaction", "模型与 Worker 输入统一脱敏"),
+        ("Idempotency", "重复提交复用幂等键，不重复执行"),
+        ("Terminal state", "超时、取消、失败均为显式可审计终态"),
     ]
-    for idx, (label, detail) in enumerate(controls):
-        y = 4.18 + (idx // 3) * 0.93
-        x = 0.82 + (idx % 3) * 4.04
-        width = 3.72
-        rect(slide, x, y, width, 0.7, fill=WHITE, line=LINE)
+    for idx, (name, detail) in enumerate(controls):
+        x = 0.78 + idx * 3.0
+        text(slide, f"0{idx + 1}", x, 4.56, 0.34, 0.2, size=7.5, color=COBALT, bold=True)
         text(
-            slide,
-            label,
-            x + 0.14,
-            y + 0.13,
-            0.92,
-            0.18,
-            size=7,
-            color=COBALT,
-            bold=True,
-            font="Courier New",
+            slide, name, x, 4.9, 2.72, 0.26, size=13.5, color=INK, bold=True, font="Helvetica Neue"
         )
-        text(slide, detail, x + 1.02, y + 0.11, width - 1.16, 0.36, size=8.5, color=MUTED)
-
-    # 10
-    slide = base_slide(
-        prs,
-        10,
-        "LIVE DEMO",
-        "真实 Demo：成功、失败与证据",
-        "本机 lassist/Pixcake Agent · AgentTeams 三角色 · 双向 Matrix event ID",
-    )
-    rect(slide, 0.55, 1.98, 3.25, 4.78, fill=INK, line=INK)
+        text(slide, detail, x, 5.39, 2.66, 0.72, size=9.6, color=MUTED)
     text(
         slide,
-        "DEMO CONTRACT",
-        0.85,
-        2.3,
-        2.6,
-        0.2,
-        size=8,
-        color="8E9691",
+        "AgentTeams 故障不会破坏 Core 与既有证据。",
+        0.78,
+        6.44,
+        11.75,
+        0.26,
+        size=11.5,
+        color=CORAL,
         bold=True,
-        font="Courier New",
+        align=PP_ALIGN.CENTER,
     )
-    demo_items = [
-        ("01", "成功闭环", "apply_image_prompt → Curator → Rule 3/3 → Judge pass"),
-        ("02", "策略回归", "编辑前未二次确认 → Rule / Judge fail"),
-        ("03", "审批边界", "未确认不提交；revision 更新使旧确认失效"),
-    ]
-    for idx, (number, name, detail) in enumerate(demo_items):
-        y = 2.88 + idx * 1.08
-        text(
-            slide,
-            number,
-            0.85,
-            y,
-            0.34,
-            0.18,
-            size=7,
-            color=COBALT,
-            bold=True,
-            font="Courier New",
-        )
-        text(slide, name, 1.3, y - 0.02, 1.9, 0.24, size=12, color=WHITE, bold=True)
-        text(slide, detail, 1.3, y + 0.33, 2.08, 0.46, size=8.5, color="BFC5C1")
-    pill(
-        slide,
-        "REAL TARGET / NO FAKE DRIVER",
-        0.85,
-        6.06,
-        2.55,
-        fill="252927",
-        color="BFC5C1",
-        line_color="343936",
-    )
-    if SCREENSHOT.exists():
-        slide.shapes.add_picture(
-            str(SCREENSHOT), Inches(4.02), Inches(1.98), width=Inches(8.77), height=Inches(4.93)
-        )
-    else:
-        rect(slide, 4.02, 1.98, 8.77, 4.93, fill=WHITE, line=LINE)
-        text(
-            slide,
-            "运行 scripts/local_demo.sh setup 后重新生成 PPT 以嵌入界面截图",
-            4.4,
-            4.1,
-            8.0,
-            0.45,
-            size=13,
-            color=MUTED,
-            align=PP_ALIGN.CENTER,
-        )
 
-    # 11
-    slide = base_slide(
+    # 10 — Product demo
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.background.fill.solid()
+    slide.background.fill.fore_color.rgb = rgb(PAPER)
+    text(slide, "真实 Demo", 0.72, 0.42, 2.2, 0.2, size=8.5, color=COBALT, bold=True)
+    text(slide, "真实产品，\n不是概念图", 0.72, 1.03, 2.32, 0.95, size=25, color=INK, bold=True)
+    text(slide, "本机 lassist/Pixcake Agent", 0.74, 2.25, 2.24, 0.25, size=9.5, color=MUTED)
+    demo_points = [
+        ("1", "三角色状态与当前计划"),
+        ("2", "成功 / 失败诊断"),
+        ("3", "Run 与 Matrix 双向 event ID"),
+    ]
+    for idx, (number, detail) in enumerate(demo_points):
+        y = 3.0 + idx * 0.78
+        marker(slide, number, 0.74, y, fill=COBALT)
+        text(slide, detail, 1.23, y + 0.04, 1.83, 0.44, size=10.5, color=TEXT, bold=True)
+    text(
+        slide,
+        "成功闭环 + 策略回归\n均保留可引用证据",
+        0.74,
+        5.72,
+        2.2,
+        0.58,
+        size=11.5,
+        color=INK,
+        bold=True,
+    )
+    picture = add_picture(slide, ASSISTANT_SCREENSHOT, 3.25, 1.15, 9.45, border=True)
+    if picture:
+        marker(slide, "1", 11.5, 3.18, fill=COBALT)
+        marker(slide, "2", 7.74, 3.6, fill=COBALT)
+        marker(slide, "3", 9.05, 1.54, fill=COBALT)
+    footer(slide, 10)
+
+    # 11 — Engineering
+    slide = new_slide(
         prs,
         11,
-        "ENGINEERING",
-        "工程落地与开放价值",
-        "Core 无模型、无 AgentTeams 仍可完成确定性回归",
+        "工程可信度",
+        "可运行、可替换、可复核",
+        "Core 在无模型、无 AgentTeams 时仍能完成确定性回归。",
     )
-    stats = [
-        ("3+", "Agent identities"),
-        ("11", "Versioned Skills"),
-        ("4", "Target Drivers"),
-        ("3", "Evaluator types"),
+    text(
+        slide, "134", 0.76, 2.04, 3.0, 0.88, size=55, color=COBALT, bold=True, font="Helvetica Neue"
+    )
+    text(
+        slide,
+        "backend tests passed",
+        0.8,
+        3.06,
+        3.2,
+        0.26,
+        size=12,
+        color=INK,
+        bold=True,
+        font="Helvetica Neue",
+    )
+    text(
+        slide,
+        "30 unit  ·  2 E2E  ·  0 secret hits",
+        0.8,
+        3.58,
+        3.35,
+        0.28,
+        size=10.5,
+        color=MUTED,
+        font="Helvetica Neue",
+    )
+    rule(slide, 0.8, 4.15, 3.55)
+    text(
+        slide,
+        "Python 3.12  ·  FastAPI  ·  SQLAlchemy\nReact  ·  MCP  ·  MIT",
+        0.8,
+        4.48,
+        3.55,
+        0.62,
+        size=11,
+        color=TEXT,
+        line_spacing=1.22,
+    )
+    box(slide, 0.8, 5.62, 3.58, 0.65, fill=DARK, stroke=None)
+    text(
+        slide,
+        "本机一键运行与确定性验证",
+        0.8,
+        5.63,
+        3.58,
+        0.63,
+        size=11,
+        color=WHITE,
+        bold=True,
+        align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    ledger = [
+        ("Core", "没有模型与 AgentTeams 也能执行回归"),
+        ("Drivers", "Pixcake / OpenAI-compatible / ACP / subprocess"),
+        ("Storage", "SQLite 本机体验；Repository 契约可接 PostgreSQL"),
+        ("Extension", "Driver / Provider / Evaluator / Skill / Adapter"),
+        ("Delivery", "MIT · 部署文档 · Skills · 安全文档 · 自动测试"),
     ]
-    for idx, (value, label) in enumerate(stats):
-        x = 0.7 + idx * 3.03
-        rect(slide, x, 2.05, 2.72, 1.25, fill=WHITE, line=LINE)
-        rect(
-            slide,
-            x,
-            2.05,
-            0.05,
-            1.25,
-            fill=COBALT if idx == 0 else GREEN if idx == 1 else AMBER if idx == 2 else CORAL,
-            line=LINE,
-        )
+    for idx, (name, detail) in enumerate(ledger):
+        y = 2.03 + idx * 0.84
         text(
-            slide,
-            value,
-            x + 0.2,
-            2.28,
-            0.92,
-            0.45,
-            size=25,
-            color=INK,
-            bold=True,
-            font="Courier New",
+            slide, name, 5.02, y, 1.2, 0.24, size=10, color=COBALT, bold=True, font="Helvetica Neue"
         )
-        text(slide, label, x + 1.1, 2.42, 1.35, 0.25, size=9, color=MUTED)
-    engineering = [
-        ("STACK", "Python 3.12 · FastAPI · SQLAlchemy · React · MCP"),
-        ("DRIVERS", "Pixcake HTTP-SSE · OpenAI compatible · ACP · subprocess"),
-        ("STORAGE", "SQLite 本机一键体验；Repository 可切 PostgreSQL"),
-        ("EXTENSION", "Driver / Provider / Evaluator / Skill / Adapter 均为契约"),
-        ("CONTEXT", "会话记忆 · 共享状态 · 轨迹可观测（3/4）"),
-        ("DELIVERY", "MIT · 一键部署 · 确定性角色包 · 测试/安全文档"),
-    ]
-    for idx, (label, detail) in enumerate(engineering):
-        x = 0.7 + (idx % 2) * 6.12
-        y = 3.75 + (idx // 2) * 0.82
-        rect(slide, x, y, 5.82, 0.62, fill=SURFACE, line=LINE)
-        text(
-            slide,
-            label,
-            x + 0.16,
-            y + 0.19,
-            1.0,
-            0.17,
-            size=7,
-            color=COBALT,
-            bold=True,
-            font="Courier New",
-        )
-        text(slide, detail, x + 1.12, y + 0.16, 4.5, 0.24, size=9, color=GRAPHITE)
+        text(slide, detail, 6.35, y - 0.01, 5.98, 0.38, size=11.2, color=TEXT, bold=idx == 0)
+        rule(slide, 5.02, y + 0.56, 7.43)
 
-    # 12
-    slide = base_slide(
+    # 12 — Close and roadmap
+    slide = new_slide(
         prs,
         12,
-        "ROADMAP",
-        "让每个 Agent 决定都经过分工、验证并留下证据",
-        "AgentRig 不替 Agent 做决定；它让决定可以持续回归、发布门禁与审计复盘",
+        "价值与路线",
+        "从“看起来能跑”，到“证据足够发布”",
+        "AgentRig 不替 Agent 做决定；它让每个决定都能回归、门禁与审计。",
     )
-    roadmap = [
-        ("INITIAL", "2026.08", "公开设计与身份清单\n真实三 Agent Demo\n成功 / 失败证据", COBALT),
-        ("SEMIFINAL", "NEXT", "可执行代码包与视频\n运行报告 / Trace\n恢复与性能指标", GREEN),
-        ("FINAL", "SCALE", "PostgreSQL / Kubernetes\nOTel / SLS 可观测\n版本对比与发布门禁", AMBER),
-    ]
-    for idx, (phase, time_value, detail, accent) in enumerate(roadmap):
-        x = 0.78 + idx * 4.15
-        rect(slide, x, 2.15, 3.72, 3.52, fill=WHITE, line=LINE)
-        rect(slide, x, 2.15, 3.72, 0.08, fill=accent, line=accent)
-        text(
-            slide,
-            phase,
-            x + 0.24,
-            2.52,
-            1.6,
-            0.2,
-            size=8,
-            color=accent,
-            bold=True,
-            font="Courier New",
-        )
-        text(
-            slide,
-            time_value,
-            x + 0.24,
-            3.02,
-            3.15,
-            0.36,
-            size=22,
-            color=INK,
-            bold=True,
-            font="Courier New",
-        )
-        line(slide, x + 0.24, 3.62, x + 3.47, 3.63)
-        text(slide, detail, x + 0.24, 3.93, 3.12, 1.05, size=11, color=MUTED)
+    text(
+        slide,
+        "Evidence before confidence.",
+        0.78,
+        2.12,
+        11.76,
+        0.58,
+        size=30,
+        color=INK,
+        bold=True,
+        font="Helvetica Neue",
+        align=PP_ALIGN.CENTER,
+    )
     text(
         slide,
         "不同企业 Agent 共用的开源质量与发布基础设施",
         0.78,
-        6.14,
-        12.0,
-        0.44,
-        size=18,
-        color=INK,
-        bold=True,
+        2.98,
+        11.76,
+        0.34,
+        size=14,
+        color=MUTED,
         align=PP_ALIGN.CENTER,
     )
-    pill(
-        slide,
-        "AGENTRIG / EVIDENCE BEFORE CONFIDENCE",
-        4.62,
-        6.67,
-        4.18,
-        fill=INK,
-        color=WHITE,
-        line_color=INK,
-    )
-
-    # Appendix 01: official Agent Identity fields
-    slide = appendix_slide(
-        prs,
-        1,
-        "APPENDIX / AGENT IDENTITY",
-        "附录 A：三个 Agent 的完整身份合同",
-        "Name / Role / Capabilities / Inputs / Outputs / Dependencies / Decision Boundary / Trace",
-    )
-    identities = [
-        (
-            "evaluation-manager",
-            "Evaluation Manager",
-            COBALT,
-            [
-                ("CAPABILITIES", "资产选择 · 计划/审批 · 诊断/用例草稿"),
-                ("INPUTS", "Session/Turn/Event · 用户目标 · 权威资产事实"),
-                ("OUTPUTS", "Plan/Decision/Run 引用 · 证据诊断"),
-                ("DEPENDENCIES", "6 Manager Skills · manager MCP · Core"),
-                ("DECISION BOUNDARY", "不能原始 run_cases；确认/提交绑定用户 event + revision"),
-                ("TRACE", "AssistantEvent · ManagerDecision · Plan/Run · Matrix IDs"),
-            ],
-        ),
-        (
-            "simulation-curator",
-            "Simulation Curator",
-            GREEN,
-            [
-                ("CAPABILITIES", "生成最小合理、Schema 合法的受控结果"),
-                ("INPUTS", "invocation/hash/deadline · tool/args/schema · 脱敏历史"),
-                ("OUTPUTS", "CuratorGeneration 或分类结构化失败"),
-                ("DEPENDENCIES", "simulate-tool-result · Curator 三工具 MCP"),
-                ("DECISION BOUNDARY", "看不到 rubric/预期；不调真实工具；不枚举任务"),
-                ("TRACE", "Invocation 状态 · hashes · Matrix IDs · RunEvent ref"),
-            ],
-        ),
-        (
-            "evidence-judge",
-            "Evidence Judge",
-            AMBER,
-            [
-                ("CAPABILITIES", "独立 pass/fail/inconclusive · 引用真实 event ID"),
-                ("INPUTS", "invocation/hash/deadline · 冻结 rubric · Rule · 脱敏证据"),
-                ("OUTPUTS", "JudgeOutput · criteria · summary · evidence refs"),
-                ("DEPENDENCIES", "judge-evidence · Judge 三工具 MCP"),
-                ("DECISION BOUNDARY", "不造证据/改 Rule；证据不足必须 inconclusive"),
-                ("TRACE", "Invocation 状态 · hashes · Matrix IDs · Evaluation ID"),
-            ],
-        ),
+    rule(slide, 1.05, 4.0, 11.15, color="BFC7C2", height_pt=1.2)
+    roadmap = [
+        (1.1, "现在", "三 Agent 协作\n成功 / 回归证据\n开源工程包", COBALT),
+        (5.0, "下一阶段", "可执行 Trace 报告\n恢复 / 性能指标\n版本对比", GREEN),
+        (8.95, "规模化", "PostgreSQL / K8s\nOTel / SLS\n发布门禁", AMBER),
     ]
-    for idx, (name, role, accent, fields) in enumerate(identities):
-        x = 0.62 + idx * 4.12
-        rect(slide, x, 2.0, 3.82, 4.78, fill=WHITE, line=LINE)
-        rect(slide, x, 2.0, 3.82, 0.08, fill=accent, line=accent)
-        text(
-            slide,
-            name,
-            x + 0.2,
-            2.29,
-            3.4,
-            0.2,
-            size=7,
-            color=accent,
-            bold=True,
-            font="Courier New",
-        )
-        text(slide, role, x + 0.2, 2.61, 3.4, 0.3, size=16, color=INK, bold=True)
-        for field_index, (label, detail) in enumerate(fields):
-            y = 3.13 + field_index * 0.58
-            text(
-                slide,
-                label,
-                x + 0.2,
-                y,
-                1.08,
-                0.16,
-                size=6.2,
-                color=accent,
-                bold=True,
-                font="Courier New",
-            )
-            text(slide, detail, x + 1.18, y - 0.02, 2.39, 0.38, size=7.5, color=GRAPHITE)
-
-    # Appendix 02: official Skill contract fields
-    slide = appendix_slide(
-        prs,
-        2,
-        "APPENDIX / SKILL CONTRACT",
-        "附录 B：11 个 Skill 如何被工程化",
-        "不只列名称：定义调用、输入输出、失败、安全、验证、版本与复用",
-    )
-    rect(slide, 0.65, 2.0, 4.02, 4.78, fill=INK, line=INK)
+    for x, phase, detail, accent in roadmap:
+        marker(slide, "", x, 3.78, fill=accent, size=0.43)
+        text(slide, phase, x - 0.05, 4.48, 2.7, 0.28, size=14.5, color=INK, bold=True)
+        text(slide, detail, x - 0.05, 4.95, 2.7, 0.78, size=10.5, color=MUTED, line_spacing=1.22)
+    box(slide, 3.78, 6.13, 5.78, 0.62, fill=COBALT, stroke=None)
     text(
         slide,
-        "11 VERSIONED SKILLS",
-        0.92,
-        2.3,
-        3.5,
-        0.22,
-        size=8,
-        color="8E9691",
+        "让每次变化，都留下可核验的证据",
+        3.78,
+        6.14,
+        5.78,
+        0.6,
+        size=14,
+        color=WHITE,
         bold=True,
-        font="Courier New",
+        align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    # 13 — Appendix: identities
+    slide = new_slide(
+        prs,
+        13,
+        "评审附录 A",
+        "三个 Agent 的身份合同",
+        "输入、输出、依赖、边界与追踪字段可与代码、MCP 路由和运行轨迹交叉核验。",
+    )
+    columns = [0.58, 1.83, 5.48, 9.13, 12.75]
+    headers = ["字段", "Evaluation Manager", "Simulation Curator", "Evidence Judge"]
+    box(slide, 0.58, 1.94, 12.17, 0.58, fill=DARK, stroke=None)
+    for idx, header in enumerate(headers):
+        text(
+            slide,
+            header,
+            columns[idx] + 0.12,
+            2.13,
+            columns[idx + 1] - columns[idx] - 0.24,
+            0.2,
+            size=8.5 if idx else 8,
+            color=WHITE if idx else "A9B0AC",
+            bold=True,
+        )
+    identity_rows = [
+        ("角色", "面向用户的评测编排", "受控工具结果生成", "基于证据的独立裁决"),
+        (
+            "能力",
+            "资产选择 / 计划 / 审批 / 诊断",
+            "最小合理且 Schema 合法的候选",
+            "pass / fail / inconclusive + 引用",
+        ),
+        (
+            "输入",
+            "会话 / 目标 / 权威资产事实",
+            "tool / args / schema / 脱敏历史",
+            "冻结 rubric / Rule / 脱敏证据",
+        ),
+        (
+            "输出",
+            "Plan / Decision / Run 引用",
+            "CuratorGeneration / 结构化失败",
+            "JudgeOutput / criteria / refs",
+        ),
+        (
+            "依赖",
+            "6 Manager Skills / MCP / Core",
+            "simulate-tool-result / Worker MCP",
+            "judge-evidence / Worker MCP",
+        ),
+        (
+            "决策边界",
+            "不能原始 run_cases；提交绑定 event + revision",
+            "看不到 rubric；不调真实工具",
+            "不造证据；不足必须 inconclusive",
+        ),
+        (
+            "审计追踪",
+            "AssistantEvent / Plan / Run / Matrix IDs",
+            "invocation / hash / event IDs",
+            "evaluation / hash / evidence refs",
+        ),
+    ]
+    row_y = 2.52
+    row_h = 0.59
+    for row_idx, row in enumerate(identity_rows):
+        if row_idx % 2 == 0:
+            box(slide, 0.58, row_y, 12.17, row_h, fill=WHITE, stroke=None)
+        for col_idx, value in enumerate(row):
+            text(
+                slide,
+                value,
+                columns[col_idx] + 0.12,
+                row_y + 0.13,
+                columns[col_idx + 1] - columns[col_idx] - 0.24,
+                row_h - 0.2,
+                size=7.3 if col_idx else 8,
+                color=TEXT if col_idx else COBALT,
+                bold=col_idx == 0,
+                line_spacing=1.08,
+            )
+        rule(slide, 0.58, row_y + row_h, 12.17)
+        row_y += row_h
+    for x in columns[1:-1]:
+        v_rule(slide, x, 1.94, row_y - 1.94, color=LINE)
+    text(
+        slide,
+        "完整身份清单：docs/competition/02-Agent-Identity-清单.md",
+        0.58,
+        6.78,
+        12.17,
+        0.18,
+        size=7.5,
+        color=MUTED,
+    )
+
+    # 14 — Appendix: skill contracts
+    slide = new_slide(
+        prs,
+        14,
+        "评审附录 B",
+        "11 个 Skill 如何被工程化",
+        "不是名称清单：每个核心 Skill 都定义调用、失败、安全、验证与版本边界。",
+    )
+    text(
+        slide,
+        "Skill inventory",
+        0.68,
+        2.0,
+        4.5,
+        0.3,
+        size=16,
+        color=INK,
+        bold=True,
+        font="Helvetica Neue",
     )
     skill_groups = [
         (
-            "MANAGER / 6",
-            "adaptive-evaluation\nplan-evaluation\nexecute-evaluation-plan\ndiagnose-run\nbuild-test-case-draft\nconfigure-test-target",
+            "Manager / 6",
+            [
+                "adaptive-evaluation",
+                "plan-evaluation",
+                "execute-evaluation-plan",
+                "diagnose-run",
+                "build-test-case-draft",
+                "configure-test-target",
+            ],
             COBALT,
         ),
-        ("WORKERS / 2", "simulate-tool-result\njudge-evidence", GREEN),
-        ("CORE / 3", "run-test-cases\nbuild-test-case\nharvest-tool-samples", AMBER),
+        ("Workers / 2", ["simulate-tool-result", "judge-evidence"], GREEN),
+        ("Core / 3", ["run-test-cases", "build-test-case", "harvest-tool-samples"], AMBER),
     ]
-    group_y = 2.72
+    y = 2.55
     for label, values, accent in skill_groups:
-        line_count = values.count("\n") + 1
-        group_height = 0.38 + line_count * 0.27
         text(
             slide,
             label,
-            0.92,
-            group_y,
-            1.15,
-            0.18,
-            size=6.8,
+            0.68,
+            y,
+            1.28,
+            0.2,
+            size=8.5,
             color=accent,
             bold=True,
-            font="Courier New",
+            font="Helvetica Neue",
         )
-        text(
-            slide,
-            values,
-            2.02,
-            group_y - 0.03,
-            2.25,
-            group_height,
-            size=7.2,
-            color=WHITE,
-            bold=True,
-            font="Courier New",
-        )
-        group_y += group_height + 0.23
-    rect(slide, 4.98, 2.0, 7.72, 2.75, fill=WHITE, line=LINE)
+        for idx, value in enumerate(values):
+            text(
+                slide,
+                value,
+                2.05,
+                y + idx * 0.34,
+                3.12,
+                0.19,
+                size=7.7,
+                color=TEXT,
+                bold=True,
+                font="Menlo",
+            )
+        y += max(0.82, len(values) * 0.34 + 0.28)
+    v_rule(slide, 5.45, 1.98, 4.8, color=LINE)
     text(
         slide,
-        "OFFICIAL CONTRACT FIELDS",
-        5.25,
-        2.3,
-        3.2,
-        0.2,
-        size=8,
-        color=COBALT,
+        "Official contract fields",
+        5.82,
+        2.0,
+        5.9,
+        0.3,
+        size=16,
+        color=INK,
         bold=True,
-        font="Courier New",
+        font="Helvetica Neue",
     )
-    contract_fields = [
+    fields = [
         "名称 / 类型",
         "使用场景",
         "输入参数",
@@ -1218,144 +1302,143 @@ def build() -> Presentation:
         "验证 / 复用",
         "版本 / 回滚",
     ]
-    for field_index, value in enumerate(contract_fields):
-        col = field_index % 2
-        row = field_index // 2
-        x = 5.25 + col * 3.55
-        y = 2.76 + row * 0.36
-        rect(slide, x, y, 3.25, 0.27, fill=SURFACE, line=LINE)
+    for idx, value in enumerate(fields):
+        col = idx % 2
+        row = idx // 2
+        x = 5.82 + col * 3.25
+        yy = 2.58 + row * 0.51
         text(
             slide,
-            f"{field_index + 1:02d}",
-            x + 0.1,
-            y + 0.08,
-            0.28,
-            0.1,
-            size=5.5,
+            f"{idx + 1:02d}",
+            x,
+            yy + 0.02,
+            0.34,
+            0.18,
+            size=7,
             color=FAINT,
-            font="Courier New",
+            font="Helvetica Neue",
         )
-        text(slide, value, x + 0.43, y + 0.05, 2.62, 0.14, size=7, color=GRAPHITE, bold=True)
-    rect(slide, 4.98, 5.02, 7.72, 1.76, fill=COBALT_SOFT, line="C8D4FF")
+        text(slide, value, x + 0.44, yy, 2.55, 0.22, size=9.5, color=TEXT, bold=True)
+        rule(slide, x, yy + 0.33, 2.92)
+    box(slide, 5.82, 5.52, 6.57, 0.98, fill=COBALT_SOFT, stroke=None)
+    text(slide, "版本与回滚", 6.07, 5.76, 1.28, 0.22, size=9.5, color=COBALT, bold=True)
     text(
         slide,
-        "VERSION / RELEASE / ROLLBACK",
-        5.25,
-        5.29,
-        3.4,
-        0.18,
-        size=7.5,
-        color=COBALT,
-        bold=True,
-        font="Courier New",
-    )
-    text(
-        slide,
-        "当前随 AgentRig 0.2.0a0 进入 Git 版本管理；确定性构建三角色包，\n"
-        "AgentTeams 基线锁定 v1.1.2；回滚完整 Release + 角色包，不单独热替换 Prompt。",
-        5.25,
+        "随 AgentRig 0.2.0a0 进入 Git；锁定 AgentTeams v1.1.2；回滚完整 Release + 角色包，不热替换临场 Prompt。",
+        7.42,
         5.71,
-        7.05,
-        0.72,
-        size=9.5,
-        color=GRAPHITE,
+        4.68,
+        0.48,
+        size=8.6,
+        color=TEXT,
         bold=True,
     )
     text(
         slide,
         "完整逐 Skill 字段表：docs/competition/08-Skill-清单.md",
-        5.25,
-        6.47,
-        6.9,
+        5.82,
+        6.71,
+        6.5,
         0.18,
-        size=7,
+        size=7.5,
         color=MUTED,
-        font="Courier New",
     )
 
-    # Appendix 03: context and current verification evidence
-    slide = appendix_slide(
+    # 15 — Appendix: verification
+    slide = new_slide(
         prs,
-        3,
-        "APPENDIX / VERIFICATION",
-        "上下文能力与当前可验证证据",
-        "赛题要求 4 选 2；AgentRig 实现记忆、共享状态和轨迹可观测 3 项",
+        15,
+        "评审附录 C",
+        "上下文能力与当前验证台账",
+        "赛题要求四选二；AgentRig 已实现记忆、共享状态和轨迹可观测三项。",
     )
-    capabilities = [
-        ("01", "Agent 记忆", "Session / Turn / Event\n恢复 Plan 与 Run 上下文", GREEN, GREEN_SOFT, "IMPLEMENTED"),
-        ("02", "知识库 RAG", "当前场景不需要\n未为数量堆叠检索链", FAINT, SURFACE, "NOT NEEDED"),
-        ("03", "共享状态", "Plan / Invocation / Run\n权威状态机", COBALT, COBALT_SOFT, "IMPLEMENTED"),
-        ("04", "轨迹可观测", "RunEvent / Evaluation / Decision\nMatrix IDs / hashes", AMBER, AMBER_SOFT, "IMPLEMENTED"),
+    text(
+        slide,
+        "Context capabilities",
+        0.7,
+        2.0,
+        4.8,
+        0.3,
+        size=16,
+        color=INK,
+        bold=True,
+        font="Helvetica Neue",
+    )
+    context_rows = [
+        ("Agent 记忆", "已实现", "Session / Turn / Event"),
+        ("知识库 RAG", "未采用", "当前评测场景不需要"),
+        ("共享状态", "已实现", "Plan / Invocation / Run"),
+        ("轨迹可观测", "已实现", "RunEvent / Eval / Matrix IDs / hash"),
     ]
-    for idx, (number, name, detail, accent, fill, state_value) in enumerate(capabilities):
-        x = 0.63 + idx * 3.12
-        rect(slide, x, 2.02, 2.86, 1.67, fill=fill, line=LINE)
+    for idx, (name, state, detail) in enumerate(context_rows):
+        y = 2.56 + idx * 0.78
+        text(slide, name, 0.7, y, 1.5, 0.23, size=10.5, color=TEXT, bold=True)
         text(
             slide,
-            number,
-            x + 0.16,
-            2.22,
-            0.35,
-            0.16,
-            size=6.5,
-            color=accent,
+            state,
+            2.35,
+            y,
+            0.7,
+            0.23,
+            size=8.5,
+            color=GREEN if state == "已实现" else FAINT,
             bold=True,
-            font="Courier New",
         )
-        text(slide, name, x + 0.16, 2.52, 2.46, 0.27, size=13, color=INK, bold=True)
-        text(slide, detail, x + 0.16, 2.91, 2.48, 0.48, size=8.2, color=MUTED)
-        text(
-            slide,
-            state_value,
-            x + 1.7,
-            2.22,
-            0.96,
-            0.14,
-            size=5.8,
-            color=accent,
-            bold=True,
-            font="Courier New",
-            align=PP_ALIGN.RIGHT,
-        )
-    evidence_cards = [
-        ("134", "后端测试通过", "6 skipped / 1 deprecation warning", COBALT),
-        ("3", "参考场景验证", "success / policy regression / recovery", GREEN),
-        ("0", "Git 历史密钥命中", "Gitleaks 8.29.1 + official fixture sanity", AMBER),
-        ("2", "Worker 双向回执", "Curator + Judge / Matrix event IDs", COBALT),
-        ("3/3", "成功场景 Rule", "Evidence Judge 独立 pass", GREEN),
-        ("2/3", "策略回归 Rule", "Judge 引用同一违规事件 fail", CORAL),
+        text(slide, detail, 3.18, y, 2.2, 0.36, size=8.8, color=MUTED)
+        rule(slide, 0.7, y + 0.49, 4.68)
+    v_rule(slide, 5.7, 1.98, 4.54, color=LINE)
+    text(
+        slide,
+        "Verification ledger",
+        6.06,
+        2.0,
+        6.24,
+        0.3,
+        size=16,
+        color=INK,
+        bold=True,
+        font="Helvetica Neue",
+    )
+    evidence_rows = [
+        ("Backend", "134 passed", "6 skipped / 1 deprecation warning"),
+        ("Web", "30 unit + 2 E2E", "typecheck / coverage / build passed"),
+        ("Reference demo", "3 scenarios", "success / policy regression / recovery"),
+        ("Secret scan", "0 findings", "Gitleaks 8.29.1 + fixture sanity"),
+        ("Worker receipts", "2 directions", "Curator + Judge / Matrix event IDs"),
     ]
-    for idx, (value, label, detail, accent) in enumerate(evidence_cards):
-        x = 0.63 + (idx % 3) * 4.14
-        y = 4.12 + (idx // 3) * 1.17
-        rect(slide, x, y, 3.86, 0.92, fill=WHITE, line=LINE)
-        rect(slide, x, y, 0.05, 0.92, fill=accent, line=accent)
+    for idx, (name, value, detail) in enumerate(evidence_rows):
+        y = 2.56 + idx * 0.68
+        text(
+            slide, name, 6.06, y, 1.42, 0.22, size=9.5, color=TEXT, bold=True, font="Helvetica Neue"
+        )
         text(
             slide,
             value,
-            x + 0.18,
-            y + 0.2,
-            0.92,
-            0.34,
-            size=20,
-            color=INK,
+            7.62,
+            y,
+            1.62,
+            0.22,
+            size=9.2,
+            color=COBALT if idx < 3 else GREEN,
             bold=True,
-            font="Courier New",
+            font="Helvetica Neue",
         )
-        text(slide, label, x + 1.12, y + 0.16, 2.48, 0.22, size=9.5, color=GRAPHITE, bold=True)
-        text(slide, detail, x + 1.12, y + 0.49, 2.48, 0.22, size=7.2, color=MUTED)
+        text(slide, detail, 9.38, y, 2.93, 0.33, size=8.1, color=MUTED)
+        rule(slide, 6.06, y + 0.42, 6.24)
+    box(slide, 0.7, 6.3, 11.6, 0.48, fill=CORAL_SOFT, stroke=None)
     text(
         slide,
-        "边界：云端 OTel/SLS、Kubernetes、公开 Release/Tag 与最终视频仍按提交清单闭环，不伪装为已完成。",
-        0.63,
-        6.56,
-        12.0,
-        0.28,
-        size=9.5,
+        "边界：未把云端 OTel/SLS、Kubernetes 与公开 Release/Tag 伪装为已完成。",
+        0.92,
+        6.43,
+        11.15,
+        0.2,
+        size=9,
         color=CORAL,
         bold=True,
         align=PP_ALIGN.CENTER,
     )
+
     return prs
 
 

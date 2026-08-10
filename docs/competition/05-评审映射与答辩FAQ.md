@@ -59,7 +59,7 @@ Curator、Real Tool 或 Proxy，不用一个策略覆盖所有场景。真实工
 ### Q9：项目当前真实完成度如何？
 
 已完成 AgentTeams v1.1.2 本机部署、三角色包、Matrix/Higress/MinIO、V1 Core、V2 Web、真实
-lassist 三 Agent 闭环与自动测试。云端 OTel/SLS 和 Kubernetes 是复赛增强项，不伪装为已完成。
+lassist 三 Agent 闭环与自动测试。云端 OTel/SLS 和 Kubernetes 是复赛增强项，不列为当前完成项。
 
 ### Q10：与 AgentScope Eval 等方案有什么区别？
 
