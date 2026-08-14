@@ -2,10 +2,9 @@
 """Build the long-form AgentRig GOAI review cut with fixed 1080p frames.
 
 The video deliberately uses no zoom, pan, cursor replay, or simulated typing. Every
-product frame is either a page from the submitted deck or a real browser capture from
-the EditFlow rehearsal. Every product frame is backed by the
-formal live capture. Frames come from the deck and real recording-database captures;
-narration is synthesized locally.
+product frame is either a page from the submitted deck or a real capture backed by the
+formal recording database (browser screenshots and the Codex terminal session).
+Narration is synthesized locally.
 """
 
 from __future__ import annotations
@@ -247,7 +246,7 @@ async def synthesize_narration(
 _KOKORO_PIPELINE = None
 
 
-def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.7) -> None:
+def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.78) -> None:
     """Local neural TTS (Kokoro-82M-v1.1-zh) with English terms via misaki G2P."""
     global _KOKORO_PIPELINE
     import numpy as np
@@ -475,7 +474,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--engine", choices=("edge", "macos", "kokoro"), default="edge")
     parser.add_argument("--kokoro-voice", default="zf_001")
-    parser.add_argument("--kokoro-speed", type=float, default=0.7)
+    parser.add_argument("--kokoro-speed", type=float, default=0.78)
     parser.add_argument("--voice", default="zh-CN-YunxiNeural")
     parser.add_argument("--rate", default="-4%")
     parser.add_argument("--pitch", default="-2Hz")
