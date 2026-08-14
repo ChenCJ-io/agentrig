@@ -59,6 +59,7 @@ MCP，Case/Sample 批准走 Web 审核端点，MCP 无批准权限）。机器�
 | Sample | `sample_934464c5a0414796839cac6d821b1339` | `source_type=real_tool`、Web 审核 approved ✅ |
 | Replay Run | `run_1a209c84b61f4390bf468af8865f0b90` | 5/5；Run 内 real_tool Attempt=0 ✅ |
 | Assistant Session / Plan / Run | `asst_5740815c6ef248d2992f77c6fc8d970e` / `plan_a0d80e75e2634b5f81fe751a197bbdbb` / `run_a1c88bc8ed83474a9261df9e1d0d23fb` | 确认与提交分离，3/3 ✅ |
+| Codex CLI 确认批次 | `run_79367abb0d5b4db2b743e143d130cb99` | Codex 真实会话经 MCP 提交,同 Manifest,5/5;按会话范围如实输出 PARTIAL ✅ |
 | Final Decision | ACCEPT | hard Case 5/5、矩阵 30/30、仓库检查通过 ✅ |
 
 ## 5. 禁止混用

@@ -20,6 +20,8 @@ CANDIDATE = LIVE / "editflow-02-candidate-run.png"
 TIMELINE = LIVE / "editflow-03-timeline.png"
 ACCEPTANCE = LIVE / "editflow-04-acceptance.png"
 ASSISTANT = LIVE / "editflow-05-assistant.png"
+CODEX_SKILL = LIVE / "codex-01-skill-session.png"
+CODEX_VERDICT = LIVE / "codex-02-regression-verdict.png"
 
 W, H, TOTAL = 13.333, 7.5, 16
 INK, TEXT, MUTED, FAINT = "121617", "2B312F", "67706B", "929A95"
@@ -69,16 +71,18 @@ def text(
     frame.margin_left = frame.margin_right = 0
     frame.margin_top = frame.margin_bottom = 0
     frame.vertical_anchor = valign
-    p = frame.paragraphs[0]
-    p.alignment = align
-    p.space_after = Pt(0)
-    p.line_spacing = spacing
-    run = p.add_run()
-    run.text = value
-    run.font.name = font
-    run.font.size = Pt(size)
-    run.font.bold = bold
-    run.font.color.rgb = rgb(color)
+    # python-pptx renders "\n" inside a run as a space; emit one paragraph per line
+    for index, line in enumerate(value.split("\n")):
+        p = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+        p.alignment = align
+        p.space_after = Pt(0)
+        p.line_spacing = spacing
+        run = p.add_run()
+        run.text = line
+        run.font.name = font
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.color.rgb = rgb(color)
     return shape
 
 
@@ -455,26 +459,10 @@ def build() -> Presentation:
         "不同能力可以给出不同方案，共享同一种证据合同",
         "Codex 面向开发者闭环；Web 助手面向产品、运营与测试人员。",
     )
-    box(slide, 0.75, 2.0, 5.95, 4.25, fill=DARK, stroke=None)
-    text(slide, "DEVELOPER", 1.05, 2.28, 1.5, 0.22, size=8.5, color=BLUE, bold=True)
-    text(slide, "Codex + 项目 Skill + MCP", 1.05, 2.75, 5.1, 0.4, size=20, color=WHITE, bold=True)
-    bullets(
-        slide,
-        [
-            "读取代码、Prompt Diff 和业务不变量",
-            "查询、创建并治理 Case / Sample",
-            "Preview 后按 Manifest 提交回归矩阵",
-            "基于 Timeline 修复并输出验收结论",
-        ],
-        1.05,
-        3.47,
-        5.15,
-        1.75,
-        size=11.3,
-        color="CFD4D1",
-        gap=8,
-    )
-    chip(slide, "主入口 · 改软件 + 治回归", 1.05, 5.57, 2.35, fill=GREEN_SOFT, color=GREEN)
+    text(slide, "DEVELOPER", 0.78, 2.02, 1.5, 0.22, size=8.5, color=BLUE, bold=True)
+    text(slide, "Codex + 项目 Skill + MCP", 0.78, 2.32, 5.1, 0.36, size=17, color=INK, bold=True)
+    picture(slide, CODEX_VERDICT, 0.78, 2.88, 5.95, 3.17)
+    chip(slide, "主入口 · 真实会话 · run_79367a…", 0.78, 6.16, 2.9, fill=GREEN_SOFT, color=GREEN)
     box(slide, 6.98, 2.0, 5.6, 4.25, fill=WHITE, stroke=LINE)
     text(slide, "PRODUCT / QA", 7.28, 2.28, 1.8, 0.22, size=8.5, color=GREEN, bold=True)
     text(slide, "AgentRig 智能评测助手", 7.28, 2.75, 4.8, 0.4, size=20, color=INK, bold=True)
@@ -720,37 +708,16 @@ def build() -> Presentation:
         "只改模型可见边界，并用 Prompt SHA 证明 Candidate 已生效",
         "HTTP/SSE 适配层没有加入关键词路由，也没有为视频写死答案。",
     )
-    box(slide, 0.78, 2.03, 7.25, 4.5, fill="0E1418", stroke=None)
-    chip(slide, "PROMPT DIFF", 1.06, 2.3, 1.2, fill="1D2B34", color="80A9FF")
-    diff = [
-        "- retouch_photo 可完成复合图片编辑",
-        "+ retouch_photo 仅处理亮度、对比度等像素调整",
-        "+ 背景/素材必须 search_assets → apply_asset",
-        "+ 比例必须 crop_photo",
-        "+ 下一工具消费最新 output_image_ref",
-        "+ preserve_subject 传播到相关工具",
-    ]
+    picture(slide, CODEX_SKILL, 0.78, 2.03, 7.25, 3.86)
     text(
         slide,
-        "\n".join(diff),
-        1.06,
-        2.94,
-        6.5,
-        2.7,
-        size=11.2,
-        color="D7E0E4",
-        font="Menlo",
-        spacing=1.3,
-    )
-    text(
-        slide,
-        "修改范围：system.md + tool description",
-        1.06,
-        5.93,
-        5.8,
-        0.27,
+        "真实 Codex 会话：读取 Skill → MCP 冻结身份 → 最小 Prompt Diff（修改范围：system.md + tool description）",
+        0.78,
+        6.06,
+        7.25,
+        0.5,
         size=9.5,
-        color="8EA5FF",
+        color=MUTED,
         font="Menlo",
     )
     text(slide, "BEFORE", 8.5, 2.15, 1.0, 0.22, size=8.5, color=RED, bold=True)
@@ -873,7 +840,7 @@ def build() -> Presentation:
     steps = [
         ("01", "Capture", "真实 MCP 调用 1 次", "run_db173d…59ef", BLUE, BLUE_SOFT),
         ("02", "Event", "持久化 real_tool 事实", "evt_32fb37…f80d", AMBER, AMBER_SOFT),
-        ("03", "Sample", "Codex 创建 Draft", "sample_editflow…0814", BLUE, BLUE_SOFT),
+        ("03", "Sample", "Agent 创建 Draft", "sample_9344…1339", BLUE, BLUE_SOFT),
         ("04", "Review", "人类批准来源与边界", "approved", RED, RED_SOFT),
         ("05", "Replay", "Sample-only × 5", "run_1a209c…0b90", GREEN, GREEN_SOFT),
     ]
@@ -1033,7 +1000,7 @@ def build() -> Presentation:
         prs,
         16,
         "证据台账",
-        "正式录制已闭环；台账中的每个 Run、Sample 与事件均来自干净录制库",
+        "正式录制已闭环；全部证据来自干净录制库",
         "已证明的事实与尚未证明的边界必须同时出现在结论里。",
     )
     ledger = [

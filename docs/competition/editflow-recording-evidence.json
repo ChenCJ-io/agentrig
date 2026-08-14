@@ -92,6 +92,26 @@
     "Narration of the composed demo video is synthesized speech; frames are stills from this recording database and the proposal deck.",
     "The captured approved Sample covers inspect_image only, not the complete five-tool chain.",
     "Case and Sample approvals were operated through the Web-API review endpoints by the participant's delegated automation; the MCP surface holds no approval permission.",
-    "AgentScope/AgentTeams external live and target-scale SLOs remain separate environment claims."
-  ]
+    "AgentScope/AgentTeams external live and target-scale SLOs remain separate environment claims.",
+    "The Codex CLI session confirmed the candidate headline 5/5 over MCP and returned PARTIAL for its own scope (headline only); the full-matrix ACCEPT is evidenced by candidate_matrix in this file."
+  ],
+  "codex_session": {
+    "session": "codex exec · prompt-regression-governance",
+    "cli": "codex-cli 0.147.0",
+    "driver": "OpenAI Codex (developer entry), MCP -> recording AgentRig 8024",
+    "run_id": "run_79367abb0d5b4db2b743e143d130cb99",
+    "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
+    "case_id": "case_editflow_one_step_mixed_chain",
+    "attempt_count": 5,
+    "pass_count": 5,
+    "verdict": "PARTIAL (session scope: headline only; full ACCEPT is carried by the ledger matrix)",
+    "checks": {
+      "ruff": "pass",
+      "non_live_tests": "34 passed, 1 deselected"
+    },
+    "captures": [
+      "codex-01-skill-session.png",
+      "codex-02-regression-verdict.png"
+    ]
+  }
 }

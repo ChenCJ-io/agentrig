@@ -258,6 +258,25 @@
       },
       "surface": "web-api:assistant nl-plan → confirm → submit",
       "at": "2026-08-14T15:03:12+00:00"
+    },
+    "codex_session": {
+      "session": "codex exec · prompt-regression-governance",
+      "cli": "codex-cli 0.147.0",
+      "driver": "OpenAI Codex (developer entry), MCP -> recording AgentRig 8024",
+      "run_id": "run_79367abb0d5b4db2b743e143d130cb99",
+      "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
+      "case_id": "case_editflow_one_step_mixed_chain",
+      "attempt_count": 5,
+      "pass_count": 5,
+      "verdict": "PARTIAL (session scope: headline only; full ACCEPT is carried by the ledger matrix)",
+      "checks": {
+        "ruff": "pass",
+        "non_live_tests": "34 passed, 1 deselected"
+      },
+      "captures": [
+        "codex-01-skill-session.png",
+        "codex-02-regression-verdict.png"
+      ]
     }
   },
   "updated_at": "2026-08-14T15:03:12+00:00"

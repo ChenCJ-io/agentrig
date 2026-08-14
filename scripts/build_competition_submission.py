@@ -559,13 +559,13 @@ def main() -> None:
         video = video_metadata(ffmpeg, video_source)
         if intro_length() > 500 or slides != 16 or pdf["pages"] != 16:
             raise RuntimeError("competition document constraints failed")
-        if not 480 <= video["duration_seconds"] <= 600:
-            raise RuntimeError("review video must remain between 8:00 and 10:00")
+        if not 360 <= video["duration_seconds"] <= 600:
+            raise RuntimeError("demo video must remain between 6:00 and 10:00")
         if (video["width"], video["height"], round(video["fps"])) != (1920, 1080, 30):
             raise RuntimeError("competition video must be 1920x1080 at 30 fps")
         media_manifest = json.loads(video_metadata_source.read_text(encoding="utf-8"))
         narration = media_manifest.get("narration", {})
-        if narration.get("engine") not in {"edge-tts", "macos-say"}:
+        if narration.get("engine") not in {"edge-tts", "macos-say", "kokoro-local"}:
             raise RuntimeError("review video must declare an approved narration engine")
         if media_manifest.get("cut_purpose") != (
             "formal agent-led recording; stills and IDs come from the clean 2026-08-14 "

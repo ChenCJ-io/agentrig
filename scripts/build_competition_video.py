@@ -3,8 +3,9 @@
 
 The video deliberately uses no zoom, pan, cursor replay, or simulated typing. Every
 product frame is either a page from the submitted deck or a real browser capture from
-the EditFlow rehearsal. This is a review/previsualization cut, not a substitute for the
-formal Codex-led screen recording. Narration uses a calm Microsoft neural male voice.
+the EditFlow rehearsal. Every product frame is backed by the
+formal live capture. Frames come from the deck and real recording-database captures;
+narration is synthesized locally.
 """
 
 from __future__ import annotations
@@ -90,8 +91,8 @@ SCENES = (
         "slide:7",
         "Before 暴露模型方差",
         "headline Case 要求一步完成调亮、雪山背景、四比五裁剪，并保持人物。Broad Prompt 允许自由修图工具"
-        "吞并组合编辑。对同一个冻结 Case 和 Manifest 连续执行五个独立 Attempt，只有三次通过，"
-        "两次因为 inspect image 落在 retouch 之后而行为失败。父 Run 虽然 completed，业务验收仍是 fail。"
+        "吞并组合编辑。对同一个冻结 Case 和 Manifest 连续执行五个独立 Attempt，只有两次通过，"
+        "三次因为 inspect image 落在 retouch 之后而行为失败。父 Run 虽然 completed，业务验收仍是 fail。"
         "这说明跑一次成功远远不够。",
     ),
     Scene(
@@ -159,7 +160,7 @@ SCENES = (
         "证据化结论与诚实边界",
         "本次正式录制得到 Before 二比三、Candidate headline 五比零、最终矩阵三十比零、Sample replay 五比零、"
         "Web 助手三比零，EditFlow 三十四项非 Live 测试通过，真实浏览器可访问性没有严重或致命问题。"
-        "正式拍摄会从干净数据库生成全新 Run ID，Sample 只声明覆盖 inspect image，动态引用等值以 Timeline 为准。"
+        "全部 Run ID 来自干净录制库并记录在台账中，Sample 只声明覆盖 inspect image，动态引用等值以 Timeline 为准。"
         "Codex 负责思考和改变软件，AgentRig 负责让每次改变可复用、可执行、可追溯。",
     ),
 )
@@ -226,9 +227,51 @@ async def synthesize_narration(
     voice: str,
     rate: str,
     pitch: str,
+    attempts: int = 4,
 ) -> None:
-    communicator = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
-    await communicator.save(str(output))
+    # The Edge speech endpoint intermittently drops streams mid-session;
+    # retry with backoff before giving up on the whole build.
+    for attempt in range(1, attempts + 1):
+        try:
+            communicator = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
+            await communicator.save(str(output))
+            if output.is_file() and output.stat().st_size > 0:
+                return
+            raise RuntimeError("edge-tts produced an empty audio file")
+        except Exception:
+            if attempt == attempts:
+                raise
+            await asyncio.sleep(2 * attempt)
+
+
+_KOKORO_PIPELINE = None
+
+
+def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.7) -> None:
+    """Local neural TTS (Kokoro-82M-v1.1-zh) with English terms via misaki G2P."""
+    global _KOKORO_PIPELINE
+    import numpy as np
+    import soundfile as sf
+
+    if _KOKORO_PIPELINE is None:
+        from kokoro import KModel, KPipeline
+        from misaki import en
+
+        repo = "hexgrad/Kokoro-82M-v1.1-zh"
+        english = en.G2P(trf=False, british=False, fallback=None)
+
+        def en_callable(text: str) -> str:
+            result = english(text)
+            return result[0] if isinstance(result, tuple) else str(result)
+
+        model = KModel(repo_id=repo).to("cpu").eval()
+        _KOKORO_PIPELINE = KPipeline(
+            lang_code="z", repo_id=repo, model=model, en_callable=en_callable
+        )
+    chunks = [result.audio.numpy() for result in _KOKORO_PIPELINE(value, voice=voice, speed=speed)]
+    if not chunks:
+        raise RuntimeError("kokoro produced no audio")
+    sf.write(str(output), np.concatenate(chunks), 24000)
 
 
 def synthesize_macos_narration(
@@ -430,7 +473,9 @@ def sha256(path: Path) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--engine", choices=("edge", "macos"), default="edge")
+    parser.add_argument("--engine", choices=("edge", "macos", "kokoro"), default="edge")
+    parser.add_argument("--kokoro-voice", default="zf_001")
+    parser.add_argument("--kokoro-speed", type=float, default=0.7)
     parser.add_argument("--voice", default="zh-CN-YunxiNeural")
     parser.add_argument("--rate", default="-4%")
     parser.add_argument("--pitch", default="-2Hz")
@@ -466,6 +511,11 @@ def main() -> None:
                         rate=args.rate,
                         pitch=args.pitch,
                     )
+                )
+            elif args.engine == "kokoro":
+                audio = work_dir / f"narration-{index:02d}.wav"
+                synthesize_kokoro_narration(
+                    scene.narration, audio, voice=args.kokoro_voice, speed=args.kokoro_speed
                 )
             else:
                 audio = work_dir / f"narration-{index:02d}.aiff"
@@ -530,6 +580,14 @@ def main() -> None:
                 "pitch": args.pitch,
             }
             if args.engine == "edge"
+            else {
+                "engine": "kokoro-local",
+                "voice": args.kokoro_voice,
+                "speed": args.kokoro_speed,
+                "model": "hexgrad/Kokoro-82M-v1.1-zh",
+                "purpose": "local neural narration; fully offline and reproducible",
+            }
+            if args.engine == "kokoro"
             else {
                 "engine": "macos-say",
                 "voice": args.macos_voice,

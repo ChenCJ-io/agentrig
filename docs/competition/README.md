@@ -29,6 +29,7 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 - Candidate matrix：6 Cells / 30 Attempts，30/30；
 - Real MCP Capture：1 次；Sample-only Replay：5/5、5 Sample hit、Run 内 real_tool Attempt=0；
 - Web Assistant：Plan → confirm → submit → Run，3/3；
+- Codex CLI 真实会话：读取 Skill 后经 MCP 提交确认批次 5/5（同一冻结 Manifest），并按 Skill 如实输出 PARTIAL；
 - EditFlow：34 non-live tests；Web：typecheck、真实后端 E2E、Axe 0 serious/critical。
 
 详细机器事实见 `editflow-recording-evidence.json`（正式录制）与《EditFlow彩排证据与正式录制台账.md》
@@ -77,7 +78,8 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 ```bash
 uv run --with python-pptx python scripts/build_competition_deck.py
 node web/scripts/render-competition-deck.mjs
-uv run --with imageio-ffmpeg --with edge-tts python scripts/build_competition_video.py --engine macos
+uv run --with imageio-ffmpeg --with edge-tts --with kokoro --with "misaki[en,zh]" --with soundfile \
+  python scripts/build_competition_video.py --engine kokoro
 uv build
 uv run python scripts/build_competition_submission.py
 ```
