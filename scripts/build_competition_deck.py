@@ -802,7 +802,7 @@ def build() -> Presentation:
     box(slide, 10.23, 4.73, 2.18, 1.1, fill=GREEN_SOFT, stroke=None)
     text(
         slide,
-        "headline\n3 / 5 → 5 / 5",
+        "headline\n2 / 5 → 5 / 5",
         10.42,
         4.96,
         1.8,
