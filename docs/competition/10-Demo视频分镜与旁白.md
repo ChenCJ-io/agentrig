@@ -13,7 +13,7 @@
 | 00:20—00:52 | EditFlow README/能力 | 真实模型与协议，受控图片副作用 | Agno、DeepSeek、5 tools、PostgreSQL |
 | 00:52—01:25 | Codex 读取 Skill | 先冻结身份和不变量，不直接改 Prompt | commit、Before Prompt SHA、Case IDs |
 | 01:25—02:10 | MCP Case 审计 + Web 审核 | 查重、Reuse/Change/New/Exclude、人工冻结 | 真 New Case；Draft → approved |
-| 02:10—02:55 | Before Run/Cell | 单次成功不够，5 次暴露随机回归 | 1 Cell/5 Attempts；3 Pass/2 Fail |
+| 02:10—02:55 | Before Run/Cell | 单次成功不够，5 次暴露随机回归 | 1 Cell/5 Attempts；2 Pass/3 Fail |
 | 02:55—03:32 | Prompt/description Diff | 只改模型可见边界，不在 HTTP 层写路由 | 精简 Diff；34 tests |
 | 03:32—03:55 | 重启与身份对比 | SHA 不变就不算 Candidate | `43157c…` → `71adb3…` |
 | 03:55—05:00 | Candidate + Matrix + Timeline | 同 Case 5/5；六 Case 30/30；内部行为可见 | Manifest、30/30、参数与引用 |
@@ -103,7 +103,7 @@ Review 后如需压缩，保留 12 个场景但缩短为：15、18、18、25、2
 - 每个段落的 Run/Cell/Attempt/Timeline 来自同一 Run；
 - 可剪等待和日志滚动，不可跨 Run 拼“完美轨迹”；
 - Codex UI 必须是真实执行；若使用静态摘录，明确标注；
-- 正式录制使用新 ledger，彩排 `run_38a956…` 等 ID 不冒充现场；
+- 正式录制台账已生成：矩阵 `run_3afacf…` 等 ID 均来自干净录制库，不与彩排批次拼接；
 - 画面固定硬切，不做 zoompan、鼠标追踪或后期防抖；
 - 旁白优先真人；TTS 使用自然中文男声，场景级响度约 -16 LUFS；
 - 术语 Run、Cell、Attempt、Sample、Manifest 全片统一。

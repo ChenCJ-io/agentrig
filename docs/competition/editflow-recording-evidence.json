@@ -1,0 +1,97 @@
+{
+  "schema_version": "agentrig.competition-recording.v1",
+  "recorded_at": "2026-08-14T15:03:12+00:00",
+  "status": "formal_recording",
+  "driver": "Claude Code (agent over AgentRig MCP; approvals via Web API endpoints)",
+  "recording_database": ".agentrig/editflow-recording-20260814.db (fresh; seed preflight clean: 7 draft cases, 0 samples, 0 runs)",
+  "editflow_commits": {
+    "baseline": "f38257ddceb3c95291a1b03304fa5b9eaa6a8eb3",
+    "candidate": "12475f390e648de1cac496eb63137e32aaf6d91d",
+    "baseline_tag": "recording-baseline-v1"
+  },
+  "target": {
+    "id": "target_editflow_http_sse",
+    "framework": "agno",
+    "framework_version": "2.6.11",
+    "model": "deepseek-v4-flash",
+    "protocol": "http_sse",
+    "tool_count": 5
+  },
+  "new_case": {
+    "case_id": "case_editflow_one_step_mixed_chain",
+    "review_status": "draft",
+    "created_at": "2026-08-14T13:38:43+00:00",
+    "surface": "mcp:create_test_case"
+  },
+  "before": {
+    "prompt_sha256": "43157c294fef4cc0cacd2089a0973402cb15794421340504f8a35f546f879572",
+    "run_id": "run_61e7649365274a238f566e40328d9c03",
+    "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
+    "case_id": "case_editflow_one_step_mixed_chain",
+    "cell_count": 1,
+    "attempt_count": 5,
+    "pass_count": 2,
+    "fail_count": 3,
+    "failure_class": "behavior_regression"
+  },
+  "candidate_headline": {
+    "prompt_sha256": "71adb390cb86dd05dc5fdc1d9cf2656a436525176ccf178543eaf81a65dff7fd",
+    "run_id": "run_b8ac3aa9d5b1437ba0954144ff6024ea",
+    "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
+    "case_id": "case_editflow_one_step_mixed_chain",
+    "cell_count": 1,
+    "attempt_count": 5,
+    "pass_count": 5,
+    "fail_count": 0
+  },
+  "candidate_matrix": {
+    "run_id": "run_3afacf3d9e304498b677265b11044793",
+    "manifest_hash": "sha256:50adbfacf8ee62cd01fa38647f1f79f9575fc80b3e08442f30be3744f7cfbdaf",
+    "case_count": 6,
+    "cell_count": 6,
+    "attempt_count": 30,
+    "pass_count": 30,
+    "fail_count": 0,
+    "case_ids": [
+      "case_editflow_brighten_only",
+      "case_editflow_background",
+      "case_editflow_mixed_chain",
+      "case_editflow_preserve_subject",
+      "case_editflow_crop_only",
+      "case_editflow_asset_miss"
+    ]
+  },
+  "sample_flow": {
+    "capture_run_id": "run_db173d3e5b314568bfad82d2b3fc59ef",
+    "source_tool_call_event_id": "evt_32fb37661a564843b5973c60ad7ff80d",
+    "real_tool_hits": 1,
+    "sample_id": "sample_934464c5a0414796839cac6d821b1339",
+    "sample_source_type": "real_tool",
+    "sample_status": "approved",
+    "replay_run_id": "run_1a209c84b61f4390bf468af8865f0b90",
+    "replay_attempt_count": 5,
+    "replay_pass_count": 5,
+    "sample_hits": 5,
+    "replay_real_tool_attempts": 0
+  },
+  "web_assistant": {
+    "session_id": "asst_5740815c6ef248d2992f77c6fc8d970e",
+    "plan_id": "plan_a0d80e75e2634b5f81fe751a197bbdbb",
+    "run_id": "run_a1c88bc8ed83474a9261df9e1d0d23fb",
+    "confirmation_reason": "repeated execution",
+    "case_count": 1,
+    "attempt_count": 3,
+    "pass_count": 3
+  },
+  "checks": {
+    "editflow_ruff": "pass",
+    "editflow_non_live_tests_passed": 34,
+    "editflow_live_tests_deselected": 1
+  },
+  "limitations": [
+    "Narration of the composed demo video is synthesized speech; frames are stills from this recording database and the proposal deck.",
+    "The captured approved Sample covers inspect_image only, not the complete five-tool chain.",
+    "Case and Sample approvals were operated through the Web-API review endpoints by the participant's delegated automation; the MCP surface holds no approval permission.",
+    "AgentScope/AgentTeams external live and target-scale SLOs remain separate environment claims."
+  ]
+}

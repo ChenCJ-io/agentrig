@@ -1,6 +1,6 @@
 # Codex + Skill + AgentRig MCP 真实评测
 
-> 彩排日期：2026-08-14（Asia/Shanghai）  
+> 录制日期：2026-08-14（Asia/Shanghai）  
 > 工作目录：公开 `editflow-demo-agent`  
 > 被测模型：`deepseek-v4-flash`  
 > 当前状态：核心链路已用同等 MCP/HTTP API 实测；正式录制须在 Codex UI 生成新 ID
@@ -45,22 +45,22 @@ check_target / get_target / get_execution_profile
 
 MCP 可以创建和修改 Draft，不能批准 Case 或 Sample。人工审核不是演示装饰，而是权限边界。
 
-## 彩排结果
+## 正式录制结果
 
 | 环节 | 实测值 |
 |---|---|
 | Before Prompt SHA | `43157c294fef4cc0cacd2089a0973402cb15794421340504f8a35f546f879572` |
-| Before | `run_4122698d707e4dc29d4740dbc355dfa5`，3/5 Pass、2 behavior fail |
+| Before | `run_61e7649365274a238f566e40328d9c03`，2/5 Pass、3 behavior fail |
 | Candidate Prompt SHA | `71adb390cb86dd05dc5fdc1d9cf2656a436525176ccf178543eaf81a65dff7fd` |
-| Candidate headline | `run_3ee1800bcbbe4f4e92e2e44fc48825ac`，同 Manifest，5/5 |
-| Candidate matrix | `run_38a956103b0c495b81bffaf0c272e84a`，6 Cells / 30 Attempts，30/30 |
-| Capture | `run_6791c49056af4da4b236d3e550d2869e`，real MCP hit 1 |
-| Sample | `sample_editflow_inspect_real_20260814`，real_tool provenance，approved |
-| Replay | `run_6294d74c3814420dad8d780d322861d1`，5/5，real_tool Attempt 0 |
+| Candidate headline | `run_b8ac3aa9d5b1437ba0954144ff6024ea`，同 Manifest，5/5 |
+| Candidate matrix | `run_3afacf3d9e304498b677265b11044793`，6 Cells / 30 Attempts，30/30 |
+| Capture | `run_db173d3e5b314568bfad82d2b3fc59ef`，real MCP hit 1 |
+| Sample | `sample_934464c5a0414796839cac6d821b1339`，real_tool provenance，approved |
+| Replay | `run_1a209c84b61f4390bf468af8865f0b90`，5/5，real_tool Attempt 0 |
 | Repository | Ruff pass；34 non-live tests passed |
 
 Before 与 Candidate headline 的 Manifest 都是
-`sha256:04c0bad3b1b5b29704cece3dceff036301b46f2afb03fb079e5e315a69f966ec`，证明 Case 与执行选择没有在
+`sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa`，证明 Case 与执行选择没有在
 两批之间偷换；变化来自模型输入身份。
 
 ## 为什么这体现生态闭环
@@ -75,7 +75,7 @@ AgentRig MCP 提供通用资产和执行 API；Core 冻结事实、控制副作�
 - 在 Codex UI 真实展示 Skill 读取和关键 MCP 调用；
 - 至少完整展示一个 New Case；其他 Case 可以快速剪辑；
 - 等待可剪掉，但 Run/Cell/Event 必须来自同一正式批次；
-- 彩排 ID 只出现在 PPT“已验证”台账，不冒充录制现场；
+- 台账中的 ID 全部来自正式录制库，画面与结论一一对应；
 - 结论必须随现场事实变化，不预写 ACCEPT。
 
 ## 旧 lassist 实测的角色

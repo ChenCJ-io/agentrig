@@ -38,22 +38,28 @@
 | 人工边界真实存在 | MCP 不能批准 Case/Sample；重复执行的 confirm 与 submit 分离 |
 | 不绑定单一 Agent | EditFlow 公开复现；lassist 保留为真实生产形态兼容附录 |
 
-## 4. 正式录制空表
+## 4. 正式录制台账（2026-08-14，干净录制库）
 
-| 正式证据 | 待填写值 | 硬门槛 |
+录制环境：录制专用 AgentRig（sqlite `editflow-recording-20260814.db`，seed preflight：7 Draft / 0 Sample /
+0 Run）+ EditFlow 8094 + 本地工具 MCP 8095；驱动方为参赛人授权的 Claude Code（Agent 动作走 AgentRig
+MCP，Case/Sample 批准走 Web 审核端点，MCP 无批准权限）。机器事实源：
+[editflow-recording-evidence.json](./editflow-recording-evidence.json) 与
+[editflow-recording-ledger.json](./editflow-recording-ledger.json)。
+
+| 正式证据 | 实测值 | 硬门槛核对 |
 |---|---|---|
-| Baseline tag / commit | — | 工作树干净、公开可定位 |
-| Candidate commit | — | 验收后提交 |
-| Before / Candidate Prompt SHA | — / — | 必须不同 |
-| New Case | — | 现场创建 Draft，人工 approved |
-| Before Run / Manifest | — / — | 5 个独立 Attempt；如实展示结果 |
-| Candidate headline Run | — | hard Case 5/5 才可 ACCEPT |
-| Candidate matrix Run | — | 相关 hard Case 全通过 |
-| Capture Run / source event | — / — | `source=real_tool` |
-| Sample | — | `source_type=real_tool`、人工 approved |
-| Replay Run | — | 5/5；Run 内 real_tool Attempt=0 |
-| Assistant Session / Plan / Run | — / — / — | 确认与提交分离 |
-| Final Decision | — | 与实际 Cell/Attempt 一致 |
+| Baseline tag / commit | `recording-baseline-v1` / `f38257dd` | 工作树干净（`worktree_dirty=false`）✅ |
+| Candidate commit | `12475f39` | 验收后提交，工作树干净 ✅ |
+| Before / Candidate Prompt SHA | `43157c…9572` / `71adb390…f7fd` | 不同 ✅ |
+| New Case | `case_editflow_one_step_mixed_chain` | MCP 现场创建 Draft，经 Web 审核 approved ✅ |
+| Before Run / Manifest | `run_61e7649365274a238f566e40328d9c03` / `sha256:bb5008e6…6766aa` | 5 独立 Attempt：2 Pass / 3 `behavior_regression` ✅ |
+| Candidate headline Run | `run_b8ac3aa9d5b1437ba0954144ff6024ea` | 同 Manifest，5/5 → ACCEPT ✅ |
+| Candidate matrix Run | `run_3afacf3d9e304498b677265b11044793` | 6 Cells / 30 Attempts，30/30 ✅ |
+| Capture Run / source event | `run_db173d3e5b314568bfad82d2b3fc59ef` / `evt_32fb37661a564843b5973c60ad7ff80d` | `source=real_tool`，命中 1 次 ✅ |
+| Sample | `sample_934464c5a0414796839cac6d821b1339` | `source_type=real_tool`、Web 审核 approved ✅ |
+| Replay Run | `run_1a209c84b61f4390bf468af8865f0b90` | 5/5；Run 内 real_tool Attempt=0 ✅ |
+| Assistant Session / Plan / Run | `asst_5740815c6ef248d2992f77c6fc8d970e` / `plan_a0d80e75e2634b5f81fe751a197bbdbb` / `run_a1c88bc8ed83474a9261df9e1d0d23fb` | 确认与提交分离，3/3 ✅ |
+| Final Decision | ACCEPT | hard Case 5/5、矩阵 30/30、仓库检查通过 ✅ |
 
 ## 5. 禁止混用
 

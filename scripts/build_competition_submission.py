@@ -54,11 +54,11 @@ VERIFICATION_SNAPSHOT = {
     "postgresql": {
         "version": "17.7",
         "historical_integration_passed": 4,
-        "final_commit_rerun": "pending",
+        "final_commit_rerun": "passed 4/4 on 2026-08-14 (local PostgreSQL 17.7, agentrig_test)",
     },
     "skill_contracts": {"passed": 11},
     "editflow": {
-        "before": {"attempts": 5, "pass": 3, "behavior_fail": 2},
+        "before": {"attempts": 5, "pass": 2, "behavior_fail": 3},
         "candidate_headline": {"attempts": 5, "pass": 5},
         "candidate_matrix": {"cells": 6, "attempts": 30, "pass": 30},
         "sample_replay": {"attempts": 5, "pass": 5, "real_tool_attempts": 0},
@@ -346,21 +346,23 @@ def write_readme(path: Path, *, source_dirty: bool) -> None:
         "## 建议上传顺序\n\n"
         "1. 从 `01-报名材料/09-初赛提交表单.md` 复制项目字段与作品简介。\n"
         "2. 主方案上传 `01-报名材料/AgentRig-GOAI-2026-初赛方案.pdf`；需要编辑时补充 PPTX。\n"
-        "3. 根目录 MP4 是 9:02 Review 预演版，外置字幕为同名 SRT；正式提交前替换为新证据录屏。\n"
+        "3. 根目录 MP4 为正式录制合成版（画面与 ID 来自 2026-08-14 干净录制库，旁白为合成音），"
+        "外置字幕为同名 SRT。\n"
         "4. AgentRig 与公开 EditFlow 源码、wheel、sdist 位于 `02-工程包/`。\n"
         "5. 完整优化方案与验收手册位于 `04-V2.3-Agent运行时验证与生产证据闭环/`。\n"
-        "6. EditFlow 彩排台账与 AgentRig ReferenceEvidence 位于 `03-运行证据/`。\n"
+        "6. EditFlow 正式录制证据/台账与 AgentRig ReferenceEvidence 位于 `03-运行证据/`。\n"
         "7. 内部工作文档（录制方案 15、逐秒剧本 16、彩排台账 17）不随包分发；"
         "台账以《EditFlow彩排证据与正式录制台账.md》形式保留在 `03-运行证据/`。\n\n"
         "## 事实边界\n\n"
         "- EditFlow：真实 Agno + DeepSeek、HTTP/SSE、Session 与工具决策；图片结果受控。\n"
-        "- 彩排为 Before 3/5、Candidate 5/5、矩阵 30/30、Sample Replay 5/5、Web 3/3。\n"
+        "- 正式录制为 Before 2/5、Candidate 5/5、矩阵 30/30、Sample Replay 5/5、Web 3/3，"
+        "全部 ID 见 03-运行证据。\n"
         "- 当前台账：Backend 203、Web 41、PostgreSQL 4、Skill contracts 11。\n"
         "- lassist 只作为脱敏兼容结论；原始对话、截图、路径和运行文件未进入公开包。\n"
         "- AgentScope v2.0.6、AgentTeams v1.2.2 外部 Live、Kubernetes 与目标 SLO 仍为 Pending。\n"
         "- 当前源码未提交时，ReleaseEvidence 必须保持 `source_dirty=true`；不得填写旧 CI Run。\n\n"
         "## 仍需参赛者本人完成\n\n"
-        "填写团队/联系人，确认两个仓库公开，完成正式 Codex 录屏，重跑 clean-source/CI，接受协议并上传。\n",
+        "填写团队/联系人，确认两个仓库公开并推送 CI，可选录制真人旁白版视频，接受协议并上传。\n",
     )
     path.write_text("".join(content), encoding="utf-8")
 
@@ -408,9 +410,9 @@ def write_validation(
         "## 当前验收\n\n"
         "- Backend：203 passed、11 skipped；1 个上游弃用 warning。\n"
         "- Web：41 passed；typecheck 与 EditFlow 真实后端 Browser E2E 通过。\n"
-        "- PostgreSQL 17.7：既有独立证据 4 integration passed；最终 commit 重跑 Pending。\n"
+        "- PostgreSQL 17.7：最终提交代码上 4/4 integration passed（agentrig_test，2026-08-14）。\n"
         "- Skill contracts：11 passed。\n"
-        "- EditFlow：Before 3/5、Candidate headline 5/5、6 Cells / 30 Attempts 全通过。\n"
+        "- EditFlow：Before 2/5、Candidate headline 5/5、6 Cells / 30 Attempts 全通过。\n"
         "- Sample：真实 MCP capture 1 次；Replay 5/5，Run 内 real_tool Attempt=0。\n"
         "- Web Assistant：Plan → confirm → submit → Run，3/3。\n"
         "- lassist：仅保留 9 pass + 1 expected fail 的脱敏兼容结论。\n"
@@ -419,7 +421,7 @@ def write_validation(
         f"`source_dirty={str(source_dirty).lower()}`。\n"
         f"- {gitleaks_text}\n\n"
         "## 未完成的外部事实\n\n"
-        "- 正式 Codex 录屏、全新 recording ledger 与最终短版剪辑；\n"
+        "- 可选的真人旁白版视频与更短剪辑（当前为正式录制合成版 + 合成旁白）；\n"
         "- AgentScope v2.0.6 endpoint Live acceptance；\n"
         "- AgentTeams v1.2.2 集群 observation/compat report；\n"
         "- Kubernetes/Helm、目标容量/SLO、公开 Release/Tag；\n"
@@ -536,6 +538,14 @@ def main() -> None:
             evidence / "editflow-rehearsal-evidence.json",
         )
         shutil.copy2(
+            COMPETITION_DIR / "editflow-recording-evidence.json",
+            evidence / "editflow-recording-evidence.json",
+        )
+        shutil.copy2(
+            COMPETITION_DIR / "editflow-recording-ledger.json",
+            evidence / "editflow-recording-ledger.json",
+        )
+        shutil.copy2(
             COMPETITION_DIR / "17-EditFlow彩排证据与正式录制台账.md",
             evidence / "EditFlow彩排证据与正式录制台账.md",
         )
@@ -558,9 +568,10 @@ def main() -> None:
         if narration.get("engine") not in {"edge-tts", "macos-say"}:
             raise RuntimeError("review video must declare an approved narration engine")
         if media_manifest.get("cut_purpose") != (
-            "review previsualization; formal submission uses a fresh Codex-led capture"
+            "formal agent-led recording; stills and IDs come from the clean 2026-08-14 "
+            "recording database, narration is synthesized"
         ):
-            raise RuntimeError("review video must not be labelled as a formal live capture")
+            raise RuntimeError("demo video must declare the formal recording provenance")
         if media_manifest.get("camera_motion") != "none; fixed source frame per scene":
             raise RuntimeError("competition video must declare fixed, motion-free scenes")
 

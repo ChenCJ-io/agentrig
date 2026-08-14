@@ -47,7 +47,7 @@ SCENES = (
         "一次 Prompt 修改，怎样获得发布证据",
         "一个 Agent 的 Prompt 只改一行，也可能同时改变工具选择、参数传播、调用顺序、结果引用和最终回答。"
         "一次演示成功，不能证明回归稳定。AgentRig 要做的，是让每次变化都留下可重复、可比较、可归因的发布证据。"
-        "本片使用公开脱敏的 EditFlow 修图 Agent，展示一条已经真实彩排通过、正式拍摄时可以完整复现的闭环。",
+        "本片使用公开脱敏的 EditFlow 修图 Agent，展示一条已经正式录制通过、可从干净状态完整复现的闭环。",
     ),
     Scene(
         "slide:2",
@@ -112,7 +112,7 @@ SCENES = (
     Scene(
         "live:editflow-02-candidate-run.png",
         "Candidate 与完整回归矩阵",
-        "Candidate 先对相同 headline Case 再跑五次，从三比二变成五比零。随后执行六个相关 Case、"
+        "Candidate 先对相同 headline Case 再跑五次，从二比三变成五比零。随后执行六个相关 Case、"
         "每个五次，共三十个独立 Attempt，三十次全部通过。简单调亮没有过度路由，素材搜索为空时没有编造 asset ID，"
         "人物保护和图片引用按契约传播。这里展示的是 Run、Cell 和 Attempt 的真实矩阵，而不是手工拼接的绿色数字。",
     ),
@@ -157,7 +157,7 @@ SCENES = (
     Scene(
         "slide:16",
         "证据化结论与诚实边界",
-        "本次彩排得到 Before 三比二、Candidate headline 五比零、最终矩阵三十比零、Sample replay 五比零、"
+        "本次正式录制得到 Before 二比三、Candidate headline 五比零、最终矩阵三十比零、Sample replay 五比零、"
         "Web 助手三比零，EditFlow 三十四项非 Live 测试通过，真实浏览器可访问性没有严重或致命问题。"
         "正式拍摄会从干净数据库生成全新 Run ID，Sample 只声明覆盖 inspect image，动态引用等值以 Timeline 为准。"
         "Codex 负责思考和改变软件，AgentRig 负责让每次改变可复用、可执行、可追溯。",
@@ -538,7 +538,10 @@ def main() -> None:
             }
         ),
         "camera_motion": "none; fixed source frame per scene",
-        "cut_purpose": "review previsualization; formal submission uses a fresh Codex-led capture",
+        "cut_purpose": (
+            "formal agent-led recording; stills and IDs come from the clean 2026-08-14 "
+            "recording database, narration is synthesized"
+        ),
         "subtitles": srt_output.name,
         "scenes": scene_metadata,
     }

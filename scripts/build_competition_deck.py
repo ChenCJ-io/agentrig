@@ -573,7 +573,7 @@ def build() -> Presentation:
         prs,
         7,
         "真实回归 · Before",
-        "同一冻结 Case 跑 5 次：3 Pass / 2 Behavior Fail",
+        "同一冻结 Case 跑 5 次：2 Pass / 3 Behavior Fail",
         "单次成功掩盖模型方差；父 Run completed 不等于业务验收通过。",
     )
     box(slide, 0.78, 2.02, 4.25, 4.72, fill=DARK, stroke=None)
@@ -603,7 +603,7 @@ def build() -> Presentation:
     )
     text(
         slide,
-        "Manifest  04c0bad3…966ec",
+        "Manifest  bb5008e6…6766aa",
         1.08,
         5.68,
         3.25,
@@ -623,8 +623,8 @@ def build() -> Presentation:
         color="AAB3AF",
         font="Menlo",
     )
-    stat(slide, "3", "Pass", 5.6, 2.22, 1.2, color=GREEN)
-    stat(slide, "2", "Behavior Fail", 7.22, 2.22, 1.7, color=RED)
+    stat(slide, "2", "Pass", 5.6, 2.22, 1.2, color=GREEN)
+    stat(slide, "3", "Behavior Fail", 7.22, 2.22, 1.7, color=RED)
     stat(slide, "5", "Independent Attempts", 9.5, 2.22, 2.3, color=BLUE)
     rule(slide, 5.58, 3.32, 6.5)
     text(slide, "失败轨迹", 5.6, 3.72, 1.3, 0.28, size=13.5, color=RED, bold=True)
@@ -654,7 +654,7 @@ def build() -> Presentation:
         bold=True,
     )
     text(
-        slide, "Run  run_4122698d…55dfa5", 5.6, 6.28, 4.8, 0.25, size=9.4, color=MUTED, font="Menlo"
+        slide, "Run  run_61e76493…8d9c03", 5.6, 6.28, 4.8, 0.25, size=9.4, color=MUTED, font="Menlo"
     )
 
     # 08 — case governance
@@ -815,7 +815,7 @@ def build() -> Presentation:
     )
     text(
         slide,
-        "run_38a956…e84a",
+        "run_3afacf…4793",
         10.23,
         6.18,
         2.18,
@@ -871,11 +871,11 @@ def build() -> Presentation:
         "真实来源、人工责任和重复成本被放进同一条证据链。",
     )
     steps = [
-        ("01", "Capture", "真实 MCP 调用 1 次", "run_6791c…869e", BLUE, BLUE_SOFT),
-        ("02", "Event", "持久化 real_tool 事实", "evt_7581c…be80", AMBER, AMBER_SOFT),
+        ("01", "Capture", "真实 MCP 调用 1 次", "run_db173d…59ef", BLUE, BLUE_SOFT),
+        ("02", "Event", "持久化 real_tool 事实", "evt_32fb37…f80d", AMBER, AMBER_SOFT),
         ("03", "Sample", "Codex 创建 Draft", "sample_editflow…0814", BLUE, BLUE_SOFT),
         ("04", "Review", "人类批准来源与边界", "approved", RED, RED_SOFT),
-        ("05", "Replay", "Sample-only × 5", "run_6294d…61d1", GREEN, GREEN_SOFT),
+        ("05", "Replay", "Sample-only × 5", "run_1a209c…0b90", GREEN, GREEN_SOFT),
     ]
     for i, (number, name, detail, ident, accent, soft) in enumerate(steps):
         x = 0.78 + i * 2.42
@@ -932,7 +932,7 @@ def build() -> Presentation:
     box(slide, 10.23, 5.58, 2.18, 0.72, fill=GREEN_SOFT, stroke=None)
     text(
         slide,
-        "run_76307b…d28b9\n3 / 3 PASS",
+        "run_a1c88b…23fb\n3 / 3 PASS",
         10.38,
         5.72,
         1.88,
@@ -1033,11 +1033,11 @@ def build() -> Presentation:
         prs,
         16,
         "证据台账",
-        "彩排已闭环；正式拍摄重新生成一套不可拼接的新证据",
+        "正式录制已闭环；台账中的每个 Run、Sample 与事件均来自干净录制库",
         "已证明的事实与尚未证明的边界必须同时出现在结论里。",
     )
     ledger = [
-        ("Before", "3 / 5", "2 次行为失败", RED),
+        ("Before", "2 / 5", "3 次行为失败", RED),
         ("Headline", "5 / 5", "同 Case + Manifest", GREEN),
         ("Matrix", "30 / 30", "6 Cells", GREEN),
         ("Sample replay", "5 / 5", "0 real_tool", GREEN),

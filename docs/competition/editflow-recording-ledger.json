@@ -1,0 +1,264 @@
+{
+  "schema_version": "editflow.recording-ledger.v1",
+  "steps": {
+    "target_check_baseline": {
+      "reachable": true,
+      "model_input_sha256": "43157c294fef4cc0cacd2089a0973402cb15794421340504f8a35f546f879572",
+      "source_commit": "f38257ddceb3c95291a1b03304fa5b9eaa6a8eb3",
+      "worktree_dirty": false,
+      "model_id": "deepseek-v4-flash",
+      "at": "2026-08-14T13:38:43+00:00"
+    },
+    "new_case": {
+      "case_id": "case_editflow_one_step_mixed_chain",
+      "review_status": "draft",
+      "created_at": "2026-08-14T13:38:43+00:00",
+      "surface": "mcp:create_test_case"
+    },
+    "case_approvals": {
+      "approved": [
+        {
+          "case_id": "case_editflow_one_step_mixed_chain",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_brighten_only",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_background",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_mixed_chain",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_preserve_subject",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_crop_only",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_asset_miss",
+          "review_status": "approved"
+        },
+        {
+          "case_id": "case_editflow_inspect_sample_capture",
+          "review_status": "approved"
+        }
+      ],
+      "surface": "web-api:/test-cases/{id}/review",
+      "at": "2026-08-14T13:38:43+00:00"
+    },
+    "before_headline": {
+      "run_id": "run_61e7649365274a238f566e40328d9c03",
+      "status": "completed",
+      "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
+      "cell_count": 1,
+      "attempt_count": 5,
+      "pass_count": 2,
+      "fail_count": 3,
+      "evaluation_states": [
+        "fail",
+        "fail",
+        "pass",
+        "fail",
+        "pass"
+      ],
+      "tool_result_sources": [
+        "fixture"
+      ],
+      "real_tool_results": 0,
+      "sample_results": 0,
+      "recorded_at": "2026-08-14T13:40:26+00:00",
+      "profile_id": "profile_editflow_fixture_only",
+      "case_ids": [
+        "case_editflow_one_step_mixed_chain"
+      ],
+      "surface": "mcp:run_cases"
+    },
+    "capture_run": {
+      "run_id": "run_db173d3e5b314568bfad82d2b3fc59ef",
+      "status": "completed",
+      "manifest_hash": "sha256:88de51ad48d6bf90016fd46b07fc470ce54e19d3b51efa90d001d38d30fd1b45",
+      "cell_count": 1,
+      "attempt_count": 1,
+      "pass_count": 1,
+      "fail_count": 0,
+      "evaluation_states": [
+        "pass"
+      ],
+      "tool_result_sources": [
+        "real_tool"
+      ],
+      "real_tool_results": 1,
+      "sample_results": 0,
+      "recorded_at": "2026-08-14T13:41:59+00:00",
+      "profile_id": "profile_editflow_capture_real_sample",
+      "case_ids": [
+        "case_editflow_inspect_sample_capture"
+      ],
+      "surface": "mcp:run_cases"
+    },
+    "sample": {
+      "sample_id": "sample_934464c5a0414796839cac6d821b1339",
+      "status": "approved",
+      "source_tool_call_event_id": "evt_32fb37661a564843b5973c60ad7ff80d",
+      "source_type": "real_tool",
+      "surface": "mcp:create_sample",
+      "at": "2026-08-14T13:42:13+00:00",
+      "approved_surface": "web-api:/samples/{id}/review"
+    },
+    "sample_replay": {
+      "run_id": "run_1a209c84b61f4390bf468af8865f0b90",
+      "status": "completed",
+      "manifest_hash": "sha256:20bcfd6786546a14777eeae0b7daed0cd463171ad32079778a60aad9527d59c2",
+      "cell_count": 1,
+      "attempt_count": 5,
+      "pass_count": 5,
+      "fail_count": 0,
+      "evaluation_states": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "tool_result_sources": [
+        "sample"
+      ],
+      "real_tool_results": 0,
+      "sample_results": 5,
+      "recorded_at": "2026-08-14T13:42:46+00:00",
+      "profile_id": "profile_editflow_sample_only",
+      "case_ids": [
+        "case_editflow_inspect_sample_capture"
+      ],
+      "surface": "mcp:run_cases"
+    },
+    "target_check_candidate": {
+      "reachable": true,
+      "model_input_sha256": "71adb390cb86dd05dc5fdc1d9cf2656a436525176ccf178543eaf81a65dff7fd",
+      "source_commit": "12475f390e648de1cac496eb63137e32aaf6d91d",
+      "worktree_dirty": false,
+      "model_id": "deepseek-v4-flash",
+      "at": "2026-08-14T14:46:22+00:00"
+    },
+    "candidate_headline": {
+      "run_id": "run_b8ac3aa9d5b1437ba0954144ff6024ea",
+      "status": "completed",
+      "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
+      "cell_count": 1,
+      "attempt_count": 5,
+      "pass_count": 5,
+      "fail_count": 0,
+      "evaluation_states": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "tool_result_sources": [
+        "fixture"
+      ],
+      "real_tool_results": 0,
+      "sample_results": 0,
+      "recorded_at": "2026-08-14T14:47:28+00:00",
+      "profile_id": "profile_editflow_fixture_only",
+      "case_ids": [
+        "case_editflow_one_step_mixed_chain"
+      ],
+      "surface": "mcp:run_cases"
+    },
+    "candidate_matrix": {
+      "run_id": "run_3afacf3d9e304498b677265b11044793",
+      "status": "completed",
+      "manifest_hash": "sha256:50adbfacf8ee62cd01fa38647f1f79f9575fc80b3e08442f30be3744f7cfbdaf",
+      "cell_count": 6,
+      "attempt_count": 30,
+      "pass_count": 30,
+      "fail_count": 0,
+      "evaluation_states": [
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass",
+        "pass"
+      ],
+      "tool_result_sources": [
+        "fixture"
+      ],
+      "real_tool_results": 0,
+      "sample_results": 0,
+      "recorded_at": "2026-08-14T14:51:41+00:00",
+      "profile_id": "profile_editflow_fixture_only",
+      "case_ids": [
+        "case_editflow_brighten_only",
+        "case_editflow_background",
+        "case_editflow_mixed_chain",
+        "case_editflow_preserve_subject",
+        "case_editflow_crop_only",
+        "case_editflow_asset_miss"
+      ],
+      "surface": "mcp:run_cases"
+    },
+    "web_assistant": {
+      "session_id": "asst_5740815c6ef248d2992f77c6fc8d970e",
+      "plan_id": "plan_a0d80e75e2634b5f81fe751a197bbdbb",
+      "plan_status": "submitted",
+      "message": "请帮我把用例 case_editflow_brighten_only 在 target_editflow_http_sse 上用 profile_editflow_fixture_only 重复执行 3 次,我想确认修图回复稳定。",
+      "run": {
+        "run_id": "run_a1c88bc8ed83474a9261df9e1d0d23fb",
+        "status": "completed",
+        "manifest_hash": "sha256:fbfb599f7d9b36fbe0b9e4deace19cf814101b7e2ec4bec098ddf40a1d5bdcfa",
+        "cell_count": 1,
+        "attempt_count": 3,
+        "pass_count": 3,
+        "fail_count": 0,
+        "evaluation_states": [
+          "pass",
+          "pass",
+          "pass"
+        ],
+        "tool_result_sources": [
+          "fixture"
+        ],
+        "real_tool_results": 0,
+        "sample_results": 0,
+        "recorded_at": "2026-08-14T15:03:12+00:00"
+      },
+      "surface": "web-api:assistant nl-plan → confirm → submit",
+      "at": "2026-08-14T15:03:12+00:00"
+    }
+  },
+  "updated_at": "2026-08-14T15:03:12+00:00"
+}

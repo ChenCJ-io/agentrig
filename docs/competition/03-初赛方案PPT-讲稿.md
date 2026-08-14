@@ -38,7 +38,7 @@ EditFlow 是公开脱敏的 Agno + DeepSeek Agent，使用 PostgreSQL Session �
 ## 07｜Before：单次成功掩盖了随机回归
 
 headline 要求一步完成调亮、雪山背景、4:5 裁剪并保持人物。Broad Prompt 允许 `retouch_photo` 吞并
-组合编辑。彩排 Before 在同一冻结 Case 下 5 次得到 3 Pass / 2 Behavior Fail，说明“跑一次成功”不足以
+组合编辑。正式录制 Before 在同一冻结 Case 下 5 次得到 2 Pass / 3 Behavior Fail，说明“跑一次成功”不足以
 作为验收依据。
 
 ## 08｜Codex + Skill：从 Prompt Diff 生成评测资产
@@ -53,10 +53,10 @@ New、Exclude。真正现场新增的是“一步完成不能绕过专用工具�
 每个变更步骤消费最新 `output_image_ref`。重启后 Prompt SHA 从 `43157c…9572` 变为 `71adb3…f7fd`；
 HTTP 层没有关键词路由或为视频写死的答案。
 
-## 10｜Candidate：同 Case 从 3/5 到 5/5
+## 10｜Candidate：同 Case 从 2/5 到 5/5
 
 Candidate headline 与 Before 使用相同 Manifest 和 Case Snapshot，5/5 通过。最终六 Case 回归矩阵
-`run_38a956…` 有 6 Cells、30 个独立 Attempt，30/30 通过；简单调亮不过度路由，空素材不编造 ID，
+`run_3afacf…` 有 6 Cells、30 个独立 Attempt，30/30 通过；简单调亮不过度路由，空素材不编造 ID，
 人物约束和图片引用按契约传播。
 
 ## 11｜不只给绿灯：可以下钻到内部行为
@@ -74,7 +74,7 @@ Codex 从事件创建 Draft Sample，人类审核后，Sample-only Run 五次全
 ## 13｜普通用户也能完成评测
 
 Web 助手接收自然语言，生成 1 Case × 3 Attempts 的 Draft Plan。重复执行触发人工确认；确认后明确
-尚未创建 Run，另一次提交才创建 `run_76307b…`，最终 3/3 通过。普通用户无需理解 MCP，但仍进入同一种
+尚未创建 Run，另一次提交才创建 `run_a1c88b…`，最终 3/3 通过。普通用户无需理解 MCP，但仍进入同一种
 Run、Cell、Attempt 与证据结构。
 
 ## 14｜为什么它是平台，而不是 Demo 脚本
@@ -90,7 +90,7 @@ AgentRig 与 AgentScope 共享同一类评测闭环经验，并复用了部分�
 
 ## 16｜证据台账与诚实边界
 
-彩排硬证据：Before 3/5、Candidate headline 5/5、最终矩阵 30/30、Sample replay 5/5、Web Run 3/3、
+正式录制硬证据：Before 2/5、Candidate headline 5/5、最终矩阵 30/30、Sample replay 5/5、Web Run 3/3、
 EditFlow 34 tests、真实 Browser E2E 与 Axe 0 serious/critical。正式拍摄必须生成新 Run ID；Sample 仅覆盖
 `inspect_image`；动态引用等值以 Timeline 展示；AgentTeams 外部 Live 和目标容量不冒充本次结论。
 

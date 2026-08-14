@@ -24,15 +24,15 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 
 ## 当前硬证据
 
-- Before：同一冻结 Case 5 次为 3 Pass / 2 Behavior Fail；
+- Before：同一冻结 Case 5 次为 2 Pass / 3 Behavior Fail；
 - Candidate headline：同 Manifest 5/5；Prompt SHA 已变化；
 - Candidate matrix：6 Cells / 30 Attempts，30/30；
 - Real MCP Capture：1 次；Sample-only Replay：5/5、5 Sample hit、Run 内 real_tool Attempt=0；
 - Web Assistant：Plan → confirm → submit → Run，3/3；
 - EditFlow：34 non-live tests；Web：typecheck、真实后端 E2E、Axe 0 serious/critical。
 
-详细机器事实见 `editflow-rehearsal-evidence.json` 与《EditFlow彩排证据与正式录制台账.md》
-（仓库内位于本目录，提交包内位于 `03-运行证据/`）。这些是彩排 ID；正式视频必须产生新 ID。
+详细机器事实见 `editflow-recording-evidence.json`（正式录制）与《EditFlow彩排证据与正式录制台账.md》
+（仓库内位于本目录，提交包内位于 `03-运行证据/`）；彩排事实保留在 `editflow-rehearsal-evidence.json`。
 
 ## 交付物索引
 
@@ -44,7 +44,7 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 | [04 Demo 演示脚本](./04-Demo演示脚本.md) | Codex 主流程与 Web 辅助流程 |
 | [05 FAQ](./05-评审映射与答辩FAQ.md) | 真实性、AgentScope、Mock、差异规划答辩 |
 | [06 检查清单](./06-提交与开源检查清单.md) | 录制、开源、媒体和提交门禁 |
-| [07 真实证据报告](./07-真实运行证据报告.md) | EditFlow 彩排权威证据 |
+| [07 真实证据报告](./07-真实运行证据报告.md) | EditFlow 正式录制权威证据 |
 | [08 Skill 清单](./08-Skill-清单.md) | AgentRig 11 个 Skill 合同 |
 | [09 提交表单](./09-初赛提交表单.md) | 可复制字段与待人工项 |
 | [10 视频分镜与旁白](./10-Demo视频分镜与旁白.md) | 7:20 正式录制母版与 4 分钟减法 |
@@ -53,7 +53,7 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 | [13 Codex + Skill + MCP](./13-Codex-Skill-MCP真实评测.md) | 开发者入口的真实工作流 |
 | [14 音视频规范](./14-音视频与录制质量规范.md) | 稳定画面与自然声音标准 |
 | `AgentRig-GOAI-2026-初赛方案.pptx/.pdf` | 16 页 Review 版方案 |
-| `dist/competition/media/AgentRig-GOAI-2026-Demo.*` | 9:02 Review 预演 MP4/SRT/JSON；非正式现场录屏 |
+| `dist/competition/media/AgentRig-GOAI-2026-Demo.*` | 9:03 正式录制合成版 MP4/SRT/JSON（画面与 ID 来自干净录制库，旁白为合成音） |
 
 内部工作文档（仅在仓库内维护，不进入提交包的 `01-报名材料/`）：
 
@@ -82,5 +82,6 @@ uv build
 uv run python scripts/build_competition_submission.py
 ```
 
-当前先生成内容更完整的 Review 候选制品。正式录屏、最终 commit、团队字段和平台限制确认后，再做减法并
-生成 Final 包。凭据、Cookie、本地数据库、私有图片和模型请求头不进入交付物。
+正式录制证据、正式截图与合成版视频均已生成；在干净 commit 上重建后 builder 自动输出 FINAL/CLEAN 包。
+团队字段、仓库公开与平台限制核对由参赛人完成。凭据、Cookie、本地数据库、私有图片和模型请求头不进入
+交付物。
