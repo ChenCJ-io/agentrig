@@ -213,7 +213,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      AGENTRIG_REFERENCE_STATE_DIR: ${{ runner.temp }}/agentrig-real-browser
+      # runner context is not available in job-level env; use a literal temp path
+      AGENTRIG_REFERENCE_STATE_DIR: /tmp/agentrig-real-browser
       AGENTRIG_REFERENCE_SERVER_PORT: "8000"
       AGENTRIG_REFERENCE_TARGET_PORT: "8091"
       AGENTRIG_REFERENCE_SKIP_INSTALL: "1"
