@@ -28,8 +28,8 @@ def target_value() -> TargetCreate:
         "device_id": "AGENTRIG-LOCAL-DEMO",
         "os": "macOS",
         "os_version": "local",
-        "app_version": "9.2.0",
-        "tool_version": 4,
+        "app_version": "10.0.0",
+        "tool_version": 6,
         "tool_version_branch": None,
         "app_build": "65",
     }
@@ -58,14 +58,19 @@ def target_value() -> TargetCreate:
         },
         versions=[
             {
-                "version": "9.2.0",
+                "version": version,
                 "options": {
                     "device_info": {
-                        "app_version": "9.2.0",
-                        "tool_version": 4,
+                        "app_version": version,
+                        "tool_version": tool_version,
                     }
                 },
             }
+            for version, tool_version in (
+                ("9.2.0", 4),
+                ("9.3.0", 5),
+                ("10.0.0", 6),
+            )
         ],
     )
 

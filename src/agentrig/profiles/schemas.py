@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -49,6 +50,39 @@ class ComponentTimeouts(BaseModel):
     judge: float = Field(default=60.0, gt=0)
 
 
+class ModelPricing(BaseModel):
+    """One exact model price in an immutable, operator-supplied snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1, max_length=300)
+    input_per_million: Decimal = Field(ge=0)
+    output_per_million: Decimal = Field(ge=0)
+    cached_input_per_million: Decimal | None = Field(default=None, ge=0)
+
+
+class PricingSnapshot(BaseModel):
+    """Prices frozen into every CaseRun profile rather than read at report time."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["agentrig.pricing-snapshot.v1"] = (
+        "agentrig.pricing-snapshot.v1"
+    )
+    source: str = Field(min_length=1, max_length=300)
+    effective_at: datetime
+    currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    rates: list[ModelPricing] = Field(min_length=1)
+
+    @field_validator("rates")
+    @classmethod
+    def model_rates_are_unique(cls, value: list[ModelPricing]) -> list[ModelPricing]:
+        names = [item.model for item in value]
+        if len(names) != len(set(names)):
+            raise ValueError("pricing snapshot cannot contain duplicate model rates")
+        return value
+
+
 class ExecutionProfileConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -66,6 +100,7 @@ class ExecutionProfileConfig(BaseModel):
     repeat_count: int = Field(default=1, ge=1)
     curator_model: ModelConfigRef | None = None
     judge_model: ModelConfigRef | None = None
+    pricing_snapshot: PricingSnapshot | None = None
 
     @field_validator("provider_chain")
     @classmethod

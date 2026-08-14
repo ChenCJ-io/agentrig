@@ -34,6 +34,8 @@ from .mcp_server import (
     create_role_mcp_servers,
     mcp_lifespan,
 )
+from .production.api import router as otlp_router
+from .projects.schemas import ProjectScope
 from .proxy.aggregator import AgentRigProxy
 from .proxy.backend import connect_backend
 from .v1_api import router as v1_api_router
@@ -93,6 +95,7 @@ def create_app(services: ServiceContainer | None = None) -> FastAPI:
     _add_security(app, settings)
     app.include_router(v1_api_router)
     app.include_router(v2_api_router)
+    app.include_router(otlp_router)
     _add_error_handlers(app)
     for role, role_server in role_mcp_servers.items():
         role_app = build_mcp_app(role_server)
@@ -132,6 +135,7 @@ def _add_error_handlers(app: FastAPI) -> None:
             "decision_required": 409,
             "agent_role_forbidden": 403,
             "agentteams_unavailable": 503,
+            "assistant_provider_unavailable": 503,
             "matrix_delivery_failed": 503,
             "agent_invocation_timed_out": 504,
         }.get(exc.detail.code.value, 400)
@@ -185,8 +189,33 @@ def _add_security(app: FastAPI, settings: Settings) -> None:
                 f"Bearer {expected}"
             ):
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
+        elif request.url.path == "/v1/traces":
+            # The OTLP receiver authenticates an ingest-source token and must not
+            # accept the deployment-wide API token as an ingest credential.
+            pass
         elif token and any(request.url.path.startswith(p) for p in protected):
-            if request.headers.get("authorization", "") != f"Bearer {token}":
+            authorization = request.headers.get("authorization", "")
+            project_parts = request.url.path.split("/")
+            project_id = (
+                project_parts[3]
+                if len(project_parts) > 3
+                and project_parts[1:3] == ["api", "projects"]
+                else None
+            )
+            project_token = authorization.removeprefix("Bearer ")
+            if project_id and project_token.startswith("agrp_"):
+                required_scope = _required_project_scope(
+                    request.method,
+                    request.url.path,
+                )
+                try:
+                    request.state.project_context = await cast(
+                        ServiceContainer,
+                        app.state.services,
+                    ).projects.authenticate(project_id, project_token, required_scope)
+                except AgentRigError:
+                    return JSONResponse({"error": "unauthorized"}, status_code=401)
+            elif authorization != f"Bearer {token}":
                 return JSONResponse({"error": "unauthorized"}, status_code=401)
         return cast(Response, await call_next(request))
 
@@ -207,6 +236,26 @@ def _add_security(app: FastAPI, settings: Settings) -> None:
             "img-src 'self' data:"
         )
         return resp
+
+
+def _required_project_scope(method: str, path: str) -> ProjectScope:
+    """Map project routes to the least privilege needed for this operation."""
+
+    if method in {"GET", "HEAD", "OPTIONS"}:
+        return "read"
+    if "/execution-jobs" in path:
+        return "run"
+    if "/production/ingest-sources" in path:
+        return "ingest"
+    if "/production/traces/" in path and "/case-drafts" in path:
+        return "review"
+    if "/evaluators/versions" in path:
+        return "admin" if path.endswith(":activate") else "review"
+    if any(item in path for item in ("/review-items", "/failure-")):
+        return "review"
+    if any(item in path for item in ("/api-keys", "/environments")):
+        return "admin"
+    return "admin"
 
 
 def _mount_spa(app: FastAPI, dist: Path | None = None) -> None:

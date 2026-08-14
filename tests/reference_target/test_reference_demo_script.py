@@ -74,6 +74,18 @@ def test_reference_demo_all_is_idempotent_and_exports_verified_evidence(
             "baseline": "pass",
             "candidate": "fail",
         }
+        policy_scenario = manifest["scenarios"]["policy-regression"]
+        assert policy_scenario["quality_report"]["schema_version"] == (
+            "agentrig.quality-report.v1"
+        )
+        assert policy_scenario["comparison_report"]["summary"]["regression_count"] == 1
+        assert policy_scenario["release_gate"]["verdict"] == "fail"
+        assert len(
+            {
+                policy_scenario[name]["source_snapshot_hash"]
+                for name in ("quality_report", "comparison_report", "release_gate")
+            }
+        ) == 1
         recovery = manifest["scenarios"]["recovery"]
         assert recovery["expected"] == {
             "attempt_1": "target_unreachable",
@@ -107,7 +119,7 @@ def test_reference_demo_all_is_idempotent_and_exports_verified_evidence(
         assert release["components"]["profile"] == "reference-ci"
         assert release["components"]["agentteams"] is None
         assert release["configuration"]["secret_values_included"] is False
-        assert len(release["artifacts"]) == 7
+        assert len(release["artifacts"]) == 10
         assert len(release["scenarios"]) == 4
         assert {item["run_id"] for item in release["scenarios"]} == {
             run_id
@@ -121,8 +133,18 @@ def test_reference_demo_all_is_idempotent_and_exports_verified_evidence(
         assert sbom["metadata"]["component"]["version"] == release["release"]["version"]
         assert len(sbom["components"]) > 10
 
+        assert json.loads((evidence_dir / "quality-report.json").read_text())[
+            "schema_version"
+        ] == "agentrig.quality-report.v1"
+        assert json.loads((evidence_dir / "comparison-report.json").read_text())[
+            "summary"
+        ]["regression_count"] == 1
+        assert json.loads((evidence_dir / "release-gate.json").read_text())[
+            "verdict"
+        ] == "fail"
+
         checksum_lines = (evidence_dir / "SHA256SUMS").read_text().splitlines()
-        assert len(checksum_lines) == 8
+        assert len(checksum_lines) == 11
         for line in checksum_lines:
             expected_digest, filename = line.split("  ", 1)
             actual_digest = hashlib.sha256((evidence_dir / filename).read_bytes()).hexdigest()

@@ -42,7 +42,8 @@ class HttpSseDriver:
         endpoint = context.target.get("endpoint")
         if not endpoint:
             raise ValueError("http_sse target requires endpoint")
-        endpoint = str(endpoint).rstrip("/")
+        root_endpoint = str(endpoint).rstrip("/")
+        endpoint = root_endpoint
         if not endpoint.endswith("/chat/stream"):
             endpoint = f"{endpoint}/chat/stream"
         options = dict(context.target.get("options") or {})
@@ -57,7 +58,9 @@ class HttpSseDriver:
         return DriverSession(
             state={
                 "endpoint": endpoint,
+                "root_endpoint": root_endpoint,
                 "headers": headers,
+                "options": options,
                 "version": context.version,
                 "initial_state": context.initial_state,
                 "timeout": context.component_timeout_seconds,
@@ -72,6 +75,85 @@ class HttpSseDriver:
                 ),
             }
         )
+
+    async def describe_capabilities(
+        self,
+        context: DriverPrepareContext,
+        session: DriverSession,
+    ) -> dict[str, Any]:
+        """Observe an optional same-origin capability document before execution."""
+
+        del context
+        options = session.state["options"]
+        path = options.get("capability_path")
+        declared: dict[str, Any] = {
+            "source_status": "declared",
+            "runtime": {
+                "framework": str(options.get("framework") or "http_sse"),
+                "framework_version": options.get("framework_version"),
+                "protocol": "http_sse",
+                "protocol_version": str(options.get("protocol_version") or "1"),
+            },
+            "features": {
+                key: {"status": "declared", "value": value}
+                for key, value in self.capabilities().model_dump().items()
+            },
+        }
+        if path is None:
+            return declared
+        if not isinstance(path, str) or not path.startswith("/"):
+            return {
+                **declared,
+                "limitations": ["http_sse_capability_path_invalid"],
+            }
+        client_options: dict[str, Any] = {"timeout": session.state["timeout"]}
+        if self._transport is not None:
+            client_options["transport"] = self._transport
+        try:
+            async with httpx.AsyncClient(**client_options) as client:
+                response = await client.get(
+                    f"{session.state['root_endpoint']}{path}",
+                    headers=session.state["headers"],
+                )
+                response.raise_for_status()
+                observed = response.json()
+        except (httpx.HTTPError, ValueError):
+            return {
+                **declared,
+                "limitations": ["http_sse_capability_endpoint_unavailable"],
+            }
+        if not isinstance(observed, dict):
+            return {
+                **declared,
+                "limitations": ["http_sse_capability_document_invalid"],
+            }
+        return {
+            **declared,
+            **{
+                key: value
+                for key, value in observed.items()
+                if key
+                in {
+                    "models",
+                    "tools",
+                    "skills",
+                    "permissions",
+                    "workspace",
+                    "memory",
+                    "collaboration",
+                    "features",
+                }
+            },
+            "source_status": "observed",
+            "runtime": {
+                **declared["runtime"],
+                **(
+                    observed["runtime"]
+                    if isinstance(observed.get("runtime"), dict)
+                    else {}
+                ),
+            },
+        }
 
     async def send_user_message(
         self,

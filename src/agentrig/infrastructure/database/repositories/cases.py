@@ -20,11 +20,12 @@ from ..session import Database
 
 
 class SqlCaseRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create(self, case_id: str, value: TestCaseCreate) -> TestCaseView:
-        row = self._new_row(case_id, value)
+        row = self._new_row(case_id, value, project_id=self._project_id)
         async with self._database.session() as session:
             session.add(row)
             await session.commit()
@@ -36,7 +37,10 @@ class SqlCaseRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(TestCaseORM)
-                .where(TestCaseORM.id == case_id)
+                .where(
+                    TestCaseORM.id == case_id,
+                    TestCaseORM.project_id == self._project_id,
+                )
                 .options(
                     selectinload(TestCaseORM.turns),
                     selectinload(TestCaseORM.tags),
@@ -51,7 +55,9 @@ class SqlCaseRepository:
         limit: int,
         offset: int,
     ) -> TestCasePage:
-        query = select(TestCaseORM).options(
+        query = select(TestCaseORM).where(
+            TestCaseORM.project_id == self._project_id
+        ).options(
             selectinload(TestCaseORM.turns),
             selectinload(TestCaseORM.tags),
         )
@@ -70,7 +76,10 @@ class SqlCaseRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(TestCaseORM)
-                .where(TestCaseORM.id == case_id)
+                .where(
+                    TestCaseORM.id == case_id,
+                    TestCaseORM.project_id == self._project_id,
+                )
                 .options(
                     selectinload(TestCaseORM.turns),
                     selectinload(TestCaseORM.tags),
@@ -100,7 +109,7 @@ class SqlCaseRepository:
     async def delete(self, case_id: str) -> bool:
         async with self._database.session() as session:
             row = await session.get(TestCaseORM, case_id)
-            if row is None:
+            if row is None or row.project_id != self._project_id:
                 return False
             await session.delete(row)
             await session.commit()
@@ -113,7 +122,7 @@ class SqlCaseRepository:
     ) -> TestCaseView:
         async with self._database.session() as session:
             row = await session.get(TestCaseORM, case_id)
-            assert row is not None
+            assert row is not None and row.project_id == self._project_id
             row.review_status = status.value
             row.updated_at = utc_now()
             await session.commit()
@@ -126,6 +135,8 @@ class SqlCaseRepository:
             rows = (
                 await session.execute(
                     select(CaseTagORM.tag, func.count(CaseTagORM.case_id))
+                    .join(TestCaseORM, TestCaseORM.id == CaseTagORM.case_id)
+                    .where(TestCaseORM.project_id == self._project_id)
                     .group_by(CaseTagORM.tag)
                     .order_by(CaseTagORM.tag)
                 )
@@ -133,9 +144,15 @@ class SqlCaseRepository:
         return [TagUsage(tag=tag, count=count) for tag, count in rows]
 
     @staticmethod
-    def _new_row(case_id: str, value: TestCaseCreate) -> TestCaseORM:
+    def _new_row(
+        case_id: str,
+        value: TestCaseCreate,
+        *,
+        project_id: str,
+    ) -> TestCaseORM:
         row = TestCaseORM(
             id=case_id,
+            project_id=project_id,
             name=value.name,
             description=value.description,
             review_status=ReviewStatus.DRAFT.value,

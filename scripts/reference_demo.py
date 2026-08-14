@@ -34,6 +34,12 @@ MANIFEST_SCHEMA = "agentrig.reference-demo-runs.v1"
 EVIDENCE_SCHEMA = "agentrig.reference-evidence.v1"
 TERMINAL_RUN_STATES = {"completed", "failed", "cancelled", "interrupted"}
 SCENARIO_CHOICES = ("success", "policy-regression", "recovery", "all")
+DEFAULT_RELEASE_POLICY_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "configs"
+    / "release-policies"
+    / "default-agent-release.json"
+)
 
 
 class ApiError(RuntimeError):
@@ -395,6 +401,72 @@ def _tool_turns(detail: dict[str, Any], tool_name: str) -> list[int]:
     ]
 
 
+def _reference_release_reports(api: Api, run_id: str) -> dict[str, dict[str, Any]]:
+    """Build and verify the report/gate chain used as public release evidence."""
+
+    try:
+        policy = json.loads(DEFAULT_RELEASE_POLICY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("default reference release policy is unavailable") from exc
+    if not isinstance(policy, dict):
+        raise RuntimeError("default reference release policy must be a JSON object")
+
+    encoded_run_id = quote(run_id, safe="")
+    reports = {
+        "quality_report": api.get(f"/api/runs/{encoded_run_id}/quality-report"),
+        "comparison_report": api.get(
+            f"/api/runs/{encoded_run_id}/comparison-report"
+        ),
+        "release_gate": api.post(
+            f"/api/runs/{encoded_run_id}/release-gate:evaluate",
+            {"policy": policy},
+        ),
+    }
+    quality = reports["quality_report"]
+    comparison = reports["comparison_report"]
+    gate = reports["release_gate"]
+    expected_schemas = {
+        "quality_report": "agentrig.quality-report.v1",
+        "comparison_report": "agentrig.comparison-report.v1",
+        "release_gate": "agentrig.release-gate.v1",
+    }
+    for name, expected_schema in expected_schemas.items():
+        value = reports[name]
+        if not isinstance(value, dict) or value.get("schema_version") != expected_schema:
+            raise RuntimeError(f"reference {name} contract is invalid")
+        if value.get("run_id") != run_id:
+            raise RuntimeError(f"reference {name} belongs to a different Run")
+
+    snapshot_hashes = {
+        quality.get("source_snapshot_hash"),
+        comparison.get("source_snapshot_hash"),
+        gate.get("source_snapshot_hash"),
+    }
+    if None in snapshot_hashes or len(snapshot_hashes) != 1:
+        raise RuntimeError("reference report/gate source snapshots do not match")
+    summary = comparison.get("summary", {})
+    if (
+        summary.get("total_pairs") != 1
+        or summary.get("comparable_pairs") != 1
+        or summary.get("regression_count") != 1
+        or summary.get("infrastructure_error_count") != 0
+    ):
+        raise RuntimeError("reference comparison report did not isolate one regression")
+    regression_check = next(
+        (
+            item
+            for item in gate.get("checks", [])
+            if isinstance(item, dict) and item.get("name") == "outcome_regressions"
+        ),
+        None,
+    )
+    if gate.get("verdict") != "fail" or not regression_check or (
+        regression_check.get("outcome") != "fail"
+    ):
+        raise RuntimeError("reference release gate did not block the known regression")
+    return reports
+
+
 def _run_success(api: Api, timeout_seconds: float) -> dict[str, Any]:
     run, case_runs = _submit_run(
         api,
@@ -451,6 +523,8 @@ def _run_policy_regression(api: Api, timeout_seconds: float) -> dict[str, Any]:
     if _tool_turns(candidate_detail, "apply_image_prompt") != [1]:
         raise RuntimeError("policy candidate did not expose the intended regression")
 
+    release_reports = _reference_release_reports(api, str(run["id"]))
+
     return {
         "expected": {"baseline": "pass", "candidate": "fail"},
         "run_ids": [run["id"]],
@@ -459,6 +533,7 @@ def _run_policy_regression(api: Api, timeout_seconds: float) -> dict[str, Any]:
             _case_run_projection(baseline),
             _case_run_projection(candidate),
         ],
+        **release_reports,
     }
 
 
@@ -648,6 +723,15 @@ def export_evidence(
     if not isinstance(scenarios, dict) or not scenarios:
         raise RuntimeError("latest run manifest does not contain scenario results")
 
+    report_artifacts: list[tuple[Path, str]] = []
+    policy_regression = scenarios.get("policy-regression")
+    if isinstance(policy_regression, dict):
+        policy_run_ids = policy_regression.get("run_ids", [])
+        if not isinstance(policy_run_ids, list) or len(policy_run_ids) != 1:
+            raise RuntimeError("policy-regression must contain exactly one Run")
+        release_reports = _reference_release_reports(api, str(policy_run_ids[0]))
+        policy_regression.update(release_reports)
+
     run_ids = list(
         dict.fromkeys(
             str(run_id)
@@ -680,6 +764,19 @@ def export_evidence(
         suffix += 1
     output_dir.mkdir(parents=True)
 
+    if isinstance(policy_regression, dict):
+        for key, filename in (
+            ("quality_report", "quality-report.json"),
+            ("comparison_report", "comparison-report.json"),
+            ("release_gate", "release-gate.json"),
+        ):
+            artifact_path = output_dir / filename
+            artifact_path.write_text(
+                json.dumps(policy_regression[key], ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            report_artifacts.append((artifact_path, "application/json"))
+
     json_path = output_dir / "reference-evidence.json"
     markdown_path = output_dir / "reference-evidence.md"
     json_path.write_text(
@@ -697,6 +794,7 @@ def export_evidence(
         target_url=str(manifest["target_url"]),
         git_sha=str(git_metadata.get("git_sha") or ""),
         source_dirty=bool(git_metadata.get("source_dirty")),
+        additional_artifacts=report_artifacts,
     )
     _write_json_atomic(
         output_root.parent / "latest-evidence.json",

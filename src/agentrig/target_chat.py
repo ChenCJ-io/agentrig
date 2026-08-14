@@ -685,10 +685,24 @@ class TargetChatService:
                 validator=self._validator,
             )
         if self._real_tool_client is not None:
+            real_tool_spec = next(
+                (
+                    item
+                    for item in config.provider_chain
+                    if item.name is ProviderName.REAL_TOOL
+                ),
+                None,
+            )
             custom[ProviderName.REAL_TOOL] = RealToolProvider(
                 self._real_tool_client,
                 allowlist=self._real_tool_allowlist,
                 timeout_seconds=config.component_timeouts.real_tool,
+                namespace=(
+                    str(real_tool_spec.config["namespace"])
+                    if real_tool_spec is not None
+                    and real_tool_spec.config.get("namespace")
+                    else None
+                ),
             )
         return build_provider_chain(
             config.provider_chain,

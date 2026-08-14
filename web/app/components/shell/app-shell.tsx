@@ -32,6 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const target = context.targetId
     ? targets.data?.items.find((item) => item.id === context.targetId)
     : undefined;
+  const runtimeVersion = targetRuntimeVersion(target);
 
   useEffect(() => {
     setHasLocalToken(hasStoredAuthToken());
@@ -100,8 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             {context.area === "target" ? (
               <div className="target-runtime" title={target?.endpoint ?? "当前被测 Agent"}>
                 <span className="target-runtime__identity"><i aria-hidden="true" />{target?.name ?? context.targetId}</span>
-                <span>本机</span>
-                <span>{target?.versions?.[0]?.version ?? "当前"}</span>
+                <span>{targetLocation(target?.endpoint)}</span>
+                <span>{runtimeVersion ?? "当前"}</span>
                 <strong>{target?.driver_type ?? "被测 Agent"}</strong>
               </div>
             ) : (
@@ -281,4 +282,31 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
     </div>
   );
+}
+
+function targetRuntimeVersion(target?: Target): string | null {
+  if (!target) return null;
+  const options = target.options;
+  if (options && typeof options === "object" && !Array.isArray(options)) {
+    const deviceInfo = (options as Record<string, unknown>).device_info;
+    if (deviceInfo && typeof deviceInfo === "object" && !Array.isArray(deviceInfo)) {
+      const appVersion = (deviceInfo as Record<string, unknown>).app_version;
+      if (typeof appVersion === "string" && appVersion.trim()) return appVersion;
+    }
+  }
+  return [...(target.versions ?? [])]
+    .map((item) => item.version)
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+    .at(-1) ?? null;
+}
+
+function targetLocation(endpoint?: string | null): string {
+  if (!endpoint) return "未配置";
+  try {
+    const hostname = new URL(endpoint).hostname;
+    return ["127.0.0.1", "localhost", "::1"].includes(hostname) ? "本机" : "远程";
+  } catch {
+    return "自定义";
+  }
 }

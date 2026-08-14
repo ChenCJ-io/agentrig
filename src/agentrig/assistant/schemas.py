@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,18 +45,45 @@ class AssistantSessionPage(BaseModel):
     offset: int
 
 
+class AssistantPlanAction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action_type: Literal["confirm_plan", "submit_plan", "cancel_plan"]
+    plan_id: str = Field(min_length=1, max_length=128)
+    revision: int = Field(ge=1)
+
+
 class AssistantMessageCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     client_message_id: str = Field(min_length=1, max_length=128)
     content: str = Field(min_length=1, max_length=100_000)
     active_plan_id: str | None = None
+    plan_action: AssistantPlanAction | None = None
 
 
 class AssistantMessageReceipt(BaseModel):
     event_id: str
     turn_id: str
     delivery_status: DeliveryStatus
+
+
+class BasicAssistantOutput(BaseModel):
+    """基础模型只提出回答、澄清或 Plan 草稿，执行仍由 Core 完成。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["answer", "clarify", "create_plan"]
+    content: str = Field(min_length=1, max_length=10_000)
+    goal: dict[str, Any] | None = None
+    selection: RunCasesRequest | None = None
+
+
+class AssistantProviderHealth(BaseModel):
+    enabled: bool
+    available: bool
+    provider: Literal["agentteams", "openai_compatible", "none"]
+    message: str
 
 
 class AssistantEventView(BaseModel):

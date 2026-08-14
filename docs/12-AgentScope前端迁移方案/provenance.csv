@@ -1,0 +1,9 @@
+target_path,source_repo,source_commit,source_path,strategy,notes
+web/app/components/shell/app-shell.tsx,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/app/components/shell/app-shell.tsx,EXTRACT,"保留 AgentRig 鉴权与 Target 上下文，只参考 Shell 几何"
+web/app/components/content/markdown-content.tsx,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/app/components/content/markdown-content.tsx,REIMPLEMENT,"通用 Markdown/GFM 能力；不迁移 AgentScope 私有 Deep Link 协议"
+web/app/components/states/query-state.tsx,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,,REIMPLEMENT,"AgentRig 通用 Loading/Empty/Error/Partial 状态"
+web/app/pages/evaluations,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/app/pages/evaluation,EXTRACT,"仅迁移展示几何，业务状态来自 AgentRig Manifest/Cell/Attempt"
+web/app/pages/v2/assistant-page.tsx,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/app/pages/conversation,EXTRACT,"会话栏与 Composer 几何；保留 AgentRig Plan/Decision/Run 契约"
+web/app/pages/targets/target-overview-page.tsx,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/app/pages/agent-workspace,REIMPLEMENT,"复用 Summary Band 与工作区几何；数据来自 AgentRig Target/Run/Asset API"
+web/app/pages/assets/assets-page.tsx,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/app/pages/cases,REIMPLEMENT,"复用 Master/Detail、审核队列和 Sticky Action 几何；字段完全使用 AgentRig Schema"
+web/e2e/route-manifest.ts,ts-agent-scope,157101d17e3f42f2dc0cb8972d4bd01a3ae647ed,frontend/e2e/route-manifest.ts,REIMPLEMENT,"AgentRig 自有批准路由清单，不写死生产数据 ID"

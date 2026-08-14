@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 from typing import Any
 
 from ..errors import AgentRigError, ErrorCode
@@ -199,6 +197,17 @@ class EvaluationPlanService:
                 "confirmed_by must match the user who authored the confirmation event",
                 details={"confirmation_event_id": value.confirmation_event_id},
             )
+        if event.turn_id == plan.source_turn_id:
+            raise AgentRigError(
+                ErrorCode.PLAN_CONFIRMATION_REQUIRED,
+                "plan confirmation must be a new user action after the draft was created",
+                details={
+                    "confirmation_event_id": value.confirmation_event_id,
+                    "source_turn_id": plan.source_turn_id,
+                },
+            )
+        if self._enforce_managed_mutations:
+            self._require_plan_action(event.payload, plan, "confirm_plan")
         self._require_managed_decision(
             value.decision_id,
             DecisionActionType.CONFIRM_PLAN,
@@ -254,6 +263,16 @@ class EvaluationPlanService:
         if plan.status is EvaluationPlanStatus.CANCELLED:
             return plan
         self._require_managed_decision(decision_id, DecisionActionType.CANCEL_PLAN)
+        if self._enforce_managed_mutations:
+            if confirmation_event_id is None:
+                raise AgentRigError(
+                    ErrorCode.PLAN_CONFIRMATION_REQUIRED,
+                    "cancelling a managed plan requires an explicit cancel action",
+                    details={"plan_id": plan.id},
+                )
+            event = await self._assistant.get_event(confirmation_event_id)
+            self._require_user_event_for_plan(event, plan)
+            self._require_plan_action(event.payload, plan, "cancel_plan")
         if decision_id is not None and self._decisions is not None:
             if confirmation_event_id is not None:
                 await self._decisions.authorize(decision_id, confirmation_event_id)
@@ -289,6 +308,9 @@ class EvaluationPlanService:
                     status=run.status,
                     resolved_case_ids=run.resolved_case_ids,
                     planned_case_runs=run.total_count - run.skipped_count,
+                    manifest_hash=run.manifest_hash,
+                    cell_count=run.cell_count,
+                    attempt_count=run.attempt_count,
                     skipped_items=[],
                 )
             self._require_status(plan, EvaluationPlanStatus.CONFIRMED)
@@ -296,6 +318,8 @@ class EvaluationPlanService:
                 value.decision_id,
                 DecisionActionType.SUBMIT_PLAN,
             )
+            if self._enforce_managed_mutations:
+                await self._require_submit_action(plan, value.decision_id)
             if value.decision_id is not None and self._decisions is not None:
                 await self._decisions.begin_action(
                     value.decision_id,
@@ -311,7 +335,11 @@ class EvaluationPlanService:
                         "confirmed plan no longer matches current assets",
                         details={"plan_id": plan_id},
                     )
-                staged = await self._runs.stage_run_cases(request)
+                staged = await self._runs.stage_run_cases(
+                    request.model_copy(
+                        update={"expected_manifest_hash": preview.manifest_hash}
+                    )
+                )
             except AgentRigError as exc:
                 await self._repository.save_plan_error(
                     plan_id,
@@ -327,7 +355,7 @@ class EvaluationPlanService:
                 idempotency_key=value.idempotency_key,
                 run_id=staged.response.run_id,
             )
-            self._runs.start_staged_run(staged)
+            await self._runs.start_staged_run(staged)
             submitted = staged.response
             await self._assistant.append_event(
                 plan.session_id,
@@ -379,6 +407,63 @@ class EvaluationPlanService:
                 details={"action_type": action.value},
             )
 
+    async def _require_submit_action(
+        self,
+        plan: EvaluationPlanView,
+        decision_id: str | None,
+    ) -> None:
+        if decision_id is None or self._decisions is None:
+            raise AgentRigError(
+                ErrorCode.PLAN_CONFIRMATION_REQUIRED,
+                "submitting a managed plan requires an explicit submit action",
+                details={"plan_id": plan.id},
+            )
+        decision = await self._decisions.get(decision_id)
+        event_id = decision.confirmation_event_id
+        if event_id is None or event_id == plan.confirmation.confirmation_event_id:
+            raise AgentRigError(
+                ErrorCode.PLAN_CONFIRMATION_REQUIRED,
+                "submission requires a user action distinct from plan confirmation",
+                details={"plan_id": plan.id},
+            )
+        event = await self._assistant.get_event(event_id)
+        self._require_user_event_for_plan(event, plan)
+        self._require_plan_action(event.payload, plan, "submit_plan")
+
+    @staticmethod
+    def _require_user_event_for_plan(
+        event: Any,
+        plan: EvaluationPlanView,
+    ) -> None:
+        if (
+            event.session_id != plan.session_id
+            or event.actor_type is not ActorType.USER
+            or event.event_type is not AssistantEventType.USER_MESSAGE
+        ):
+            raise AgentRigError(
+                ErrorCode.PLAN_CONFIRMATION_REQUIRED,
+                "plan action must reference a user message in the same session",
+                details={"plan_id": plan.id, "event_id": event.id},
+            )
+
+    @staticmethod
+    def _require_plan_action(
+        payload: dict[str, Any],
+        plan: EvaluationPlanView,
+        action_type: str,
+    ) -> None:
+        expected = {
+            "action_type": action_type,
+            "plan_id": plan.id,
+            "revision": plan.revision,
+        }
+        if payload.get("plan_action") != expected:
+            raise AgentRigError(
+                ErrorCode.PLAN_CONFIRMATION_REQUIRED,
+                "plan mutation is not bound to the requested action and revision",
+                details={"expected_plan_action": expected},
+            )
+
     @staticmethod
     def _confirmation_reasons(
         request: RunCasesRequest,
@@ -399,13 +484,8 @@ class EvaluationPlanService:
         return reasons
 
     @staticmethod
-    def _fingerprint(request: RunCasesRequest, preview: RunPreview) -> str:
-        value: dict[str, Any] = {
-            "selection": request.model_dump(mode="json"),
-            "preview": preview.model_dump(mode="json"),
-        }
-        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    def _fingerprint(_request: RunCasesRequest, preview: RunPreview) -> str:
+        return preview.manifest_hash.removeprefix("sha256:")
 
     @staticmethod
     def _require_status(

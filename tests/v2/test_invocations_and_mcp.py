@@ -94,6 +94,10 @@ async def test_invocation_role_state_and_result_idempotency(
     global_page = await services.agent_invocations.list_all(limit=10)
     assert global_page.total == 1
     assert [item.id for item in global_page.items] == [invocation.id]
+    run_page = await services.agent_invocations.list_for_run("run_v2", limit=10)
+    assert run_page.total == 1
+    assert [item.id for item in run_page.items] == [invocation.id]
+    assert (await services.agent_invocations.list_for_run("other_run")).total == 0
 
 
 async def test_role_mcp_tool_sets_are_isolated(services: ServiceContainer) -> None:

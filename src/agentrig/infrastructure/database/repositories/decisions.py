@@ -31,8 +31,9 @@ from ..session import Database
 
 
 class SqlDecisionRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create(
         self,
@@ -50,14 +51,19 @@ class SqlDecisionRepository:
             # therefore serializes decision creation across API processes; the
             # service's striped lock provides the equivalent in-process guard
             # for SQLite, where SELECT FOR UPDATE is intentionally ignored.
-            await session.scalar(
+            parent_id = await session.scalar(
                 select(AssistantSessionORM.id)
-                .where(AssistantSessionORM.id == value.session_id)
+                .where(
+                    AssistantSessionORM.id == value.session_id,
+                    AssistantSessionORM.project_id == self._project_id,
+                )
                 .with_for_update()
             )
+            assert parent_id is not None
             existing = await session.scalar(
                 select(DecisionRecordORM).where(
-                    DecisionRecordORM.action_idempotency_key == action_idempotency_key
+                    DecisionRecordORM.action_idempotency_key == action_idempotency_key,
+                    DecisionRecordORM.project_id == self._project_id,
                 )
             )
             if existing is not None:
@@ -66,10 +72,12 @@ class SqlDecisionRepository:
                 select(func.max(DecisionRecordORM.ordinal)).where(
                     DecisionRecordORM.session_id == value.session_id,
                     DecisionRecordORM.turn_id == value.turn_id,
+                    DecisionRecordORM.project_id == self._project_id,
                 )
             )
             row = DecisionRecordORM(
                 id=decision_id,
+                project_id=self._project_id,
                 session_id=value.session_id,
                 turn_id=value.turn_id,
                 parent_decision_id=value.parent_decision_id,
@@ -99,13 +107,21 @@ class SqlDecisionRepository:
 
     async def get(self, decision_id: str) -> DecisionRecordView | None:
         async with self._database.session() as session:
-            row = await session.get(DecisionRecordORM, decision_id)
+            row = await session.scalar(
+                select(DecisionRecordORM).where(
+                    DecisionRecordORM.id == decision_id,
+                    DecisionRecordORM.project_id == self._project_id,
+                )
+            )
         return self._view(row) if row is not None else None
 
     async def get_by_idempotency_key(self, key: str) -> DecisionRecordView | None:
         async with self._database.session() as session:
             row = await session.scalar(
-                select(DecisionRecordORM).where(DecisionRecordORM.action_idempotency_key == key)
+                select(DecisionRecordORM).where(
+                    DecisionRecordORM.action_idempotency_key == key,
+                    DecisionRecordORM.project_id == self._project_id,
+                )
             )
         return self._view(row) if row is not None else None
 
@@ -116,8 +132,21 @@ class SqlDecisionRepository:
         session_id: str,
     ) -> bool:
         async with self._database.session() as session:
+            owner = await session.scalar(
+                select(AssistantSessionORM.id).where(
+                    AssistantSessionORM.id == session_id,
+                    AssistantSessionORM.project_id == self._project_id,
+                )
+            )
+            if owner is None:
+                return False
             if ref.kind == "test_case":
-                case_row = await session.get(TestCaseORM, ref.resource_id)
+                case_row = await session.scalar(
+                    select(TestCaseORM).where(
+                        TestCaseORM.id == ref.resource_id,
+                        TestCaseORM.project_id == self._project_id,
+                    )
+                )
                 if case_row is None:
                     return False
                 return ref.version is None or (
@@ -125,7 +154,12 @@ class SqlDecisionRepository:
                     and case_row.review_status == ref.version
                 )
             if ref.kind in {"target", "target_check"}:
-                target_row = await session.get(TargetORM, ref.resource_id)
+                target_row = await session.scalar(
+                    select(TargetORM).where(
+                        TargetORM.id == ref.resource_id,
+                        TargetORM.project_id == self._project_id,
+                    )
+                )
                 if (
                     target_row is None
                     or ref.kind == "target_check"
@@ -140,9 +174,25 @@ class SqlDecisionRepository:
                 )
                 return version_id is not None
             if ref.kind == "execution_profile":
-                return await session.get(ExecutionProfileORM, ref.resource_id) is not None
+                return (
+                    await session.scalar(
+                        select(ExecutionProfileORM.id).where(
+                            ExecutionProfileORM.id == ref.resource_id,
+                            ExecutionProfileORM.project_id == self._project_id,
+                        )
+                    )
+                    is not None
+                )
             if ref.kind == "tool_sample":
-                return await session.get(SampleORM, ref.resource_id) is not None
+                return (
+                    await session.scalar(
+                        select(SampleORM.id).where(
+                            SampleORM.id == ref.resource_id,
+                            SampleORM.project_id == self._project_id,
+                        )
+                    )
+                    is not None
+                )
             if ref.kind == "assistant_event":
                 event_id = await session.scalar(
                     select(AssistantEventORM.id).where(
@@ -156,6 +206,7 @@ class SqlDecisionRepository:
                     select(EvaluationPlanORM).where(
                         EvaluationPlanORM.id == ref.resource_id,
                         EvaluationPlanORM.session_id == session_id,
+                        EvaluationPlanORM.project_id == self._project_id,
                     )
                 )
                 return plan is not None and (
@@ -166,6 +217,7 @@ class SqlDecisionRepository:
                     select(EvaluationPlanORM.id).where(
                         EvaluationPlanORM.run_id == ref.resource_id,
                         EvaluationPlanORM.session_id == session_id,
+                        EvaluationPlanORM.project_id == self._project_id,
                     )
                 )
                 return plan_id is not None
@@ -179,6 +231,8 @@ class SqlDecisionRepository:
                     .where(
                         CaseRunORM.id == ref.resource_id,
                         EvaluationPlanORM.session_id == session_id,
+                        CaseRunORM.project_id == self._project_id,
+                        EvaluationPlanORM.project_id == self._project_id,
                     )
                 )
                 return case_run_id is not None
@@ -193,6 +247,8 @@ class SqlDecisionRepository:
                     .where(
                         RunEventORM.id == ref.resource_id,
                         EvaluationPlanORM.session_id == session_id,
+                        CaseRunORM.project_id == self._project_id,
+                        EvaluationPlanORM.project_id == self._project_id,
                     )
                 )
                 return event_id is not None
@@ -207,6 +263,9 @@ class SqlDecisionRepository:
                     .where(
                         EvaluationORM.id == ref.resource_id,
                         EvaluationPlanORM.session_id == session_id,
+                        EvaluationORM.project_id == self._project_id,
+                        CaseRunORM.project_id == self._project_id,
+                        EvaluationPlanORM.project_id == self._project_id,
                     )
                 )
                 return evaluation_id is not None
@@ -215,6 +274,7 @@ class SqlDecisionRepository:
                     select(AgentInvocationORM.id).where(
                         AgentInvocationORM.id == ref.resource_id,
                         AgentInvocationORM.session_id == session_id,
+                        AgentInvocationORM.project_id == self._project_id,
                     )
                 )
                 return invocation_id is not None
@@ -229,7 +289,10 @@ class SqlDecisionRepository:
         limit: int,
         offset: int,
     ) -> DecisionRecordPage:
-        filters = [DecisionRecordORM.session_id == session_id]
+        filters = [
+            DecisionRecordORM.session_id == session_id,
+            DecisionRecordORM.project_id == self._project_id,
+        ]
         if status is not None:
             filters.append(DecisionRecordORM.status == status.value)
         if decision_kind is not None:
@@ -273,7 +336,10 @@ class SqlDecisionRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(DecisionRecordORM)
-                .where(DecisionRecordORM.id == decision_id)
+                .where(
+                    DecisionRecordORM.id == decision_id,
+                    DecisionRecordORM.project_id == self._project_id,
+                )
                 .with_for_update()
             )
             assert row is not None

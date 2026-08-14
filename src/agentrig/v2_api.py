@@ -19,6 +19,7 @@ from .assistant.decision_schemas import DecisionCancel, DecisionConfirmation
 from .assistant.models import ActorType
 from .assistant.schemas import (
     AssistantMessageCreate,
+    AssistantProviderHealth,
     AssistantSessionCreate,
     EvaluationPlanConfirm,
     EvaluationPlanCreate,
@@ -83,6 +84,11 @@ async def get_session(request: Request, session_id: str) -> object:
     return await services(request).assistant.get_session(session_id)
 
 
+@router.get("/assistant/turns/{turn_id}")
+async def get_turn(request: Request, turn_id: str) -> object:
+    return await services(request).assistant.get_turn(turn_id)
+
+
 @router.post("/assistant/sessions/{session_id}/archive")
 async def archive_session(request: Request, session_id: str) -> object:
     return await services(request).assistant.archive_session(session_id)
@@ -104,10 +110,11 @@ async def send_message(
             code=ErrorCode.VALIDATION_ERROR,
             message="assistant message exceeds the configured length limit",
         )
-    if not container.agentteams_bridge.enabled:
+    provider = await _resolve_assistant_provider(container)
+    if provider is None:
         raise AgentRigError(
-            code=ErrorCode.AGENTTEAMS_UNAVAILABLE,
-            message="V2 assistant messaging requires AgentTeams to be enabled",
+            code=ErrorCode.ASSISTANT_PROVIDER_UNAVAILABLE,
+            message="智能评测助手未配置可用的模型 Provider",
             retryable=True,
         )
     receipt = await container.assistant.send_message(
@@ -115,13 +122,61 @@ async def send_message(
         value,
         actor_id=principal(request),
     )
-    background.add_task(
-        _deliver_message,
-        container,
-        receipt.event_id,
-        receipt.turn_id,
-    )
+    if provider == "agentteams":
+        background.add_task(
+            _deliver_message,
+            container,
+            receipt.event_id,
+            receipt.turn_id,
+        )
+    else:
+        background.add_task(
+            container.basic_assistant.process,
+            receipt.event_id,
+            receipt.turn_id,
+        )
     return receipt
+
+
+@router.get("/assistant/provider-health")
+async def assistant_provider_health(request: Request) -> object:
+    container = services(request)
+    provider = await _resolve_assistant_provider(container)
+    if provider == "agentteams":
+        return AssistantProviderHealth(
+            enabled=True,
+            available=True,
+            provider="agentteams",
+            message="AgentTeams 智能评测助手已就绪",
+        )
+    basic = container.basic_assistant.health()
+    if provider == "basic":
+        return basic
+    return AssistantProviderHealth(
+        enabled=False,
+        available=False,
+        provider="none",
+        message=basic.message,
+    )
+
+
+async def _resolve_assistant_provider(
+    container: ServiceContainer,
+) -> str | None:
+    if container.agentteams_bridge.enabled:
+        try:
+            health = await container.agentteams_bridge.health()
+            if (
+                health.configured
+                and health.matrix_reachable
+                and health.runtime_reachable is not False
+            ):
+                return "agentteams"
+        except Exception:
+            logger.exception("failed to probe AgentTeams assistant provider")
+    if container.basic_assistant.health().available:
+        return "basic"
+    return None
 
 
 @router.get("/assistant/sessions/{session_id}/events")
@@ -425,3 +480,5 @@ async def _deliver_message(
         await container.agentteams_bridge.dispatch_user_message(event_id, turn_id)
     except Exception:
         logger.exception("failed to deliver assistant event %s", event_id)
+        if container.basic_assistant.health().available:
+            await container.basic_assistant.process(event_id, turn_id)

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentRig AgentTeams v1.2.2 resource subset",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "agentteams.io/v1beta1"},
+    "kind": {"enum": ["Manager", "Worker", "Team"]},
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {"name": {"type": "string", "minLength": 1}},
+      "additionalProperties": true
+    },
+    "spec": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "Manager"}}},
+      "then": {
+        "properties": {
+          "spec": {
+            "required": ["model", "runtime"],
+            "properties": {
+              "model": {"type": "string", "minLength": 1},
+              "runtime": {"enum": ["openclaw", "copaw", "qwenpaw"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "Worker"}}},
+      "then": {
+        "properties": {
+          "spec": {
+            "required": ["model", "runtime"],
+            "properties": {
+              "model": {"type": "string", "minLength": 1},
+              "runtime": {"enum": ["openclaw", "copaw", "hermes", "qwenpaw"]},
+              "workerName": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "Team"}}},
+      "then": {
+        "properties": {
+          "spec": {
+            "required": ["workerMembers"],
+            "properties": {
+              "workerMembers": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 128,
+                "items": {
+                  "type": "object",
+                  "required": ["name", "role"],
+                  "properties": {
+                    "name": {"type": "string", "minLength": 1},
+                    "role": {"enum": ["team_leader", "worker"]}
+                  }
+                },
+                "contains": {
+                  "type": "object",
+                  "properties": {"role": {"const": "team_leader"}},
+                  "required": ["role"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

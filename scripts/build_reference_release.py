@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tomllib
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -290,6 +291,7 @@ def build_release_bundle(
     git_sha: str,
     source_dirty: bool,
     node_version: str | None = None,
+    additional_artifacts: Sequence[tuple[Path, str]] = (),
 ) -> Path:
     """Add locks, public config, SBOM, ReleaseEvidence, and SHA256SUMS."""
 
@@ -322,6 +324,17 @@ def build_release_bundle(
         _artifact(copied_uv_lock, "application/toml"),
         _artifact(copied_web_lock, "application/json"),
     ]
+    output_root = output_dir.resolve()
+    for artifact_path, media_type in additional_artifacts:
+        resolved_path = artifact_path.resolve()
+        if resolved_path.parent != output_root:
+            raise ValueError(
+                "additional release artifacts must be direct children of output_dir"
+            )
+        artifacts.append(_artifact(resolved_path, media_type))
+    artifact_names = [item.path for item in artifacts]
+    if len(artifact_names) != len(set(artifact_names)):
+        raise ValueError("release artifact paths must be unique")
     run_manifest = json.loads(copied_run_manifest.read_text(encoding="utf-8"))
     release = ReleaseEvidence(
         release=ReleaseIdentity(

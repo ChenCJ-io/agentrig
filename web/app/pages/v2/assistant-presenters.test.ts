@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalAssistantEvents,
   decisionActionLabel,
   decisionKindLabel,
   evidenceKindLabel,
@@ -9,6 +10,7 @@ import {
   statusLabel,
   tone,
 } from "./assistant-presenters";
+import type { AssistantEvent } from "~/api/v2";
 
 describe("assistant presenters", () => {
   it.each([
@@ -37,5 +39,42 @@ describe("assistant presenters", () => {
   it("shortens only long resource identifiers", () => {
     expect(shortId("short_id")).toBe("short_id");
     expect(shortId("123456789012345678901234")).toBe("1234567890…01234");
+  });
+
+  it("keeps only the canonical Manager final reply for each turn", () => {
+    const base = {
+      session_id: "session",
+      event_type: "assistant_message",
+      actor_type: "manager",
+      actor_id: "@manager:test",
+      payload: {},
+      plan_id: null,
+      run_id: null,
+      case_run_id: null,
+      invocation_id: null,
+      decision_id: null,
+      matrix_event_id: null,
+      delivery_status: "delivered",
+      last_error: null,
+      created_at: "2026-08-11T06:21:38",
+    } satisfies Partial<AssistantEvent>;
+    const events = [
+      { ...base, id: "progress", seq: 1, turn_id: "turn" },
+      { ...base, id: "unbound", seq: 2, turn_id: null },
+      { ...base, id: "final", seq: 3, turn_id: "turn" },
+      {
+        ...base,
+        id: "user",
+        seq: 4,
+        event_type: "user_message",
+        actor_type: "user",
+        turn_id: "next-turn",
+      },
+    ] as AssistantEvent[];
+
+    expect(canonicalAssistantEvents(events).map((item) => item.id)).toEqual([
+      "final",
+      "user",
+    ]);
   });
 });

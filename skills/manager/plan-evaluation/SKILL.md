@@ -20,7 +20,10 @@ Allowed tools: `get_decision_context`, `record_manager_decision`, `get_decision`
 3. Discover existing approved or draft assets. Prefer explicit case IDs when the user named exact coverage; otherwise use a selector and explain why each capability or tag is included.
 4. Read candidate targets and profiles. Call `check_target` when reachability affects the plan. Never request or echo a plaintext secret.
 5. Build `selection` in the exact `RunCasesRequest` shape. Record assumptions, unresolved questions, and per-selection rationale separately from the user goal.
-6. Record the matching `create_plan` or `create_plan_revision` decision, call `create_evaluation_plan` with its `origin_decision_id`, then `validate_evaluation_plan`. Use only the returned preview for planned counts and skipped items.
+6. Record the matching `create_plan` or `create_plan_revision` decision, call
+   `create_evaluation_plan` with its `origin_decision_id`, then
+   `validate_evaluation_plan`. Use only the returned preview for the canonical Manifest
+   hash, stable Cell count, Attempt count, planned counts, and skipped items.
 7. If validation fails because required information is missing, ask one focused question and stop. If no executable CaseRun remains, stop without confirmation or submission.
 8. Present the plan, skipped items, evaluator/provider choice, risks, and whether confirmation is required. Do not claim a Run exists.
 

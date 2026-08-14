@@ -27,11 +27,13 @@ scripts/reference_demo.sh all --profile reference-ci
 - `latest-evidence.json`：只含相对路径的最新证据指针；
 - `evidence/reference-demo-*/reference-evidence.json`：紧凑证据包；
 - `reference-evidence.md`：可读摘要；
+- `quality-report.json`、`comparison-report.json`、`release-gate.json`：同一来源快照生成的质量、
+  A/B 对比和门禁结果；已知策略回归必须被门禁判为 `fail`；
 - `release-evidence.json`：版本、Git SHA、组件版本、产物 Hash、场景 Run ID 和证据指针；
 - `sbom.cdx.json`：从 Python/npm 锁文件生成的 CycloneDX 1.6 运行时 SBOM；
 - `public-config.json`：不含 Secret 值和本机数据库路径的公开配置；
 - `reference-runs.json`、`uv.lock`、`web-package-lock.json`：场景和依赖输入快照；
-- `SHA256SUMS`：上述 7 个产物及 release manifest 的 SHA-256；
+- `SHA256SUMS`：上述 10 个产物及 release manifest 的 SHA-256；
 - `agentrig.db` 和 `logs/`：可继续查询的本地状态与排障日志。
 
 可拆分执行：

@@ -1,68 +1,73 @@
 # 评审映射与答辩 FAQ
 
-## 1. 评分项证据映射
+## 评分证据映射
 
-| 评审项 | 权重 | AgentRig 证据 | 演示动作 |
-|---|---:|---|---|
-| 场景价值与行业可复制性 | 25% | Driver/Provider/Evaluator 可替换；支持不同 Agent 协议 | 从 lassist 说明扩展到客服、研发、运维 Agent 的方式 |
-| 多 Agent 协同与自主闭环 | 25% | 三 Identity、Matrix 投递、Invocation 状态机、用户确认 | 展示三角色实时状态和双向 event ID |
-| Skill 工程体系与生态复用 | 25% | 11 个 Skills；角色包；Schema、失败、重试和安全合同 | 打开核心 Skill 清单并演示触发链 |
-| 工程落地与安全可审计 | 20% | 一键部署、MCP 隔离、RunEvent/Evaluation、脱敏、幂等 | 展示成功与失败 Run 证据及权限边界 |
-| 开放/开源贡献 | 5% | MIT、README、接口契约、示例、测试、安全与贡献指南 | 展示公共仓库和全新环境启动命令 |
+| 评审关注点 | AgentRig 证据 | 演示动作 |
+|---|---|---|
+| 场景价值 | 真实工具昂贵/有副作用，纯 Mock 绕过决策 | Real MCP 采一次，Sample-only 回放五次 |
+| Agent 与 Skill | EditFlow Agno Agent；项目 Prompt Skill；AgentRig MCP | Codex 读取 Skill、治理 Case、修 Prompt |
+| 技术真实性 | DeepSeek、HTTP/SSE、Session、Prompt SHA、Manifest | Before/Candidate 身份和 Timeline 下钻 |
+| 评测可靠性 | Cell 下独立 Attempt；Rule 与生命周期解耦 | 同 Case 从 3/5 到 5/5，最终 30/30 |
+| 安全治理 | Case/Sample Draft；人类批准；confirm 与 submit 分离 | 展示两次人工边界 |
+| 失败诊断 | behavior、case、evaluator、infra 分离 | 展示 Fixture miss 先修 Case，不算行为回归 |
+| 普通用户可用 | 模型助手自然语言生成可编辑 Plan | Plan → confirm → submit → 3/3 Run |
+| 开源复用 | MIT、协议无关 Driver/Provider、公开 EditFlow | lassist 作为生产形态兼容附录 |
 
-## 2. 常见问题
+## 高频问题
 
-### Q1：这不就是 LLM-as-Judge 平台吗？
+### 这是不是 AgentScope 的开源版？
 
-不是。Judge 只是可选的语义评判端口。AgentRig 的核心还包括版本化 TestCase、Target Driver、
-受控工具结果 Provider、确定性 Rule、不可变 RunEvent、计划审批、幂等执行和证据引用校验。
-Judge 不能覆盖 Rule，也不能发明不存在的证据。
+是同一类评测闭环在开源环境中的产品化延伸：部分前端工作台和交互经验可以复用，但 AgentRig 把内部
+依赖拆成 Target、Driver、Provider、Case、Manifest、Cell、Attempt、Evidence 和 Gate 等公开合同。
+AgentScope 的业务资产、Prompt 和数据不会被复制出来；公开 EditFlow 从零构建，MIT 可复现。
 
-### Q2：为什么一定需要三个 Agent？
+### 为什么不直接调用真实工具？这不就是 Mock 吗？
 
-三者的知识和权限刻意不同：Manager 有全局业务上下文但不能直接执行；Curator 能生成工具
-结果但看不到评判标准；Judge 能看 rubric 和证据但不能改变执行。合并会产生自评、目标泄漏或
-越权执行风险。
+Agent 的模型推理、协议、Session、工具选择和参数仍是真实的；受控的是工具执行结果。纯 Mock 通常连
+Agent 决策都绕过，而 AgentRig 在模型决定调用之后才选择 Fixture、Sample、Simulator 或 Real Tool。
+彩排还真实调用了一次本地 MCP，再把持久化结果治理为 Sample。
 
-### Q3：AgentTeams 是否只是消息转发？
+### 你们怎么证明 Sample 回放真的省资源？
 
-不是。Manager/Worker 身份、生命周期、工作区、Skill、Matrix 唤醒、任务状态和协作轨迹都由
-AgentTeams 承载。AgentRig 保存 Matrix request/response event ID 和业务 invocation 的映射，
-可以现场从数据库和房间两侧核验。
+Capture Run 有 1 个 `real_tool` hit；Replay Run 五次都有 Sample hit，事件审计中 `real_tool` Provider
+Attempt 为 0。准确说法是“该 Replay Run 无真实工具尝试”，不是声称整个系统永久零调用。
 
-### Q4：为什么还需要 AgentRig Core？
+### 这不就是 LLM-as-Judge 吗？
 
-协作框架擅长决定谁做什么，但业务事实不能只存在聊天历史里。Core 负责状态机、快照、权限、
-Schema 校验、执行证据和权威结论。这样 AgentTeams 或模型重启不会改变已经发生的事实。
+不是。Judge 只是可选端口。本次核心用确定性 Rule，证据来自工具事件；此外还有身份快照、Manifest、
+人工审核、独立 Attempt、恢复、报告和 Gate。Judge 不能覆盖 Rule 或发明不存在的证据。
 
-### Q5：模拟工具结果会不会让评测失真？
+### Codex 和 Web 助手为什么没有相同计划？
 
-Curator 输出只是候选，必须满足工具 Schema；它看不到 rubric，不能为了通过评测优化结果。
-严格一致性场景还可以选择 Fixture、已批准 Sample、真实工具 allowlist 或 observe-only 模式。
+二者模型能力、上下文和角色不同，输出不同方案完全合理。AgentRig 统一的是可选资产、执行边界、人工
+确认语义和证据格式。只有做严格 A/B 时，才要求同一冻结 Manifest 下的输入可比。
 
-### Q6：为什么不直接调用真实工具？
+### 为什么要跑五次？
 
-企业回归中真实工具可能收费、修改数据或无法复现。AgentRig 按风险选择 Fixture、Sample、
-Curator、Real Tool 或 Proxy，不用一个策略覆盖所有场景。真实工具需要配置、用例和运行时三重授权。
+真实模型有方差。彩排 Before 单次看可能成功，但五次中有两次行为失败；只跑一次会漏掉问题。每次重复
+是独立 Session/Attempt，不是把一个会话里的多轮消息当成重复。
 
-### Q7：RAG 在哪里？
+### `completed` 为什么可能是 Fail？
 
-当前场景不需要知识库 RAG。按赛题的四选二要求，我们实现了持久化会话/Agent 记忆、共享状态
-管理和可观测轨迹三项。后续 RAG 通过 MCP/Skill 接入，不改变 TestCase、RunEvent 或 Evaluation
-合同。
+`completed` 只表示执行生命周期结束，业务是否通过由 Evaluation 决定。Before Run 正是 completed，
+但 Cell 因 2 个行为失败而判定 fail。Web 助手的终态消息也明确要求继续读取 Cell/Attempt。
 
-### Q8：失败如何处理？
+### Fixture miss 为什么不算 Agent 失败？
 
-区分测试失败、评判错误、Worker 失败和平台故障。每类都有独立状态与错误码；已有证据不被
-删除；允许的传输重试复用幂等键；格式修正次数有限；不可恢复错误进入明确终态。
+如果模型做了合理的只读检查或有界查询改写，但 Case 没有提供结果，这是用例合同错误。彩排先将其归类
+为 `CASE_INVALID`，修 Fixture 后重新冻结并跑出 30/30；不能把测试基础设施错误嫁祸给 Agent。
 
-### Q9：项目当前真实完成度如何？
+### AgentRig 是否替被测 Agent 选工具？
 
-已完成 AgentTeams v1.1.2 本机部署、三角色包、Matrix/Higress/MinIO、V1 Core、V2 Web、真实
-lassist 三 Agent 闭环与自动测试。云端 OTel/SLS 和 Kubernetes 是复赛增强项，不列为当前完成项。
+不会。路由在 EditFlow 的 Agno Agent 中；Candidate 只改模型可见 Prompt 与工具 description，HTTP 适配层
+没有关键词路由。AgentRig 观察调用、提供受控结果并独立判断契约。
 
-### Q10：与 AgentScope Eval 等方案有什么区别？
+### 多 Agent 是不是核心卖点？
 
-AgentRig 更关注协议无关的执行控制和证据治理：被测 Agent 可以是 HTTP-SSE、OpenAI、ACP 或
-subprocess；工具结果可由多种 Provider 控制；评判结论必须回到统一 RunEvent/Evaluation 事实链。
-AgentTeams 是其多 Agent 协作平面，而不是替代评测内核。
+核心评测不依赖多 Agent。Manager/Assistant、Curator、Judge 是复杂规划、动态模拟、语义裁决时的可选
+扩展。本次 Fixture + Rule 场景保持确定、低成本，不为比赛强行调用角色。
+
+### 目前还没有闭合什么？
+
+正式视频尚未录制，彩排 ID 不能冒充正式 ID；Sample 只覆盖 `inspect_image`；动态 real-MCP 引用等值以
+Timeline 证明，Rule 还没有通用跨事件变量；AgentTeams 外部 Live、Kubernetes 和目标容量需独立环境验收。

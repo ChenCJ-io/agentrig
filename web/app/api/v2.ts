@@ -55,6 +55,22 @@ export interface AssistantEventPage {
   after_seq: number;
 }
 
+export interface AssistantTurn {
+  id: string;
+  session_id: string;
+  trigger_event_id: string;
+  status:
+    "queued" | "dispatched" | "running" | "completed" | "failed" | "cancelled";
+  matrix_request_event_id: string | null;
+  matrix_response_event_id: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  model_metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface EvidenceRef {
   kind: string;
   resource_id: string;
@@ -209,10 +225,23 @@ export interface AgentTeamsHealth {
   message: string;
 }
 
+export interface AssistantProviderHealth {
+  enabled: boolean;
+  available: boolean;
+  provider: "agentteams" | "openai_compatible" | "none";
+  message: string;
+}
+
 export interface MessageReceipt {
   event_id: string;
   turn_id: string;
   delivery_status: string;
+}
+
+export interface AssistantPlanAction {
+  action_type: "confirm_plan" | "submit_plan" | "cancel_plan";
+  plan_id: string;
+  revision: number;
 }
 
 export interface TargetChatEvent {
@@ -237,15 +266,22 @@ export function listAssistantSessions(): Promise<AssistantSessionPage> {
   return apiRequest("/api/v2/assistant/sessions?limit=100");
 }
 
-export function createAssistantSession(title: string): Promise<AssistantSession> {
+export function createAssistantSession(
+  title: string,
+  workspaceId = "default",
+): Promise<AssistantSession> {
   return apiRequest("/api/v2/assistant/sessions", {
     method: "POST",
-    ...jsonBody({ title }),
+    ...jsonBody({ title, workspace_id: workspaceId }),
   });
 }
 
 export function getAssistantSession(id: string): Promise<AssistantSession> {
   return apiRequest(`/api/v2/assistant/sessions/${encodeURIComponent(id)}`);
+}
+
+export function getAssistantTurn(id: string): Promise<AssistantTurn> {
+  return apiRequest(`/api/v2/assistant/turns/${encodeURIComponent(id)}`);
 }
 
 export function listAssistantEvents(id: string): Promise<AssistantEventPage> {
@@ -260,7 +296,9 @@ export function listDecisions(id: string): Promise<DecisionRecordPage> {
   );
 }
 
-export function getDecisionMetrics(id: string): Promise<DecisionQualityMetrics> {
+export function getDecisionMetrics(
+  id: string,
+): Promise<DecisionQualityMetrics> {
   return apiRequest(
     `/api/v2/assistant/sessions/${encodeURIComponent(id)}/decision-metrics`,
   );
@@ -323,6 +361,7 @@ export function sendAssistantMessage(
   sessionId: string,
   content: string,
   activePlanId: string | null,
+  planAction: AssistantPlanAction | null = null,
 ): Promise<MessageReceipt> {
   return apiRequest(
     `/api/v2/assistant/sessions/${encodeURIComponent(sessionId)}/messages`,
@@ -332,6 +371,7 @@ export function sendAssistantMessage(
         client_message_id: crypto.randomUUID(),
         content,
         active_plan_id: activePlanId,
+        plan_action: planAction,
       }),
     },
   );
@@ -355,26 +395,35 @@ export function confirmEvaluationPlan(
   id: string,
   confirmationEventId: string,
 ): Promise<EvaluationPlan> {
-  return apiRequest(`/api/v2/evaluation-plans/${encodeURIComponent(id)}/confirm`, {
-    method: "POST",
-    ...jsonBody({
-      confirmation_event_id: confirmationEventId,
-      confirmed_by: "web-user",
-    }),
-  });
+  return apiRequest(
+    `/api/v2/evaluation-plans/${encodeURIComponent(id)}/confirm`,
+    {
+      method: "POST",
+      ...jsonBody({
+        confirmation_event_id: confirmationEventId,
+        confirmed_by: "web-user",
+      }),
+    },
+  );
 }
 
 export function submitEvaluationPlan(id: string): Promise<unknown> {
-  return apiRequest(`/api/v2/evaluation-plans/${encodeURIComponent(id)}/submit`, {
-    method: "POST",
-    ...jsonBody({ idempotency_key: crypto.randomUUID() }),
-  });
+  return apiRequest(
+    `/api/v2/evaluation-plans/${encodeURIComponent(id)}/submit`,
+    {
+      method: "POST",
+      ...jsonBody({ idempotency_key: crypto.randomUUID() }),
+    },
+  );
 }
 
 export function cancelEvaluationPlan(id: string): Promise<EvaluationPlan> {
-  return apiRequest(`/api/v2/evaluation-plans/${encodeURIComponent(id)}/cancel`, {
-    method: "POST",
-  });
+  return apiRequest(
+    `/api/v2/evaluation-plans/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export function listAgentInvocations(id: string): Promise<AgentInvocationPage> {
@@ -395,7 +444,14 @@ export function getAgentTeamsHealth(): Promise<AgentTeamsHealth> {
   return apiRequest("/api/v2/agentteams/health");
 }
 
-export function createTargetChat(targetId: string, profileId: string | null): Promise<TargetChatSession> {
+export function getAssistantProviderHealth(): Promise<AssistantProviderHealth> {
+  return apiRequest("/api/v2/assistant/provider-health");
+}
+
+export function createTargetChat(
+  targetId: string,
+  profileId: string | null,
+): Promise<TargetChatSession> {
   return apiRequest("/api/v2/target-chats", {
     method: "POST",
     ...jsonBody({ target_id: targetId, profile_id: profileId }),
@@ -406,31 +462,55 @@ export function getTargetChat(sessionId: string): Promise<TargetChatSession> {
   return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}`);
 }
 
-export function listTargetChats(targetId: string): Promise<Page<TargetChatSession>> {
-  return apiRequest(`/api/v2/target-chats?target_id=${encodeURIComponent(targetId)}&limit=100`);
+export function listTargetChats(
+  targetId: string,
+): Promise<Page<TargetChatSession>> {
+  return apiRequest(
+    `/api/v2/target-chats?target_id=${encodeURIComponent(targetId)}&limit=100`,
+  );
 }
 
-export function sendTargetChatMessage(sessionId: string, content: string): Promise<TargetChatSession> {
-  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/messages`, {
-    method: "POST",
-    ...jsonBody({ content }),
-  });
+export function sendTargetChatMessage(
+  sessionId: string,
+  content: string,
+): Promise<TargetChatSession> {
+  return apiRequest(
+    `/api/v2/target-chats/${encodeURIComponent(sessionId)}/messages`,
+    {
+      method: "POST",
+      ...jsonBody({ content }),
+    },
+  );
 }
 
 export function closeTargetChat(sessionId: string): Promise<TargetChatSession> {
-  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/close`, { method: "POST" });
+  return apiRequest(
+    `/api/v2/target-chats/${encodeURIComponent(sessionId)}/close`,
+    { method: "POST" },
+  );
 }
 
-export function createDraftCaseFromTargetChat(sessionId: string): Promise<TestCase> {
-  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/draft-case`, {
-    method: "POST",
-    ...jsonBody({}),
-  });
+export function createDraftCaseFromTargetChat(
+  sessionId: string,
+): Promise<TestCase> {
+  return apiRequest(
+    `/api/v2/target-chats/${encodeURIComponent(sessionId)}/draft-case`,
+    {
+      method: "POST",
+      ...jsonBody({}),
+    },
+  );
 }
 
-export function createDraftSampleFromTargetChat(sessionId: string, toolCallId: string): Promise<Sample> {
-  return apiRequest(`/api/v2/target-chats/${encodeURIComponent(sessionId)}/draft-sample`, {
-    method: "POST",
-    ...jsonBody({ tool_call_id: toolCallId }),
-  });
+export function createDraftSampleFromTargetChat(
+  sessionId: string,
+  toolCallId: string,
+): Promise<Sample> {
+  return apiRequest(
+    `/api/v2/target-chats/${encodeURIComponent(sessionId)}/draft-sample`,
+    {
+      method: "POST",
+      ...jsonBody({ tool_call_id: toolCallId }),
+    },
+  );
 }

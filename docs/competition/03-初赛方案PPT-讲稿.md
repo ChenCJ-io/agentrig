@@ -1,98 +1,97 @@
 # 初赛方案 PPT 讲稿
 
-共 15 页：12 页主方案 + 3 页评审附录。正式陈述控制在 8 分钟，附录用于评委追问；提交版
-同时提供 Keynote 终检后的 PDF 稳定版和可编辑 PPTX。
+完整 Review 版共 16 页：13 页主叙事 + 3 页附录。建议陈述 8—10 分钟；正式比赛如有更短硬限制，
+保留第 1、2、4、6—13 页，其余移到答辩附录。
 
-## 01｜让企业 Agent 的每次变化都有证据
+## 01｜让 Agent 的每次变化都有证据
 
-Agent 不缺一次成功的 Demo，缺的是每次升级后都能回答四个问题：哪里变了、为什么通过、
-证据是什么、能不能安全重跑。AgentRig 是一套多 Agent 可审计评测基础设施：AgentTeams
-负责协作，AgentRig 负责事实、验证与审计。
+Agent 不缺一次成功 Demo，缺的是升级后还能回答：改了什么、行为哪里变了、为什么变、是否可以发布。
+AgentRig 把一次真实决策变成可重复、可比较、可归因的评测证据。
 
-## 02｜Agent 的风险，不止是回答错一次
+## 02｜真实工具回归的两难
 
-真正困难的不是看到一次错误，而是事后无法复原它为什么这样做：输出存在随机性，真实工具有
-成本和副作用，Judge 可能脱离运行事实，多轮状态与审批又共同影响行为。AgentRig 的目标是把
-聊天质量问题，变成可以持续验证的工程问题。
+图片处理、支付、发信和生产写入可能昂贵、缓慢或不可逆；纯 Mock 又绕过模型、协议、Session 和
+工具选择。AgentRig 的核心定位是：真实推理，受控副作用，确定性证据。
 
-## 03｜从一句目标，到一条可审计 Run
+## 03｜我们控制什么，不控制什么
 
-用户只描述目标。Manager 先查询 Case、Target、Profile 与历史 Run，生成可预览、可修订的计划；
-用户确认必须绑定真实 user event 与同一 plan revision；系统随后执行 Rule 和 Judge，保存证据并
-解释结果。关键边界只有一句：没有确认，不产生 Run。
+被测 Agent 仍由自己的模型决定是否调用工具、调用哪个工具以及参数。AgentRig 只在工具边界提供
+Fixture、已审核 Sample、Simulator 或 Real Tool，并独立记录事实和裁决；它不替 Agent 回答业务问题。
 
-## 04｜三种职责，三条不可越过的边界
+## 04｜平台闭环：Identity → Asset → Run → Evidence → Gate
 
-- Manager 把目标变成可确认计划，但不能直接调用原始 `run_cases`。
-- Simulation Curator 生成合理、Schema 合法的工具结果，但看不到 rubric 与预期答案。
-- Evidence Judge 基于冻结证据独立裁决，但不能改执行，也不能造证据。
+Target/Prompt/工具能力先冻结身份；Case 与 Profile 定义风险和副作用边界；Preview 生成 Canonical
+Manifest；Run 展开 Cell 与独立 Attempt；Timeline、Rule/Judge 和 Report 形成发布证据。任何一层变化，
+都应该产生新的快照或 Run，而不是覆盖历史。
 
-这不是为了凑 Agent 数量，而是同时避免越权执行、目标泄漏和执行者自评。
+## 05｜两种入口，不要求同一种方案
 
-## 05｜AgentTeams 是运行时事实
+开发者在项目中用 Codex + Skill + AgentRig MCP 完成风险分析、用例治理和 Prompt 修改；普通用户用
+AgentRig Web 助手自然语言复用已有资产。两个模型能力和上下文不同，方案不同是允许的；统一的是
+Target、Case、Profile、人工确认和证据合同。
 
-AgentTeams v1.1.2 管理三角色的身份、生命周期和工作区；Matrix 负责定向投递与回执；MinIO 保存
-版本化角色包和 Skills；Higress 隔离三套 MCP route。AgentRig 只保存协作事件与业务 invocation
-之间的 event ID、hash、结果引用和终态映射，Core 不依赖 AgentTeams 的内部类型。
+## 06｜公开场景：EditFlow 修图 Agent
 
-## 06｜两条责任链，一份权威事实
+EditFlow 是公开脱敏的 Agno + DeepSeek Agent，使用 PostgreSQL Session 和五个 external-execution
+工具。模型推理与 HTTP/SSE 真实；本地 MCP 返回公开确定性修图结果，不上传图片、不调用图片 API。
 
-协作链从 Web Assistant、Manager、Matrix 到 Curator/Judge；事实链从 EvaluationPlan、Core Run、
-Target/Driver 到 Evidence Store。两层之间只通过 Adapter 合同传递 event、hash 和 status。
-任何 Agent 都不能用聊天文本改写已经发生的 RunEvent。
+## 07｜Before：单次成功掩盖了随机回归
 
-## 07｜可复用能力，不是一次性 Prompt
+headline 要求一步完成调亮、雪山背景、4:5 裁剪并保持人物。Broad Prompt 允许 `retouch_photo` 吞并
+组合编辑。彩排 Before 在同一冻结 Case 下 5 次得到 3 Pass / 2 Behavior Fail，说明“跑一次成功”不足以
+作为验收依据。
 
-AgentRig 提供 11 个版本化 Skill：6 个 Manager、2 个 Worker、3 个 Core。每个比赛核心 Skill
-不只写名称，还定义输入输出、调用条件、依赖、失败处理、安全边界、验证复用和版本回滚。
-Manager、Curator、Judge 使用三套最小权限 MCP 工具集，Prompt 从来不是权限边界。
+## 08｜Codex + Skill：从 Prompt Diff 生成评测资产
 
-## 08｜结论必须回到证据
+Codex 先读取项目 `prompt-regression-governance`，再通过 MCP 查重并把 Case 分类为 Reuse、Change、
+New、Exclude。真正现场新增的是“一步完成不能绕过专用工具边界”；Case/Sample 先是 Draft，只能由
+人类批准。
 
-Case、Target、Profile 在计划阶段形成冻结快照；运行过程中只追加 RunEvent。Rule Evaluator 做
-确定性断言，Evidence Judge 做语义判断，两份 Evaluation 独立存档。Judge 只能引用本次 Run
-真实存在的 event ID；任何未知 `evidence_ref` 在进入事实库前都会被拒绝。
+## 09｜最小修复与身份变化
 
-## 09｜模型提议，确定性后端放行
+修改只触及模型可见 Prompt 和 `retouch_photo` description：像素调整、素材应用和裁剪重新分工，
+每个变更步骤消费最新 `output_image_ref`。重启后 Prompt SHA 从 `43157c…9572` 变为 `71adb3…f7fd`；
+HTTP 层没有关键词路由或为视频写死的答案。
 
-计划状态严格经过 `draft → confirmed → submitted`，确认绑定 user event 与 plan revision。
-密钥只保存 `env:`/Secret 引用；模型和 Worker 输入统一脱敏；重复提交复用幂等键；超时、取消、
-失败都是显式终态。AgentTeams 故障不会破坏 Core 与既有证据。
+## 10｜Candidate：同 Case 从 3/5 到 5/5
 
-## 10｜真实产品，不是概念图
+Candidate headline 与 Before 使用相同 Manifest 和 Case Snapshot，5/5 通过。最终六 Case 回归矩阵
+`run_38a956…` 有 6 Cells、30 个独立 Attempt，30/30 通过；简单调亮不过度路由，空素材不编造 ID，
+人物约束和图片引用按契约传播。
 
-页面展示的是本机 lassist/Pixcake Agent 的真实运行：左侧是评测会话，中间是 Manager 诊断和
-证据引用，右侧是三角色状态、当前计划与实际执行路径。成功闭环和策略回归都能追到 Run、
-Evaluation 与 Matrix 双向 event ID。
+## 11｜不只给绿灯：可以下钻到内部行为
 
-## 11｜可运行、可替换、可复核
+Run 页展示 30/30；Cell 页展示五个 Attempt；Timeline 展示 `inspect_image`、`search_assets`、
+`retouch_photo`、`apply_asset`、`crop_photo` 的参数、Fixture 来源与结果引用。AgentRig 验证的是内部
+行为合同，而不只是最终文字或一个聚合分数。
 
-Core 在无模型、无 AgentTeams 时仍能完成确定性回归。当前快照包含 134 项后端测试、30 项 Web
-单测、2 项 E2E 与 0 项历史密钥命中。Driver 支持 Pixcake、OpenAI-compatible、ACP 和 subprocess；
-Driver、Provider、Evaluator、Skill、Adapter 都是可替换契约，工程包采用 MIT License。
+## 12｜真实 MCP 结果如何变成零副作用回归资产
 
-## 12｜从“看起来能跑”到“证据足够发布”
+Capture Run 通过 AgentRig 调用本地 `editflow__inspect_image` 一次，持久化 `source=real_tool` 事件。
+Codex 从事件创建 Draft Sample，人类审核后，Sample-only Run 五次全部命中 Sample，且该 Replay Run
+中 `real_tool` Provider Attempt 为 0。真实来源和重复成本被同时治理。
 
-当前已完成三 Agent 协作、成功/策略回归证据和开源工程包；下一阶段补齐可执行 Trace 报告、
-恢复/性能指标与版本对比；规模化阶段再进入 PostgreSQL、Kubernetes、OTel/SLS 和发布门禁。
+## 13｜普通用户也能完成评测
 
-收束句：AgentRig 不替 Agent 做决定，而是让每次变化都留下可核验的证据。
+Web 助手接收自然语言，生成 1 Case × 3 Attempts 的 Draft Plan。重复执行触发人工确认；确认后明确
+尚未创建 Run，另一次提交才创建 `run_76307b…`，最终 3/3 通过。普通用户无需理解 MCP，但仍进入同一种
+Run、Cell、Attempt 与证据结构。
 
-## 13｜附录 A：三个 Agent 的身份合同
+## 14｜为什么它是平台，而不是 Demo 脚本
 
-表格按角色、能力、输入、输出、依赖、决策边界和审计追踪逐项对照。评委可以直接把这些字段与
-Identity 清单、MCP route、Invocation 和 Matrix event ID 交叉核验。
+Driver 接入 HTTP/SSE、OpenAI-compatible、AgentScope/AG-UI；Provider 支持 Fixture、Sample、Simulator、
+Real Tool；Rule/Judge、人工审核、Release Gate、生产 Trace、失败模式、耐久执行和审计日志组成可扩展
+控制面。核心模块可单独使用，多 Agent 只在需要时启用。
 
-## 14｜附录 B：11 个 Skill 如何被工程化
+## 15｜从 AgentScope 实践到开源闭环
 
-左侧给出 11 个 Skill 的完整 inventory，右侧对齐官方合同字段：名称/类型、使用场景、输入、输出、
-调用条件、依赖工具、失败处理、安全边界、验证/复用、版本/回滚。Skill 随 Git 版本管理，
-AgentTeams 基线锁定 v1.1.2；回滚完整 Release 与角色包，不在现场热替换 Prompt。
+AgentRig 与 AgentScope 共享同一类评测闭环经验，并复用了部分前端工作台设计，但把内部依赖抽成协议无关、
+可本地部署的 MIT 开源合同。公开 EditFlow 证明可复现；真实 lassist 兼容验证证明不是只适配演示 Agent。
 
-## 15｜附录 C：上下文能力与验证台账
+## 16｜证据台账与诚实边界
 
-赛题要求四选二；当前实现 Agent 记忆、共享状态和轨迹可观测三项，RAG 对此评测场景不是必要
-依赖。当前验证台账为：后端 134 passed / 6 skipped，Web 30 unit + 2 E2E，参考场景 3 个，
-Gitleaks 0 命中，Curator/Judge 双向 Matrix 回执可核验。
+彩排硬证据：Before 3/5、Candidate headline 5/5、最终矩阵 30/30、Sample replay 5/5、Web Run 3/3、
+EditFlow 34 tests、真实 Browser E2E 与 Axe 0 serious/critical。正式拍摄必须生成新 Run ID；Sample 仅覆盖
+`inspect_image`；动态引用等值以 Timeline 展示；AgentTeams 外部 Live 和目标容量不冒充本次结论。
 
-边界同样明确：云端 OTel/SLS、Kubernetes 与公开 Release/Tag 仍未完成，不写成当前能力。
+收束句：Codex 负责思考和改变软件，AgentRig 负责把每次改变变成可复用、可执行、可追溯的评测资产。

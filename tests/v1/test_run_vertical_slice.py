@@ -10,13 +10,13 @@ import pytest
 from agentrig.bootstrap import ServiceContainer
 from agentrig.cases import TestCaseCreate
 from agentrig.config import Settings
-from agentrig.errors import AgentRigError
+from agentrig.errors import AgentRigError, ErrorCode
 from agentrig.evaluations.models import EvaluationOutcome, EvaluatorType
 from agentrig.evaluations.schemas import ExternalVerdictSubmit
 from agentrig.infrastructure.database import Database
 from agentrig.profiles import ProfileCreate
-from agentrig.runs.models import CaseRunStatus, RunEventType, RunStatus
-from agentrig.runs.schemas import RunCasesRequest
+from agentrig.runs.models import CaseRunStatus, FailureClass, RunEventType, RunStatus
+from agentrig.runs.schemas import RunCasesRequest, RunCellRetryRequest
 from agentrig.targets import TargetCreate
 from agentrig.targets.drivers import (
     DriverCapabilities,
@@ -278,6 +278,87 @@ async def test_run_request_respects_deployment_size_limits() -> None:
         await services.close()
 
 
+async def test_run_preview_builds_stable_manifest_and_attempts(
+    container: ServiceContainer,
+) -> None:
+    await seed_case(container, "case_manifest")
+    await seed_target_and_profile(container)
+    request = RunCasesRequest(
+        case_ids=["case_manifest"],
+        targets=[{"target_id": "target_scripted", "version": "v1"}],
+        profile_id="profile_fixture",
+        repeat_count=2,
+    )
+
+    first = await container.runs.preview_run_cases(request)
+    second = await container.runs.preview_run_cases(request)
+
+    assert first.manifest_hash == second.manifest_hash
+    assert first.manifest == second.manifest
+    assert first.cell_count == 1
+    assert first.attempt_count == 2
+    assert first.planned_case_runs == 2
+    assert first.manifest.cells[0].disposition == "run"
+    assert [
+        item.attempt_index for item in first.manifest.cells[0].attempts
+    ] == [1, 2]
+
+
+async def test_run_manifest_hash_guard_precedes_persistence(
+    container: ServiceContainer,
+) -> None:
+    await seed_case(container, "case_manifest_guard")
+    await seed_target_and_profile(container)
+    request = RunCasesRequest(
+        case_ids=["case_manifest_guard"],
+        targets=[{"target_id": "target_scripted", "version": "v1"}],
+        profile_id="profile_fixture",
+    )
+
+    with pytest.raises(AgentRigError) as caught:
+        await container.runs.stage_run_cases(
+            request.model_copy(update={"expected_manifest_hash": f"sha256:{'0' * 64}"})
+        )
+
+    assert caught.value.detail.code is ErrorCode.PLAN_STALE
+    assert (await container.runs.list_runs()).total == 0
+
+
+async def test_staged_run_persists_manifest_cell_and_attempt_identity(
+    container: ServiceContainer,
+) -> None:
+    await seed_case(container, "case_manifest_submit")
+    await seed_target_and_profile(container)
+    request = RunCasesRequest(
+        case_ids=["case_manifest_submit"],
+        targets=[{"target_id": "target_scripted", "version": "v1"}],
+        profile_id="profile_fixture",
+        repeat_count=2,
+    )
+    preview = await container.runs.preview_run_cases(request)
+
+    staged = await container.runs.stage_run_cases(
+        request.model_copy(update={"expected_manifest_hash": preview.manifest_hash})
+    )
+    run = await container.runs.get_run(staged.response.run_id)
+    attempts = (await container.runs.list_case_runs(run.id)).items
+
+    assert run.manifest_hash == preview.manifest_hash
+    assert run.manifest == preview.manifest
+    assert run.cell_count == 1
+    assert run.attempt_count == 2
+    assert staged.response.cell_count == 1
+    assert staged.response.attempt_count == 2
+    assert len({item.cell_key for item in attempts}) == 1
+    assert len({item.attempt_id for item in attempts}) == 2
+    assert sorted(item.attempt_index for item in attempts) == [1, 2]
+    cells = await container.runs.list_run_cells(run.id)
+    assert cells.total == 1
+    assert cells.items[0].attempt_count == 2
+    detail = await container.runs.get_run_cell(run.id, cells.items[0].cell_id)
+    assert len(detail.attempt_details) == 2
+
+
 async def test_async_run_persists_events_and_rule_evaluation(
     container: ServiceContainer,
 ) -> None:
@@ -305,6 +386,7 @@ async def test_async_run_persists_events_and_rule_evaluation(
     detail = await container.runs.get_case_run(page.items[0].id)
     event_types = [event.event_type for event in detail.events]
     assert event_types == [
+        RunEventType.CAPABILITY_SNAPSHOT,
         RunEventType.USER_MESSAGE,
         RunEventType.DRIVER_SESSION,
         RunEventType.TOOL_CALL,
@@ -315,9 +397,7 @@ async def test_async_run_persists_events_and_rule_evaluation(
         RunEventType.ASSISTANT_MESSAGE,
     ]
     tool_result = next(
-        event
-        for event in detail.events
-        if event.event_type is RunEventType.TOOL_RESULT
+        event for event in detail.events if event.event_type is RunEventType.TOOL_RESULT
     )
     assert tool_result.payload["source"] == "fixture"
     assert len(detail.evaluations) == 1
@@ -330,18 +410,14 @@ async def test_async_run_persists_events_and_rule_evaluation(
     )
     assert filtered.total == 2
     assert filtered.limit == 1
-    assert [item.event_type for item in filtered.items] == [
-        RunEventType.TOOL_CALL
-    ]
+    assert [item.event_type for item in filtered.items] == [RunEventType.TOOL_CALL]
     second = await container.runs.list_case_run_events(
         detail.id,
         event_types=[RunEventType.TOOL_CALL, RunEventType.TOOL_RESULT],
         limit=1,
         offset=1,
     )
-    assert [item.event_type for item in second.items] == [
-        RunEventType.TOOL_RESULT
-    ]
+    assert [item.event_type for item in second.items] == [RunEventType.TOOL_RESULT]
 
 
 async def test_list_runs_can_be_scoped_to_target(
@@ -476,6 +552,7 @@ async def test_driver_request_session_and_text_order_are_persisted_as_evidence()
         }
         event_types = [event.event_type for event in detail.events]
         assert event_types == [
+            RunEventType.CAPABILITY_SNAPSHOT,
             RunEventType.USER_MESSAGE,
             RunEventType.DRIVER_REQUEST,
             RunEventType.DRIVER_SESSION,
@@ -491,14 +568,10 @@ async def test_driver_request_session_and_text_order_are_persisted_as_evidence()
             RunEventType.ASSISTANT_MESSAGE,
         ]
         first_text = next(
-            event
-            for event in detail.events
-            if event.event_type is RunEventType.ASSISTANT_TEXT
+            event for event in detail.events if event.event_type is RunEventType.ASSISTANT_TEXT
         )
         tool_call = next(
-            event
-            for event in detail.events
-            if event.event_type is RunEventType.TOOL_CALL
+            event for event in detail.events if event.event_type is RunEventType.TOOL_CALL
         )
         completed_requests = [
             event
@@ -537,6 +610,8 @@ async def test_partial_version_incompatibility_returns_skipped_items(
         CaseRunStatus.COMPLETED,
         CaseRunStatus.SKIPPED,
     }
+    skipped = next(item for item in page.items if item.status is CaseRunStatus.SKIPPED)
+    assert skipped.failure_class is FailureClass.CONTRACT_INCOMPATIBLE
 
 
 async def test_omitted_version_executes_intersection_and_returns_version_differences(
@@ -554,16 +629,12 @@ async def test_omitted_version_executes_intersection_and_returns_version_differe
     )
 
     assert submitted.planned_case_runs == 1
-    assert [
-        (item.version, item.code)
-        for item in submitted.skipped_items
-    ] == [("v2", "version_incompatible")]
+    assert [(item.version, item.code) for item in submitted.skipped_items] == [
+        ("v2", "version_incompatible")
+    ]
     await container.scheduler.wait(submitted.run_id)
     page = await container.runs.list_case_runs(submitted.run_id)
-    assert {
-        (item.version, item.status)
-        for item in page.items
-    } == {
+    assert {(item.version, item.status) for item in page.items} == {
         ("v1", CaseRunStatus.COMPLETED),
         ("v2", CaseRunStatus.SKIPPED),
     }
@@ -587,10 +658,7 @@ async def test_case_version_without_target_override_uses_base_and_extra_is_skipp
     )
 
     assert submitted.planned_case_runs == 2
-    assert {
-        (item.version, item.message)
-        for item in submitted.skipped_items
-    } == {
+    assert {(item.version, item.message) for item in submitted.skipped_items} == {
         (
             "v2",
             "case case_v1_and_v3 does not support version v2",
@@ -598,10 +666,7 @@ async def test_case_version_without_target_override_uses_base_and_extra_is_skipp
     }
     await container.scheduler.wait(submitted.run_id)
     page = await container.runs.list_case_runs(submitted.run_id)
-    assert {
-        (item.version, item.status)
-        for item in page.items
-    } == {
+    assert {(item.version, item.status) for item in page.items} == {
         ("v1", CaseRunStatus.COMPLETED),
         ("v2", CaseRunStatus.SKIPPED),
         ("v3", CaseRunStatus.COMPLETED),
@@ -792,6 +857,110 @@ async def test_cancel_is_cooperative_and_preserves_terminal_state() -> None:
         await services.close()
 
 
+async def test_durable_run_cancel_cancels_queued_jobs_and_case_runs() -> None:
+    database = Database("sqlite+aiosqlite:///:memory:")
+    registry = DriverRegistry()
+    registry.register("durable_cancel", ScriptedDriver)
+    services = ServiceContainer.build(
+        Settings(execution={"durable_scheduler_enabled": True}),
+        database=database,
+        drivers=registry,
+    )
+    await services.initialize()
+    try:
+        await seed_case(services, "case_durable_cancel")
+        await services.targets.create(
+            TargetCreate(
+                id="target_durable_cancel",
+                name="Durable cancel",
+                driver_type="durable_cancel",
+            )
+        )
+        submitted = await services.runs.run_cases(
+            RunCasesRequest(
+                case_ids=["case_durable_cancel"],
+                targets=[{"target_id": "target_durable_cancel"}],
+            )
+        )
+        jobs = await services.durable_jobs.list_jobs(
+            "default",
+            limit=10,
+            offset=0,
+        )
+        assert jobs.total == 1
+        assert jobs.items[0].status == "queued"
+
+        cancelled = await services.runs.cancel_run(submitted.run_id)
+
+        assert cancelled.status is RunStatus.CANCELLED
+        case_runs = await services.runs.list_case_runs(submitted.run_id)
+        assert case_runs.items[0].status is CaseRunStatus.CANCELLED
+        assert (await services.durable_jobs.get("default", jobs.items[0].id)).status == "cancelled"
+    finally:
+        await services.close()
+
+
+async def test_durable_cancel_fences_a_late_executor_completion() -> None:
+    gate = asyncio.Event()
+    database = Database("sqlite+aiosqlite:///:memory:")
+    registry = DriverRegistry()
+    registry.register("durable_gated", lambda: ScriptedDriver(gate))
+    services = ServiceContainer.build(
+        Settings(
+            execution={
+                "durable_scheduler_enabled": True,
+                "job_lease_seconds": 10,
+            }
+        ),
+        database=database,
+        drivers=registry,
+    )
+    await services.initialize()
+    try:
+        await seed_case(services, "case_durable_late")
+        await services.targets.create(
+            TargetCreate(
+                id="target_durable_late",
+                name="Durable late completion",
+                driver_type="durable_gated",
+            )
+        )
+        submitted = await services.runs.run_cases(
+            RunCasesRequest(
+                case_ids=["case_durable_late"],
+                targets=[{"target_id": "target_durable_late"}],
+            )
+        )
+        await services.durable_jobs.register_worker("late-worker")
+        worker_task = asyncio.create_task(services.durable_worker.run_once("late-worker"))
+        for _ in range(100):
+            jobs = await services.durable_jobs.list_jobs(
+                "default",
+                limit=10,
+                offset=0,
+            )
+            if jobs.items[0].status == "running":
+                break
+            await asyncio.sleep(0.01)
+        else:
+            pytest.fail("durable worker did not enter running state")
+
+        await services.runs.cancel_run(submitted.run_id)
+        gate.set()
+        assert await worker_task is True
+
+        run = await services.runs.get_run(submitted.run_id)
+        case_runs = await services.runs.list_case_runs(submitted.run_id)
+        job = await services.durable_jobs.get("default", jobs.items[0].id)
+        assert run.status is RunStatus.CANCELLED
+        assert run.cancelled_count == 1
+        assert case_runs.items[0].status is CaseRunStatus.CANCELLED
+        assert job.status == "cancelled"
+    finally:
+        gate.set()
+        await services.close()
+
+
 async def test_case_timeout_fails_item_but_parent_batch_completes() -> None:
     gate = asyncio.Event()
     database = Database("sqlite+aiosqlite:///:memory:")
@@ -828,13 +997,82 @@ async def test_case_timeout_fails_item_but_parent_batch_completes() -> None:
         assert run.failed_count == 1
         page = await services.runs.list_case_runs(submitted.run_id)
         assert page.items[0].status is CaseRunStatus.FAILED
-        assert (
-            page.items[0].evaluation_state
-            is EvaluationOutcome.EVALUATION_ERROR
-        )
+        assert page.items[0].evaluation_state is EvaluationOutcome.EVALUATION_ERROR
         assert page.items[0].error_code == "case_timeout"
+        assert page.items[0].failure_class is FailureClass.TIMEOUT
+        source_attempt_id = page.items[0].id
+        cells = await services.runs.list_run_cells(submitted.run_id)
+        recovery = await services.runs.retry_run_cells(
+            submitted.run_id,
+            RunCellRetryRequest(
+                cell_ids=[cells.items[0].cell_id],
+                reason="retry timeout from frozen evidence",
+            ),
+        )
+        await services.scheduler.wait(recovery.run_id)
+        recovery_run = await services.runs.get_run(recovery.run_id)
+        recovery_attempts = await services.runs.list_case_runs(recovery.run_id)
+        assert recovery_run.recovery_of_run_id == submitted.run_id
+        assert recovery_run.recovery_reason == "retry timeout from frozen evidence"
+        assert recovery_attempts.items[0].recovery_of_case_run_id == source_attempt_id
+        assert recovery_attempts.items[0].case_id == "case_timeout"
     finally:
         await services.close()
+
+
+async def test_behavior_failure_recovery_requires_explicit_override(
+    container: ServiceContainer,
+) -> None:
+    await container.cases.create(
+        TestCaseCreate(
+            id="case_behavior_failure",
+            name="Behavior failure",
+            supported_versions=["v1"],
+            primary_evaluator="rule",
+            turns=[
+                {
+                    "position": 1,
+                    "user_message": "case_behavior_failure",
+                    "fixtures": [
+                        {
+                            "tool_name": "search",
+                            "match_arguments": {"query": "case_behavior_failure"},
+                            "result": {"items": []},
+                        }
+                    ],
+                    "assertions": [
+                        {"kind": "text_contains", "value": "never-present"},
+                    ],
+                }
+            ],
+        )
+    )
+    await seed_target_and_profile(container)
+    submitted = await container.runs.run_cases(
+        RunCasesRequest(
+            case_ids=["case_behavior_failure"],
+            targets=[{"target_id": "target_scripted", "version": "v1"}],
+            profile_id="profile_fixture",
+        )
+    )
+    await container.scheduler.wait(submitted.run_id)
+    cells = await container.runs.list_run_cells(submitted.run_id)
+    assert cells.items[0].failure_class is FailureClass.BEHAVIOR_REGRESSION
+
+    request = RunCellRetryRequest(
+        cell_ids=[cells.items[0].cell_id],
+        reason="explicit behavior recheck",
+    )
+    with pytest.raises(AgentRigError) as caught:
+        await container.runs.retry_run_cells(submitted.run_id, request)
+    assert caught.value.detail.code is ErrorCode.CONFLICT
+
+    recovery = await container.runs.retry_run_cells(
+        submitted.run_id,
+        request.model_copy(update={"override_behavior_fail": True}),
+    )
+    await container.scheduler.wait(recovery.run_id)
+    assert recovery.recovery_of_run_id == submitted.run_id
 
 
 async def test_driver_factory_failure_is_isolated_to_case_run() -> None:
@@ -890,6 +1128,7 @@ async def test_driver_factory_failure_is_isolated_to_case_run() -> None:
         assert page.items[0].status is CaseRunStatus.FAILED
         assert page.items[0].error_code == "internal_error"
         assert page.items[0].error_message == "driver failed while opening"
+        assert page.items[0].failure_class is FailureClass.INTERNAL_ERROR
     finally:
         await services.close()
 
@@ -911,9 +1150,7 @@ async def test_external_verdict_is_separate_and_overwrites_only_external_record(
     case_run_id = page.items[0].id
     detail = await container.runs.get_case_run(case_run_id)
     evidence_ref = next(
-        event.id
-        for event in detail.events
-        if event.event_type is RunEventType.ASSISTANT_MESSAGE
+        event.id for event in detail.events if event.event_type is RunEventType.ASSISTANT_MESSAGE
     )
     first = await container.runs.submit_external_verdict(
         case_run_id,
@@ -940,9 +1177,7 @@ async def test_external_verdict_is_separate_and_overwrites_only_external_record(
         EvaluatorType.RULE,
         EvaluatorType.EXTERNAL_CONTROLLER,
     }
-    rule = next(
-        item for item in updated.evaluations if item.evaluator_type is EvaluatorType.RULE
-    )
+    rule = next(item for item in updated.evaluations if item.evaluator_type is EvaluatorType.RULE)
     external = next(
         item
         for item in updated.evaluations

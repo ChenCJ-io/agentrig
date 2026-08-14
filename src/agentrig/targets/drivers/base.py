@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +17,28 @@ class DriverEventType(StrEnum):
     ASSISTANT_TEXT_DELTA = "assistant_text_delta"
     ASSISTANT_MESSAGE_COMPLETED = "assistant_message_completed"
     TOOL_CALLS = "tool_calls"
+    SESSION_STATUS_CHANGED = "session_status_changed"
+    MODEL_CALL_STARTED = "model_call_started"
+    MODEL_CALL_COMPLETED = "model_call_completed"
+    THINKING_STARTED = "thinking_started"
+    THINKING_DELTA = "thinking_delta"
+    THINKING_COMPLETED = "thinking_completed"
+    DATA_PART = "data_part"
+    TOOL_CALL_STARTED = "tool_call_started"
+    TOOL_CALL_ARGUMENTS_DELTA = "tool_call_arguments_delta"
+    TOOL_CALL_COMPLETED = "tool_call_completed"
+    TOOL_RESULT_OBSERVED = "tool_result_observed"
+    PERMISSION_REQUESTED = "permission_requested"
+    PERMISSION_RESOLVED = "permission_resolved"
+    EXTERNAL_EXECUTION_REQUESTED = "external_execution_requested"
+    EXTERNAL_EXECUTION_RESOLVED = "external_execution_resolved"
+    INTERRUPT_REQUESTED = "interrupt_requested"
+    INTERRUPTED = "interrupted"
+    RESUMED = "resumed"
+    AGENT_STARTED = "agent_started"
+    AGENT_COMPLETED = "agent_completed"
+    MEMORY_OPERATION = "memory_operation"
+    WORKSPACE_ARTIFACT = "workspace_artifact"
     USAGE = "usage"
     COMPLETED = "completed"
     ERROR = "error"
@@ -43,7 +66,17 @@ class ToolResult(BaseModel):
 class DriverEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    schema_version: Literal["agentrig.driver-event.v2"] = "agentrig.driver-event.v2"
+    event_id: str | None = None
     type: DriverEventType
+    occurred_at: datetime | None = None
+    sequence: int | None = Field(default=None, ge=0)
+    parent_event_id: str | None = None
+    agent_path: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    raw_type: str | None = None
+    source: str | None = None
+    redaction: dict[str, Any] = Field(default_factory=dict)
     session_id: str | None = None
     request_id: str | None = None
     request_kind: str | None = None
@@ -58,6 +91,8 @@ class DriverEvent(BaseModel):
 
 
 class DriverCapabilities(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     streaming: bool = False
     multi_turn: bool = False
     tool_call_observation: bool = False
@@ -66,6 +101,17 @@ class DriverCapabilities(BaseModel):
     usage_metrics: bool = False
     full_trace: bool = False
     tool_proxy_injection: bool = False
+    permission_observation: bool = False
+    permission_response: bool = False
+    interrupt: bool = False
+    resume: bool = False
+    external_execution: bool = False
+    nested_agents: bool = False
+    model_call_observation: bool = False
+    memory_observation: bool = False
+    workspace_artifacts: bool = False
+    multimodal: bool = False
+    ordered_event_cursor: bool = False
 
     def names(self) -> list[str]:
         return [
@@ -135,3 +181,41 @@ class ProbeableAgentDriver(Protocol):
     """可执行一次不产生业务对话的真实连通性探针。"""
 
     async def probe(self, context: DriverPrepareContext) -> None: ...
+
+
+@runtime_checkable
+class DescribableAgentDriver(Protocol):
+    """Return public runtime metadata observed before the first user message."""
+
+    async def describe_capabilities(
+        self,
+        context: DriverPrepareContext,
+        session: DriverSession,
+    ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ResumableAgentDriver(Protocol):
+    def resume(
+        self,
+        session: DriverSession,
+        value: dict[str, Any],
+    ) -> AsyncIterator[DriverEvent]: ...
+
+
+@runtime_checkable
+class PermissionResponseAgentDriver(Protocol):
+    def submit_permission_response(
+        self,
+        session: DriverSession,
+        value: dict[str, Any],
+    ) -> AsyncIterator[DriverEvent]: ...
+
+
+@runtime_checkable
+class ExternalExecutionAgentDriver(Protocol):
+    def submit_external_result(
+        self,
+        session: DriverSession,
+        value: dict[str, Any],
+    ) -> AsyncIterator[DriverEvent]: ...

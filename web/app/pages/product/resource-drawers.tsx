@@ -72,14 +72,14 @@ export function TargetEditorDrawer({ initial, onClose, onSaved }: { initial?: Ta
   const drivers = useQuery({ queryKey: ["product", "driver-types"], queryFn: () => getOne<Array<{ driver_type: string; deployment_ready: boolean }>>("/api/driver-types") });
   const [id, setId] = useState("");
   const [name, setName] = useState("");
-  const [driverType, setDriverType] = useState("pixcake_http_sse");
+  const [driverType, setDriverType] = useState("http_sse");
   const [endpoint, setEndpoint] = useState("");
   const [secretRef, setSecretRef] = useState("");
   const [versions, setVersions] = useState("[]");
   const [options, setOptions] = useState("{}");
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    setId(initial?.id ?? ""); setName(initial?.name ?? ""); setDriverType(initial?.driver_type ?? "pixcake_http_sse"); setEndpoint(initial?.endpoint ?? ""); setSecretRef(typeof initial?.secret_ref === "string" ? initial.secret_ref : ""); setVersions(JSON.stringify(initial?.versions ?? [], null, 2)); setOptions(JSON.stringify(initial?.options ?? {}, null, 2)); setError(null);
+    setId(initial?.id ?? ""); setName(initial?.name ?? ""); setDriverType(initial?.driver_type ?? "http_sse"); setEndpoint(initial?.endpoint ?? ""); setSecretRef(typeof initial?.secret_ref === "string" ? initial.secret_ref : ""); setVersions(JSON.stringify(initial?.versions ?? [], null, 2)); setOptions(JSON.stringify(initial?.options ?? {}, null, 2)); setError(null);
   }, [initial]);
   const save = useMutation({
     mutationFn: async () => {
@@ -91,7 +91,7 @@ export function TargetEditorDrawer({ initial, onClose, onSaved }: { initial?: Ta
   });
   const remove = useMutation({ mutationFn: () => deleteOne(`/api/targets/${encodeURIComponent(initial!.id)}`), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["product", "targets"] }); onSaved(); }, onError: (value) => setError(message(value)) });
   return <DrawerShell error={error} eyebrow="被测对象 · 连接配置" isEditing={Boolean(initial)} isPending={save.isPending || remove.isPending} kind="被测 Agent" onClose={onClose} onDelete={initial ? () => remove.mutate() : undefined} onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
-    <div className={styles.formGrid}>{!initial ? <label>被测对象 ID（Target ID，可选）<input onChange={(event) => setId(event.target.value)} placeholder="target_lassist" value={id} /></label> : <label>被测对象 ID<input readOnly value={initial.id} /></label>}<label>显示名称<input onChange={(event) => setName(event.target.value)} required value={name} /></label></div>
+    <div className={styles.formGrid}>{!initial ? <label>被测对象 ID（Target ID，可选）<input onChange={(event) => setId(event.target.value)} placeholder="target_my_agent" value={id} /></label> : <label>被测对象 ID<input readOnly value={initial.id} /></label>}<label>显示名称<input onChange={(event) => setName(event.target.value)} required value={name} /></label></div>
     <label>接入驱动（Driver）<select onChange={(event) => setDriverType(event.target.value)} value={driverType}>{(drivers.data ?? [{ driver_type: driverType, deployment_ready: true }]).map((driver) => <option disabled={!driver.deployment_ready} key={driver.driver_type} value={driver.driver_type}>{driver.driver_type}{driver.deployment_ready ? "" : " · 当前不可部署"}</option>)}</select></label>
     <label>服务地址（Endpoint，可选）<input onChange={(event) => setEndpoint(event.target.value)} placeholder="http://127.0.0.1:8008" value={endpoint} /></label>
     <label>密钥引用（Secret Reference，可选）<input onChange={(event) => setSecretRef(event.target.value)} placeholder="env:TARGET_API_KEY" value={secretRef} /><small>只允许 env:VARIABLE_NAME，不保存明文密钥。</small></label>

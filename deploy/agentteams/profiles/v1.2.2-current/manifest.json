@@ -1,0 +1,20 @@
+{
+  "schema_version": "agentrig.agentteams-profile.v1",
+  "profile": "v1.2.2-current",
+  "agentteams_version": "v1.2.2",
+  "source_git_sha": "849182af8e017168a5a200a87b1062142caf462d",
+  "runtime_name": "qwenpaw",
+  "resource_api_version": "agentteams.io/v1beta1",
+  "resource_schema_hash": "sha256:15b210c68a77b033d8267543c97f2fb1b680489a2523e2fc1e6064444baa1781",
+  "controller_image": "higress-registry.cn-hangzhou.cr.aliyuncs.com/agentteams/agentteams-controller:v1.2.2@sha256:a0709506e6dd047bc6aadcfd8d77c8f193683d4326795c263f32b7be9e791570",
+  "runtime_images": {
+    "manager": "higress-registry.cn-hangzhou.cr.aliyuncs.com/agentteams/agentteams-manager:v1.2.2@sha256:dd11878943e4a425ff38dcc152c9d44ea0e68d97bac89f711207134b8636c0fb",
+    "qwenpaw_worker": "higress-registry.cn-hangzhou.cr.aliyuncs.com/agentteams/agentteams-copaw-worker:v1.2.2@sha256:7a6780ef76b6c7b056a2c343eeabc697f70108dae153afe8ddb76a3fad9a41b4"
+  },
+  "roles": {
+    "manager": "agentrig-manager",
+    "curator": "agentrig-curator",
+    "judge": "agentrig-judge"
+  },
+  "historical_read_only": false
+}

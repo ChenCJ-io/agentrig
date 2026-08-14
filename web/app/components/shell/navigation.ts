@@ -105,7 +105,10 @@ function targetGroups(pathname: string, targetId: string): NavigationGroup[] {
 function pageTitle(pathname: string) {
   const pages: Array<[RegExp, string, string, LucideIcon]> = [
     [/\/conversation$/, "对话验证", "直接连接被测 Agent", MessageSquare],
-    [/\/assistant$/, "智能评测助手", "AgentTeams 协作评测", MessagesSquare],
+    [/\/assistant$/, "智能评测助手", "自然语言评测与可审计执行", MessagesSquare],
+    [/\/evaluation\/runs\/new\/(?:info|scope|review)$/, "新建评测", "配置、预览与提交", ListChecks],
+    [/\/evaluation\/runs\/[^/]+\/cells\/[^/]+$/, "Cell 证据", "Attempt、时间线与恢复", ListChecks],
+    [/\/evaluation\/runs\/[^/]+\/report$/, "验收报告", "质量门禁、失败与 Recovery", ClipboardCheck],
     [/\/overview$/, "评测总览", "质量与运行概况", Gauge],
     [/\/evaluation\/runs\/[^/]+$/, "运行证据", "用例运行可审计链路", ListChecks],
     [/\/evaluation\/runs$/, "运行记录", "运行与用例运行", ListChecks],
@@ -141,6 +144,14 @@ export function getShellContext(pathname: string): ShellContext {
   }
   const title = pathname.startsWith("/evaluator-teams")
     ? ["评测团队", "AgentTeams 身份与协作", UsersRound] as const
+    : pathname.startsWith("/production")
+      ? ["生产证据", "OTLP Trace、脱敏与 Trace→Case", Activity] as const
+      : pathname.startsWith("/reviews")
+        ? ["人工审核", "Annotation、GoldLabel 与 Judge 对齐", ClipboardCheck] as const
+        : pathname.startsWith("/failure-patterns")
+          ? ["Failure Patterns", "失败归并、状态与复发监控", FileSearch] as const
+          : pathname.startsWith("/jobs")
+            ? ["耐久执行", "数据库租约、Attempt 与恢复", History] as const
     : pathname.startsWith("/audit")
       ? ["审计日志", "操作者、资源与结果", ShieldCheck] as const
       : pathname.startsWith("/settings")
@@ -156,6 +167,10 @@ export function getShellContext(pathname: string): ShellContext {
     groups: [{
       items: [
         { label: "被测 Agent", path: "/targets", icon: Waypoints },
+        { label: "生产证据", path: "/production", icon: Activity },
+        { label: "人工审核", path: "/reviews", icon: ClipboardCheck },
+        { label: "Failure Patterns", path: "/failure-patterns", icon: FileSearch },
+        { label: "耐久执行", path: "/jobs", icon: History },
         { label: "评测团队", path: "/evaluator-teams", icon: UsersRound },
         { label: "审计日志", path: "/audit", icon: ShieldCheck },
         { label: "系统设置", path: "/settings", icon: Settings2 },

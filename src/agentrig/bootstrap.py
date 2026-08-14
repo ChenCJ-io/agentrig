@@ -17,12 +17,15 @@ from .agents.invocation_coordinator import (
 from .agents.invocation_service import AgentInvocationService
 from .agents.ports import EvidenceJudgePort, SimulationCuratorPort
 from .assistant import AssistantService, EvaluationPlanService
+from .assistant.basic_runtime import BasicAssistantRuntime
 from .assistant.decision_service import DecisionService
 from .assistant.run_notifier import AssistantRunNotifier
 from .cases import CaseService
 from .config import Settings, get_settings
 from .evaluations.rule_evaluator import RuleEvaluator
 from .evaluations.service import EvaluationService
+from .failures import FailureGovernanceService
+from .gates import ReleaseGateService
 from .infrastructure.database import Database
 from .infrastructure.database.repositories import (
     SqlAgentInvocationRepository,
@@ -46,17 +49,23 @@ from .integrations.agentteams import (
     MatrixAgentTaskTransport,
     MatrixClient,
 )
+from .jobs import DurableJobService, DurableWorker
+from .observability import RunOtlpExporter
+from .production import ProductionEvidenceService
 from .profiles import ProfileService
 from .profiles.resolver import ProfileResolver
+from .projects import ProjectService
 from .proxy.backend import BackendRegistry
 from .proxy.scoped import ProxyScopeRegistry
 from .reporting import ReportingService
+from .reviews import ReviewAlignmentService
 from .runs.event_recorder import EventRecorder
 from .runs.executor import CaseExecutor
 from .runs.planner import RunPlanner
 from .runs.redactor import Redactor
 from .runs.scheduler import RunScheduler
 from .runs.service import RunService
+from .safety import SafetyService
 from .target_chat import TargetChatService
 from .targets import TargetService
 from .targets.drivers import DriverRegistry
@@ -72,15 +81,24 @@ class ServiceContainer:
     cases: CaseService
     targets: TargetService
     profiles: ProfileService
+    projects: ProjectService
+    production: ProductionEvidenceService
+    reviews: ReviewAlignmentService
+    failures: FailureGovernanceService
     samples: SampleService
     assistant: AssistantService
     decisions: DecisionService
     evaluation_plans: EvaluationPlanService
+    basic_assistant: BasicAssistantRuntime
     agent_invocations: AgentInvocationService
     agentteams_bridge: AgentTeamsBridge
     target_chats: TargetChatService
     runs: RunService
     reporting: ReportingService
+    release_gates: ReleaseGateService
+    safety: SafetyService
+    durable_jobs: DurableJobService
+    durable_worker: DurableWorker
     scheduler: RunScheduler
     drivers: DriverRegistry
     proxy_scopes: ProxyScopeRegistry
@@ -138,6 +156,7 @@ class ServiceContainer:
             http_policy=TargetHttpPolicy(resolved_settings.target_network),
         )
         profiles = ProfileService(profile_repository)
+        projects = ProjectService(resolved_database)
         samples = SampleService(
             sample_repository,
             evidence_reader=SqlToolCallEvidenceReader(resolved_database),
@@ -146,6 +165,17 @@ class ServiceContainer:
         redactor = Redactor(
             sensitive_keys=resolved_settings.evidence.sensitive_keys,
             sensitive_paths=resolved_settings.evidence.sensitive_paths,
+        )
+        production = ProductionEvidenceService(
+            resolved_database,
+            config=resolved_settings.production_evidence,
+            redactor=redactor,
+        )
+        reviews = ReviewAlignmentService(resolved_database)
+        failures = FailureGovernanceService(
+            resolved_database,
+            secrets=secret_resolver,
+            http_policy=TargetHttpPolicy(resolved_settings.target_network),
         )
         decisions = DecisionService(
             decision_repository,
@@ -212,9 +242,14 @@ class ServiceContainer:
             coordinator = AgentInvocationCoordinator(agent_invocations, transport)
             simulation_curator = AgentTeamsSimulationCurator(coordinator)
             evidence_judge = AgentTeamsEvidenceJudge(coordinator)
+        durable_jobs = DurableJobService(
+            resolved_database,
+            resolved_settings.execution,
+        )
         recorder = EventRecorder(
             run_repository,
             redactor,
+            external_side_effect_listener=(durable_jobs.mark_external_side_effect_by_attempt),
         )
         validator = ToolResultValidator(
             max_bytes=resolved_settings.evidence.max_event_payload_bytes,
@@ -253,6 +288,12 @@ class ServiceContainer:
             server_api_token=server_api_token,
         )
         scheduler = RunScheduler(run_repository, executor)
+        durable_worker = DurableWorker(
+            durable_jobs,
+            executor,
+            run_repository,
+            resolved_settings.execution,
+        )
         planner = RunPlanner(
             cases=cases,
             targets=targets,
@@ -271,6 +312,9 @@ class ServiceContainer:
                 evaluation_repository,
                 run_repository,
             ),
+            durable_jobs=durable_jobs,
+            durable_worker=durable_worker,
+            durable_scheduler_enabled=(resolved_settings.execution.durable_scheduler_enabled),
         )
         reporting = ReportingService(
             cases=case_repository,
@@ -280,6 +324,13 @@ class ServiceContainer:
             redactor=redactor,
             max_report_case_runs=resolved_settings.reporting.max_report_case_runs,
             max_export_records=resolved_settings.reporting.max_export_records,
+            decisions=decisions,
+            invocations=agent_invocations,
+        )
+        release_gates = ReleaseGateService(reporting)
+        safety = SafetyService(
+            run_repository,
+            max_case_runs=resolved_settings.reporting.max_report_case_runs,
         )
         evaluation_plans = EvaluationPlanService(
             repository=assistant_repository,
@@ -291,28 +342,62 @@ class ServiceContainer:
                 and resolved_settings.adaptive_decisions.enforce_managed_mutations
             ),
         )
-        scheduler.add_completion_listener(
-            AssistantRunNotifier(
-                repository=assistant_repository,
-                assistant=assistant,
-                bridge=agentteams_bridge,
-            )
+        basic_assistant = BasicAssistantRuntime(
+            config=resolved_settings.assistant.basic_provider,
+            model_client=resolved_model_client,
+            secrets=secret_resolver,
+            assistant=assistant,
+            plans=evaluation_plans,
+            cases=cases,
+            targets=targets,
+            profiles=profiles,
+            runs=runs,
         )
+        run_notifier = AssistantRunNotifier(
+            repository=assistant_repository,
+            assistant=assistant,
+            bridge=agentteams_bridge,
+            basic_runtime=basic_assistant,
+        )
+        scheduler.add_completion_listener(run_notifier)
+        durable_worker.add_completion_listener(run_notifier)
+        if resolved_settings.run_otlp_export.enabled:
+            export_headers = {
+                name: secret_resolver.resolve(reference) or ""
+                for name, reference in (
+                    resolved_settings.run_otlp_export.header_secret_refs.items()
+                )
+            }
+            run_otlp_exporter = RunOtlpExporter(
+                resolved_settings.run_otlp_export,
+                headers=export_headers,
+            )
+            scheduler.add_completion_listener(run_otlp_exporter)
+            durable_worker.add_completion_listener(run_otlp_exporter)
         return cls(
             settings=resolved_settings,
             database=resolved_database,
             cases=cases,
             targets=targets,
             profiles=profiles,
+            projects=projects,
+            production=production,
+            reviews=reviews,
+            failures=failures,
             samples=samples,
             assistant=assistant,
             decisions=decisions,
             evaluation_plans=evaluation_plans,
+            basic_assistant=basic_assistant,
             agent_invocations=agent_invocations,
             agentteams_bridge=agentteams_bridge,
             target_chats=target_chats,
             runs=runs,
             reporting=reporting,
+            release_gates=release_gates,
+            safety=safety,
+            durable_jobs=durable_jobs,
+            durable_worker=durable_worker,
             scheduler=scheduler,
             drivers=driver_registry,
             proxy_scopes=proxy_scopes,
@@ -323,8 +408,14 @@ class ServiceContainer:
 
     async def initialize(self) -> None:
         await self.database.initialize_schema()
-        await self._mark_interrupted()
+        await self.projects.ensure_default()
         await self.agentteams_bridge.start()
+        if self.settings.execution.durable_scheduler_enabled:
+            await self.durable_worker.recover_expired()
+            await self.target_chats.mark_interrupted()
+            await self.agent_invocations.cancel_in_progress()
+        else:
+            await self._mark_interrupted()
 
     async def close(self) -> None:
         await self.target_chats.close_all()

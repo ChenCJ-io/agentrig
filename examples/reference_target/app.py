@@ -52,6 +52,42 @@ def create_app() -> FastAPI:
             "active_sessions": engine.active_session_count,
         }
 
+    @application.get("/capabilities")
+    async def capabilities() -> dict[str, object]:
+        observed = {
+            "streaming",
+            "multi_turn",
+            "tool_call_observation",
+            "tool_result_injection",
+            "usage_metrics",
+            "tool_proxy_injection",
+        }
+        return {
+            "schema_version": "agentrig.reference-capabilities.v1",
+            "source_status": "observed",
+            "runtime": {
+                "framework": "agentrig-reference-target",
+                "framework_version": "1.0.0",
+                "protocol": "http_sse",
+                "protocol_version": "1",
+            },
+            "features": {
+                name: {"status": "observed", "value": name in observed}
+                for name in (
+                    "streaming",
+                    "multi_turn",
+                    "tool_call_observation",
+                    "tool_result_injection",
+                    "usage_metrics",
+                    "full_trace",
+                    "tool_proxy_injection",
+                    "permission_observation",
+                )
+            },
+            "workspace": {"isolation": "reference-process"},
+            "memory": {"mode": "ephemeral-session"},
+        }
+
     @application.post("/chat/stream", response_model=None)
     async def chat_stream(request: ChatStreamRequest) -> Response:
         exchange = engine.handle(request)

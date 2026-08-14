@@ -302,6 +302,11 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return dump_model(await invoke(services.runs.get_run(run_id)))
 
     @server.tool()
+    async def get_run_summary(run_id: str) -> dict[str, Any]:
+        """紧凑读取 Cell/Attempt 进度、评判结论和失败分类。"""
+        return dump_model(await invoke(services.runs.get_run_summary(run_id)))
+
+    @server.tool()
     async def list_case_runs(
         run_id: str,
         limit: int = 50,
@@ -311,6 +316,24 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return dump_model(
             await invoke(services.runs.list_case_runs(run_id, limit=limit, offset=offset))
         )
+
+    @server.tool()
+    async def list_run_cells(
+        run_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """按稳定 Cell 聚合 repeat Attempts 和失败分类。"""
+        return dump_model(
+            await invoke(
+                services.runs.list_run_cells(run_id, limit=limit, offset=offset)
+            )
+        )
+
+    @server.tool()
+    async def get_run_cell(run_id: str, cell_id: str) -> dict[str, Any]:
+        """读取 Cell 下每个独立 Attempt 的完整证据时间线。"""
+        return dump_model(await invoke(services.runs.get_run_cell(run_id, cell_id)))
 
     @server.tool()
     async def get_case_run(case_run_id: str) -> dict[str, Any]:

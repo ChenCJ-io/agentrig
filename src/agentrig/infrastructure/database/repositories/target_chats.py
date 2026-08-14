@@ -10,16 +10,23 @@ from ..session import Database
 
 
 class SqlTargetChatRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def save(self, value: TargetChatView) -> None:
         async with self._database.session() as session:
-            row = await session.get(TargetChatSessionORM, value.id)
+            row = await session.scalar(
+                select(TargetChatSessionORM).where(
+                    TargetChatSessionORM.id == value.id,
+                    TargetChatSessionORM.project_id == self._project_id,
+                )
+            )
             events = [event.model_dump(mode="json") for event in value.events]
             if row is None:
                 row = TargetChatSessionORM(
                     id=value.id,
+                    project_id=self._project_id,
                     target_id=value.target_id,
                     profile_id=value.profile_id,
                     version=value.version,
@@ -37,7 +44,12 @@ class SqlTargetChatRepository:
 
     async def get(self, chat_id: str) -> TargetChatView | None:
         async with self._database.session() as session:
-            row = await session.get(TargetChatSessionORM, chat_id)
+            row = await session.scalar(
+                select(TargetChatSessionORM).where(
+                    TargetChatSessionORM.id == chat_id,
+                    TargetChatSessionORM.project_id == self._project_id,
+                )
+            )
             return self._view(row) if row is not None else None
 
     async def list_page(
@@ -47,7 +59,9 @@ class SqlTargetChatRepository:
         limit: int,
         offset: int,
     ) -> TargetChatPage:
-        filters = [TargetChatSessionORM.target_id == target_id] if target_id else []
+        filters = [TargetChatSessionORM.project_id == self._project_id]
+        if target_id:
+            filters.append(TargetChatSessionORM.target_id == target_id)
         async with self._database.session() as session:
             total = int(
                 await session.scalar(
@@ -78,7 +92,10 @@ class SqlTargetChatRepository:
         async with self._database.session() as session:
             result = await session.execute(
                 update(TargetChatSessionORM)
-                .where(TargetChatSessionORM.status == "open")
+                .where(
+                    TargetChatSessionORM.status == "open",
+                    TargetChatSessionORM.project_id == self._project_id,
+                )
                 .values(status="interrupted", updated_at=utc_now())
             )
             await session.commit()

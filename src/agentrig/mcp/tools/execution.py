@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from ...bootstrap import ServiceContainer
 from ...evaluations.schemas import ExternalVerdictSubmit
 from ...runs.models import RunEventType
-from ...runs.schemas import RunCasesRequest
+from ...runs.schemas import RunCasesRequest, RunCellRetryRequest
 from .support import dump_model, invoke
 
 
@@ -28,14 +28,24 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
         return RunCasesRequest.model_json_schema()
 
     @server.tool()
+    async def preview_run_cases(value: RunCasesRequest) -> dict[str, Any]:
+        """解析稳定 Cell/Attempt Manifest；不创建 Run 或触发被测 Agent。"""
+        return dump_model(await invoke(services.runs.preview_run_cases(value)))
+
+    @server.tool()
     async def run_cases(value: RunCasesRequest) -> dict[str, Any]:
-        """异步执行单个或批量用例并立即返回 run_id；一个 case_id 也是同一入口。"""
+        """异步执行已预览请求；可用 expected_manifest_hash 阻止资产漂移提交。"""
         return dump_model(await invoke(services.runs.run_cases(value)))
 
     @server.tool()
     async def get_run(run_id: str) -> dict[str, Any]:
         """读取父 Run 调度终态和各单项计数；completed 不代表所有 CaseRun 通过。"""
         return dump_model(await invoke(services.runs.get_run(run_id)))
+
+    @server.tool()
+    async def get_run_summary(run_id: str) -> dict[str, Any]:
+        """读取适合轮询的紧凑 Cell/Attempt/结论/失败分类计数。"""
+        return dump_model(await invoke(services.runs.get_run_summary(run_id)))
 
     @server.tool()
     async def list_case_runs(
@@ -49,6 +59,32 @@ def register(server: FastMCP, services: ServiceContainer) -> None:
                 services.runs.list_case_runs(run_id, limit=limit, offset=offset)
             )
         )
+
+    @server.tool()
+    async def list_run_cells(
+        run_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """按稳定 Cell 分组读取 repeat Attempts 和聚合结论。"""
+        return dump_model(
+            await invoke(
+                services.runs.list_run_cells(run_id, limit=limit, offset=offset)
+            )
+        )
+
+    @server.tool()
+    async def get_run_cell(run_id: str, cell_id: str) -> dict[str, Any]:
+        """读取一个 Cell 的全部独立 Attempt、Timeline 与评判证据。"""
+        return dump_model(await invoke(services.runs.get_run_cell(run_id, cell_id)))
+
+    @server.tool()
+    async def retry_run_cells(
+        run_id: str,
+        value: RunCellRetryRequest,
+    ) -> dict[str, Any]:
+        """从冻结 Cell 快照创建 Recovery Run；行为失败默认禁止重跑。"""
+        return dump_model(await invoke(services.runs.retry_run_cells(run_id, value)))
 
     @server.tool()
     async def get_case_run(case_run_id: str) -> dict[str, Any]:

@@ -12,11 +12,12 @@ from ..session import Database
 
 
 class SqlTargetRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create(self, target_id: str, value: TargetCreate) -> TargetView:
-        row = self._new_row(target_id, value)
+        row = self._new_row(target_id, value, project_id=self._project_id)
         async with self._database.session() as session:
             session.add(row)
             await session.commit()
@@ -28,18 +29,29 @@ class SqlTargetRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(TargetORM)
-                .where(TargetORM.id == target_id)
+                .where(
+                    TargetORM.id == target_id,
+                    TargetORM.project_id == self._project_id,
+                )
                 .options(selectinload(TargetORM.versions))
             )
             return self._view(row) if row is not None else None
 
     async def list_page(self, *, limit: int, offset: int) -> TargetPage:
         async with self._database.session() as session:
-            total = int(await session.scalar(select(func.count(TargetORM.id))) or 0)
+            total = int(
+                await session.scalar(
+                    select(func.count(TargetORM.id)).where(
+                        TargetORM.project_id == self._project_id
+                    )
+                )
+                or 0
+            )
             rows = list(
                 (
                     await session.scalars(
                         select(TargetORM)
+                        .where(TargetORM.project_id == self._project_id)
                         .options(selectinload(TargetORM.versions))
                         .order_by(TargetORM.created_at, TargetORM.id)
                         .limit(limit)
@@ -58,7 +70,10 @@ class SqlTargetRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(TargetORM)
-                .where(TargetORM.id == target_id)
+                .where(
+                    TargetORM.id == target_id,
+                    TargetORM.project_id == self._project_id,
+                )
                 .options(selectinload(TargetORM.versions))
             )
             assert row is not None
@@ -79,16 +94,22 @@ class SqlTargetRepository:
     async def delete(self, target_id: str) -> bool:
         async with self._database.session() as session:
             row = await session.get(TargetORM, target_id)
-            if row is None:
+            if row is None or row.project_id != self._project_id:
                 return False
             await session.delete(row)
             await session.commit()
             return True
 
     @staticmethod
-    def _new_row(target_id: str, value: TargetCreate) -> TargetORM:
+    def _new_row(
+        target_id: str,
+        value: TargetCreate,
+        *,
+        project_id: str,
+    ) -> TargetORM:
         row = TargetORM(
             id=target_id,
+            project_id=project_id,
             name=value.name,
             driver_type=value.driver_type,
             endpoint=value.endpoint,

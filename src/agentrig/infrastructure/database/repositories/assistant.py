@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....assistant.models import (
     ActorType,
@@ -37,8 +38,9 @@ from ..session import Database
 
 
 class SqlAssistantRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create_session(
         self,
@@ -49,6 +51,7 @@ class SqlAssistantRepository:
     ) -> AssistantSessionView:
         row = AssistantSessionORM(
             id=session_id,
+            project_id=self._project_id,
             workspace_id=value.workspace_id,
             title=value.title,
             status=AssistantSessionStatus.ACTIVE.value,
@@ -62,7 +65,7 @@ class SqlAssistantRepository:
 
     async def get_session(self, session_id: str) -> AssistantSessionView | None:
         async with self._database.session() as session:
-            row = await session.get(AssistantSessionORM, session_id)
+            row = await self._owned_session(session, session_id)
         return self._session_view(row) if row is not None else None
 
     async def get_session_by_matrix_room(
@@ -72,7 +75,8 @@ class SqlAssistantRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(AssistantSessionORM).where(
-                    AssistantSessionORM.matrix_room_id == matrix_room_id
+                    AssistantSessionORM.matrix_room_id == matrix_room_id,
+                    AssistantSessionORM.project_id == self._project_id,
                 )
             )
         return self._session_view(row) if row is not None else None
@@ -84,10 +88,18 @@ class SqlAssistantRepository:
         offset: int,
     ) -> AssistantSessionPage:
         async with self._database.session() as session:
-            total = int(await session.scalar(select(func.count(AssistantSessionORM.id))) or 0)
+            total = int(
+                await session.scalar(
+                    select(func.count(AssistantSessionORM.id)).where(
+                        AssistantSessionORM.project_id == self._project_id
+                    )
+                )
+                or 0
+            )
             rows = list(
                 await session.scalars(
                     select(AssistantSessionORM)
+                    .where(AssistantSessionORM.project_id == self._project_id)
                     .order_by(
                         AssistantSessionORM.updated_at.desc(),
                         AssistantSessionORM.id.desc(),
@@ -105,7 +117,7 @@ class SqlAssistantRepository:
 
     async def archive_session(self, session_id: str) -> AssistantSessionView | None:
         async with self._database.session() as session:
-            row = await session.get(AssistantSessionORM, session_id)
+            row = await self._owned_session(session, session_id)
             if row is None:
                 return None
             row.status = AssistantSessionStatus.ARCHIVED.value
@@ -120,7 +132,7 @@ class SqlAssistantRepository:
         matrix_room_id: str,
     ) -> AssistantSessionView:
         async with self._database.session() as session:
-            row = await session.get(AssistantSessionORM, session_id)
+            row = await self._owned_session(session, session_id)
             assert row is not None
             row.matrix_room_id = matrix_room_id
             row.updated_at = utc_now()
@@ -138,17 +150,24 @@ class SqlAssistantRepository:
         actor_id: str,
         content: str,
         active_plan_id: str | None,
+        plan_action: dict[str, Any] | None = None,
     ) -> tuple[AssistantEventView, AssistantTurnView]:
         async with self._database.session() as session:
             existing = await session.scalar(
-                select(AssistantEventORM).where(
+                select(AssistantEventORM)
+                .join(
+                    AssistantSessionORM,
+                    AssistantSessionORM.id == AssistantEventORM.session_id,
+                )
+                .where(
                     AssistantEventORM.session_id == session_id,
                     AssistantEventORM.client_message_id == client_message_id,
+                    AssistantSessionORM.project_id == self._project_id,
                 )
             )
             if existing is not None:
                 assert existing.turn_id is not None
-                turn = await session.get(AssistantTurnORM, existing.turn_id)
+                turn = await self._owned_turn(session, existing.turn_id)
                 assert turn is not None
                 return self._event_view(existing), self._turn_view(turn)
 
@@ -160,7 +179,11 @@ class SqlAssistantRepository:
                 event_type=AssistantEventType.USER_MESSAGE.value,
                 actor_type=ActorType.USER.value,
                 actor_id=actor_id,
-                payload={"content": content, "active_plan_id": active_plan_id},
+                payload={
+                    "content": content,
+                    "active_plan_id": active_plan_id,
+                    "plan_action": plan_action,
+                },
                 turn_id=turn_id,
                 client_message_id=client_message_id,
                 delivery_status=DeliveryStatus.PENDING.value,
@@ -217,7 +240,7 @@ class SqlAssistantRepository:
 
     async def get_event(self, event_id: str) -> AssistantEventView | None:
         async with self._database.session() as session:
-            row = await session.get(AssistantEventORM, event_id)
+            row = await self._owned_event(session, event_id)
         return self._event_view(row) if row is not None else None
 
     async def get_event_by_matrix_id(
@@ -226,8 +249,14 @@ class SqlAssistantRepository:
     ) -> AssistantEventView | None:
         async with self._database.session() as session:
             row = await session.scalar(
-                select(AssistantEventORM).where(
-                    AssistantEventORM.matrix_event_id == matrix_event_id
+                select(AssistantEventORM)
+                .join(
+                    AssistantSessionORM,
+                    AssistantSessionORM.id == AssistantEventORM.session_id,
+                )
+                .where(
+                    AssistantEventORM.matrix_event_id == matrix_event_id,
+                    AssistantSessionORM.project_id == self._project_id,
                 )
             )
         return self._event_view(row) if row is not None else None
@@ -241,10 +270,16 @@ class SqlAssistantRepository:
     ) -> AssistantEventView | None:
         async with self._database.session() as session:
             row = await session.scalar(
-                select(AssistantEventORM).where(
+                select(AssistantEventORM)
+                .join(
+                    AssistantSessionORM,
+                    AssistantSessionORM.id == AssistantEventORM.session_id,
+                )
+                .where(
                     AssistantEventORM.session_id == session_id,
                     AssistantEventORM.event_type == event_type,
                     AssistantEventORM.run_id == run_id,
+                    AssistantSessionORM.project_id == self._project_id,
                 )
             )
         return self._event_view(row) if row is not None else None
@@ -259,17 +294,27 @@ class SqlAssistantRepository:
         filters = [
             AssistantEventORM.session_id == session_id,
             AssistantEventORM.seq > after_seq,
+            AssistantSessionORM.project_id == self._project_id,
         ]
         async with self._database.session() as session:
             total = int(
                 await session.scalar(
-                    select(func.count(AssistantEventORM.id)).where(*filters)
+                    select(func.count(AssistantEventORM.id))
+                    .join(
+                        AssistantSessionORM,
+                        AssistantSessionORM.id == AssistantEventORM.session_id,
+                    )
+                    .where(*filters)
                 )
                 or 0
             )
             rows = list(
                 await session.scalars(
                     select(AssistantEventORM)
+                    .join(
+                        AssistantSessionORM,
+                        AssistantSessionORM.id == AssistantEventORM.session_id,
+                    )
                     .where(*filters)
                     .order_by(AssistantEventORM.seq)
                     .limit(limit)
@@ -326,7 +371,7 @@ class SqlAssistantRepository:
 
     async def get_turn(self, turn_id: str) -> AssistantTurnView | None:
         async with self._database.session() as session:
-            row = await session.get(AssistantTurnORM, turn_id)
+            row = await self._owned_turn(session, turn_id)
         return self._turn_view(row) if row is not None else None
 
     async def get_latest_open_turn(
@@ -341,9 +386,14 @@ class SqlAssistantRepository:
         async with self._database.session() as session:
             row = await session.scalar(
                 select(AssistantTurnORM)
+                .join(
+                    AssistantSessionORM,
+                    AssistantSessionORM.id == AssistantTurnORM.session_id,
+                )
                 .where(
                     AssistantTurnORM.session_id == session_id,
                     AssistantTurnORM.status.in_(open_statuses),
+                    AssistantSessionORM.project_id == self._project_id,
                 )
                 .order_by(AssistantTurnORM.created_at.desc())
                 .limit(1)
@@ -364,6 +414,7 @@ class SqlAssistantRepository:
             status=AssistantTurnStatus.QUEUED.value,
         )
         async with self._database.session() as session:
+            assert await self._owned_session(session, session_id) is not None
             session.add(row)
             await session.commit()
             await session.refresh(row)
@@ -376,7 +427,7 @@ class SqlAssistantRepository:
         **values: Any,
     ) -> AssistantTurnView | None:
         async with self._database.session() as session:
-            row = await session.get(AssistantTurnORM, turn_id)
+            row = await self._owned_turn(session, turn_id)
             if row is None:
                 return None
             row.status = status.value
@@ -410,7 +461,7 @@ class SqlAssistantRepository:
         last_error: str | None = None,
     ) -> AssistantEventView | None:
         async with self._database.session() as session:
-            row = await session.get(AssistantEventORM, event_id)
+            row = await self._owned_event(session, event_id)
             if row is None:
                 return None
             row.delivery_status = status.value
@@ -427,16 +478,21 @@ class SqlAssistantRepository:
         value: EvaluationPlanCreate,
     ) -> EvaluationPlanView:
         async with self._database.session() as session:
-            revision = int(
-                await session.scalar(
-                    select(func.max(EvaluationPlanORM.revision)).where(
-                        EvaluationPlanORM.session_id == value.session_id
+            revision = (
+                int(
+                    await session.scalar(
+                        select(func.max(EvaluationPlanORM.revision)).where(
+                            EvaluationPlanORM.session_id == value.session_id,
+                            EvaluationPlanORM.project_id == self._project_id,
+                        )
                     )
+                    or 0
                 )
-                or 0
-            ) + 1
+                + 1
+            )
             row = EvaluationPlanORM(
                 id=plan_id,
+                project_id=self._project_id,
                 session_id=value.session_id,
                 source_turn_id=value.source_turn_id,
                 parent_plan_id=value.parent_plan_id,
@@ -450,7 +506,7 @@ class SqlAssistantRepository:
                 confirmation={"required": False, "reasons": []},
                 created_by=value.created_by,
             )
-            session_row = await session.get(AssistantSessionORM, value.session_id)
+            session_row = await self._owned_session(session, value.session_id)
             assert session_row is not None
             session_row.active_plan_id = plan_id
             session_row.updated_at = utc_now()
@@ -461,13 +517,16 @@ class SqlAssistantRepository:
 
     async def get_plan(self, plan_id: str) -> EvaluationPlanView | None:
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
         return self._plan_view(row) if row is not None else None
 
     async def get_plan_by_run_id(self, run_id: str) -> EvaluationPlanView | None:
         async with self._database.session() as session:
             row = await session.scalar(
-                select(EvaluationPlanORM).where(EvaluationPlanORM.run_id == run_id)
+                select(EvaluationPlanORM).where(
+                    EvaluationPlanORM.run_id == run_id,
+                    EvaluationPlanORM.project_id == self._project_id,
+                )
             )
         return self._plan_view(row) if row is not None else None
 
@@ -477,7 +536,7 @@ class SqlAssistantRepository:
         value: EvaluationPlanPatch,
     ) -> EvaluationPlanView | None:
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
             if row is None:
                 return None
             changes = value.model_dump(exclude_none=True)
@@ -506,7 +565,7 @@ class SqlAssistantRepository:
         confirmation: dict[str, Any],
     ) -> EvaluationPlanView:
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
             assert row is not None
             row.preview = preview
             row.selection_hash = selection_hash
@@ -526,7 +585,7 @@ class SqlAssistantRepository:
     ) -> EvaluationPlanView:
         now = utc_now()
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
             assert row is not None
             row.status = EvaluationPlanStatus.CONFIRMED.value
             row.confirmed_by = confirmed_by
@@ -544,7 +603,7 @@ class SqlAssistantRepository:
 
     async def cancel_plan(self, plan_id: str) -> EvaluationPlanView:
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
             assert row is not None
             row.status = EvaluationPlanStatus.CANCELLED.value
             row.updated_at = utc_now()
@@ -561,7 +620,7 @@ class SqlAssistantRepository:
     ) -> EvaluationPlanView:
         now = utc_now()
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
             assert row is not None
             row.status = EvaluationPlanStatus.SUBMITTED.value
             row.submit_idempotency_key = idempotency_key
@@ -579,7 +638,7 @@ class SqlAssistantRepository:
         error: dict[str, Any],
     ) -> EvaluationPlanView:
         async with self._database.session() as session:
-            row = await session.get(EvaluationPlanORM, plan_id)
+            row = await self._owned_plan(session, plan_id)
             assert row is not None
             row.last_error = error
             row.updated_at = utc_now()
@@ -588,8 +647,9 @@ class SqlAssistantRepository:
         return self._plan_view(row)
 
     async def get_integration_cursor(self, integration: str) -> str | None:
+        scoped_integration = self._scoped_integration(integration)
         async with self._database.session() as session:
-            row = await session.get(IntegrationCursorORM, integration)
+            row = await session.get(IntegrationCursorORM, scoped_integration)
         return row.cursor if row is not None else None
 
     async def save_integration_cursor(
@@ -598,12 +658,13 @@ class SqlAssistantRepository:
         cursor: str,
         metadata: dict[str, Any],
     ) -> None:
+        scoped_integration = self._scoped_integration(integration)
         async with self._database.session() as session:
-            row = await session.get(IntegrationCursorORM, integration)
+            row = await session.get(IntegrationCursorORM, scoped_integration)
             if row is None:
                 session.add(
                     IntegrationCursorORM(
-                        integration=integration,
+                        integration=scoped_integration,
                         cursor=cursor,
                         cursor_metadata=metadata,
                     )
@@ -614,11 +675,13 @@ class SqlAssistantRepository:
                 row.updated_at = utc_now()
             await session.commit()
 
-    @staticmethod
-    async def _next_seq(session: Any, session_id: str) -> int:
+    async def _next_seq(self, session: Any, session_id: str) -> int:
         value = await session.scalar(
             update(AssistantSessionORM)
-            .where(AssistantSessionORM.id == session_id)
+            .where(
+                AssistantSessionORM.id == session_id,
+                AssistantSessionORM.project_id == self._project_id,
+            )
             .values(
                 last_event_seq=AssistantSessionORM.last_event_seq + 1,
                 updated_at=utc_now(),
@@ -627,6 +690,65 @@ class SqlAssistantRepository:
         )
         assert value is not None
         return int(value)
+
+    async def _owned_session(
+        self, session: AsyncSession, session_id: str
+    ) -> AssistantSessionORM | None:
+        return cast(
+            AssistantSessionORM | None,
+            await session.scalar(
+                select(AssistantSessionORM).where(
+                    AssistantSessionORM.id == session_id,
+                    AssistantSessionORM.project_id == self._project_id,
+                )
+            ),
+        )
+
+    async def _owned_event(self, session: AsyncSession, event_id: str) -> AssistantEventORM | None:
+        return cast(
+            AssistantEventORM | None,
+            await session.scalar(
+                select(AssistantEventORM)
+                .join(
+                    AssistantSessionORM,
+                    AssistantSessionORM.id == AssistantEventORM.session_id,
+                )
+                .where(
+                    AssistantEventORM.id == event_id,
+                    AssistantSessionORM.project_id == self._project_id,
+                )
+            ),
+        )
+
+    async def _owned_turn(self, session: AsyncSession, turn_id: str) -> AssistantTurnORM | None:
+        return cast(
+            AssistantTurnORM | None,
+            await session.scalar(
+                select(AssistantTurnORM)
+                .join(
+                    AssistantSessionORM,
+                    AssistantSessionORM.id == AssistantTurnORM.session_id,
+                )
+                .where(
+                    AssistantTurnORM.id == turn_id,
+                    AssistantSessionORM.project_id == self._project_id,
+                )
+            ),
+        )
+
+    async def _owned_plan(self, session: AsyncSession, plan_id: str) -> EvaluationPlanORM | None:
+        return cast(
+            EvaluationPlanORM | None,
+            await session.scalar(
+                select(EvaluationPlanORM).where(
+                    EvaluationPlanORM.id == plan_id,
+                    EvaluationPlanORM.project_id == self._project_id,
+                )
+            ),
+        )
+
+    def _scoped_integration(self, integration: str) -> str:
+        return integration if self._project_id == "default" else f"{self._project_id}:{integration}"
 
     @staticmethod
     def _session_view(row: AssistantSessionORM) -> AssistantSessionView:

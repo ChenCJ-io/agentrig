@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import logging
 import re
 from contextlib import suppress
@@ -28,7 +29,7 @@ from ...errors import AgentRigError, ErrorCode
 from .matrix_client import MatrixClient
 
 logger = logging.getLogger("agentrig.agentteams")
-_TURN_MARKER = re.compile(r"\[agentrig-turn:([^\]]+)\]\s*", re.IGNORECASE)
+_TURN_MARKER = re.compile(r"\A\[agentrig-turn:([^\]]+)\]\s*", re.IGNORECASE)
 _INVOCATION_ID = re.compile(r"\bagentinv_[A-Za-z0-9]+\b")
 
 
@@ -179,6 +180,12 @@ class AgentTeamsBridge:
         client = self._require_client()
         try:
             active_plan_id = event.payload.get("active_plan_id")
+            plan_action = event.payload.get("plan_action")
+            serialized_plan_action = (
+                json.dumps(plan_action, ensure_ascii=False, separators=(",", ":"))
+                if isinstance(plan_action, dict)
+                else "none"
+            )
             envelope = (
                 f"{self._manager_user_id} AgentRig Manager request.\n\n"
                 "[AgentRig request envelope — trusted routing metadata]\n"
@@ -186,10 +193,15 @@ class AgentTeamsBridge:
                 f"assistant_turn_id: {turn.id}\n"
                 f"user_event_id: {event.id}\n"
                 f"active_plan_id: {active_plan_id or 'none'}\n"
+                f"plan_action: {serialized_plan_action}\n"
+                "display_timezone: Asia/Shanghai\n"
                 "[/AgentRig request envelope]\n\n"
                 "Use the AgentRig Manager MCP and the matching Skill. "
                 f"Begin the final room reply with [agentrig-turn:{turn.id}] so the "
-                "Web turn can be correlated.\n\n"
+                "Web turn can be correlated. Send exactly one user-facing reply for "
+                "this request: do not send acknowledgements, progress updates, or "
+                "internal reasoning to the room. Reply in the language used by the "
+                "user (use Chinese for a Chinese request).\n\n"
                 f"User request:\n{event.payload['content']}"
             )
             formatted_envelope = html.escape(envelope).replace("\n", "<br>")
@@ -215,6 +227,7 @@ class AgentTeamsBridge:
                     "org.agentrig.turn_id": turn.id,
                     "org.agentrig.event_id": event.id,
                     "org.agentrig.active_plan_id": event.payload.get("active_plan_id"),
+                    "org.agentrig.plan_action": plan_action,
                     "m.mentions": {"user_ids": [self._manager_user_id]},
                 },
             )
@@ -223,6 +236,12 @@ class AgentTeamsBridge:
                 event.id,
                 DeliveryStatus.FAILED,
                 last_error=str(exc),
+            )
+            await self._repository.set_turn_status(
+                turn.id,
+                AssistantTurnStatus.FAILED,
+                error_code=ErrorCode.MATRIX_DELIVERY_FAILED.value,
+                error_message=str(exc),
             )
             raise AgentRigError(
                 ErrorCode.MATRIX_DELIVERY_FAILED,
@@ -316,8 +335,6 @@ class AgentTeamsBridge:
         # duplicate chat bubbles, so only project the stable replacement event.
         if "org.matrix.msc4357.live" in content:
             return
-        relation = content.get("m.relates_to")
-        is_replacement = isinstance(relation, dict) and relation.get("rel_type") == "m.replace"
         new_content = content.get("m.new_content")
         effective_content = new_content if isinstance(new_content, dict) else content
         turn_id_value = content.get("org.agentrig.turn_id")
@@ -325,22 +342,28 @@ class AgentTeamsBridge:
         body = effective_content.get("body")
         projected_body = body if isinstance(body, str) else ""
         if sender == self._manager_user_id:
-            marker = _TURN_MARKER.search(projected_body)
-            # OpenClaw also emits stable progress/reasoning messages. A replacement
-            # is user-facing only when it carries the turn marker required by the
-            # Manager package contract. Plain non-streaming Matrix clients retain
-            # the legacy open-turn fallback below.
-            if is_replacement and marker is None:
+            # OpenClaw can emit plain progress/reasoning messages as well as live
+            # replacement events. Only the explicitly marked final reply is part of
+            # AgentRig's public transcript; never guess an open turn for unmarked
+            # Manager text.
+            marker = _TURN_MARKER.match(projected_body)
+            if marker is None:
                 return
-            if marker is not None:
-                turn_id = marker.group(1)
-                projected_body = projected_body[marker.end() :]
-            referenced_turn = (
-                await self._repository.get_turn(turn_id) if turn_id is not None else None
-            )
-            if referenced_turn is None or referenced_turn.session_id != session.id:
-                open_turn = await self._repository.get_latest_open_turn(session.id)
-                turn_id = open_turn.id if open_turn is not None else None
+            turn_id = marker.group(1)
+            projected_body = projected_body[marker.end() :].strip()
+            referenced_turn = await self._repository.get_turn(turn_id)
+            if (
+                referenced_turn is None
+                or referenced_turn.session_id != session.id
+                or referenced_turn.status
+                not in {
+                    AssistantTurnStatus.QUEUED,
+                    AssistantTurnStatus.DISPATCHED,
+                    AssistantTurnStatus.RUNNING,
+                }
+                or not projected_body
+            ):
+                return
         elif turn_id is not None:
             referenced_turn = await self._repository.get_turn(turn_id)
             if referenced_turn is None or referenced_turn.session_id != session.id:
@@ -370,10 +393,7 @@ class AgentTeamsBridge:
             if invocation is None:
                 return
             payload = {
-                "content": (
-                    f"{invocation.agent_role.value} finished: "
-                    f"{invocation.status.value}"
-                ),
+                "content": (f"{invocation.agent_role.value} finished: {invocation.status.value}"),
                 "source": "agentteams_matrix",
                 "status": invocation.status.value,
                 "agent_role": invocation.agent_role.value,

@@ -31,7 +31,13 @@ def reference_target(
         name="Public deterministic HTTP/SSE reference target",
         driver_type=driver_type,
         endpoint=base_endpoint,
-        options={"healthcheck_url": f"{base_endpoint}/healthz"},
+        options={
+            "healthcheck_url": f"{base_endpoint}/healthz",
+            "capability_path": "/capabilities",
+            "framework": "agentrig-reference-target",
+            "framework_version": "1.0.0",
+            "protocol_version": "1",
+        },
         versions=[
             TargetVersion(version="baseline"),
             TargetVersion(version="candidate-regression"),

@@ -1,0 +1,29 @@
+environment = "local"
+
+[server]
+host = "127.0.0.1"
+port = 8020
+
+[database]
+url = "sqlite+aiosqlite:///./.agentrig/agentrig.db"
+
+[assistant]
+sse_poll_interval_seconds = 0.5
+sse_heartbeat_seconds = 15
+max_message_chars = 100000
+
+# 基础助手负责自然语言问答和 Plan 草稿；确认、提交、取消与 Run 执行仍由 Core 完成。
+[assistant.basic_provider]
+enabled = true
+base_url = "https://api.deepseek.com"
+model = "deepseek-v4-flash"
+secret_ref = "env:DEEPSEEK_API_KEY"
+timeout_seconds = 90
+
+[assistant.basic_provider.options]
+temperature = 0
+structured_output = "json_object"
+
+# 高级 AgentTeams 模式可单独开启；未开启时 Web 助手会自动使用基础 Provider。
+[agentteams]
+enabled = false

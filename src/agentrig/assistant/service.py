@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from ..errors import AgentRigError, ErrorCode
@@ -29,6 +30,10 @@ from .schemas import (
 class AssistantService:
     def __init__(self, repository: AssistantRepository) -> None:
         self._repository = repository
+        # Keep the lock pool bounded while serializing message admission per
+        # session. The repository's client_message_id constraint still provides
+        # idempotency; this guard prevents two different user turns from racing.
+        self._message_locks = [asyncio.Lock() for _ in range(64)]
 
     async def create_session(
         self,
@@ -85,26 +90,54 @@ class AssistantService:
         *,
         actor_id: str,
     ) -> AssistantMessageReceipt:
-        session = await self.get_session(session_id)
-        self._ensure_active(session)
-        if value.active_plan_id is not None and value.active_plan_id != session.active_plan_id:
-            raise AgentRigError(
-                ErrorCode.CONFLICT,
-                "active plan changed before the message was accepted",
-                details={
-                    "expected": value.active_plan_id,
-                    "actual": session.active_plan_id,
-                },
+        lock = self._message_locks[hash(session_id) % len(self._message_locks)]
+        async with lock:
+            session = await self.get_session(session_id)
+            self._ensure_active(session)
+            if value.active_plan_id is not None and value.active_plan_id != session.active_plan_id:
+                raise AgentRigError(
+                    ErrorCode.CONFLICT,
+                    "active plan changed before the message was accepted",
+                    details={
+                        "expected": value.active_plan_id,
+                        "actual": session.active_plan_id,
+                    },
+                )
+            open_turn = await self._repository.get_latest_open_turn(session_id)
+            if open_turn is not None:
+                trigger = await self.get_event(open_turn.trigger_event_id)
+                if (
+                    trigger.client_message_id == value.client_message_id
+                    and trigger.actor_id == actor_id
+                ):
+                    return AssistantMessageReceipt(
+                        event_id=trigger.id,
+                        turn_id=open_turn.id,
+                        delivery_status=trigger.delivery_status,
+                    )
+                raise AgentRigError(
+                    ErrorCode.ASSISTANT_TURN_CONFLICT,
+                    "Manager is still processing the previous turn",
+                    retryable=True,
+                    details={
+                        "turn_id": open_turn.id,
+                        "status": open_turn.status.value,
+                    },
+                )
+            event, turn = await self._repository.create_user_message(
+                event_id=new_id("asstevt"),
+                turn_id=new_id("asstturn"),
+                session_id=session_id,
+                client_message_id=value.client_message_id,
+                actor_id=actor_id,
+                content=value.content,
+                active_plan_id=value.active_plan_id,
+                plan_action=(
+                    value.plan_action.model_dump(mode="json")
+                    if value.plan_action is not None
+                    else None
+                ),
             )
-        event, turn = await self._repository.create_user_message(
-            event_id=new_id("asstevt"),
-            turn_id=new_id("asstturn"),
-            session_id=session_id,
-            client_message_id=value.client_message_id,
-            actor_id=actor_id,
-            content=value.content,
-            active_plan_id=value.active_plan_id,
-        )
         return AssistantMessageReceipt(
             event_id=event.id,
             turn_id=turn.id,
@@ -182,6 +215,33 @@ class AssistantService:
         updated = await self._repository.set_turn_status(
             turn_id,
             AssistantTurnStatus.CANCELLED,
+        )
+        assert updated is not None
+        return updated
+
+    async def set_turn_status(
+        self,
+        turn_id: str,
+        status: AssistantTurnStatus,
+        **values: Any,
+    ) -> AssistantTurnView:
+        await self.get_turn(turn_id)
+        updated = await self._repository.set_turn_status(turn_id, status, **values)
+        assert updated is not None
+        return updated
+
+    async def set_event_delivery(
+        self,
+        event_id: str,
+        status: DeliveryStatus,
+        *,
+        last_error: str | None = None,
+    ) -> AssistantEventView:
+        await self.get_event(event_id)
+        updated = await self._repository.mark_event_delivery(
+            event_id,
+            status,
+            last_error=last_error,
         )
         assert updated is not None
         return updated

@@ -19,15 +19,21 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Link, useLocation } from "react-router";
-import remarkGfm from "remark-gfm";
 
 import {
   createAssistantSession,
-  getAgentTeamsHealth,
+  getAssistantProviderHealth,
   getAssistantSession,
+  getAssistantTurn,
   getDecisionMetrics,
   getEvaluationPlan,
   listAgentInvocations,
@@ -42,15 +48,23 @@ import {
   type DecisionRecord,
   updateEvaluationPlan,
 } from "~/api/v2";
+import { MarkdownContent } from "~/components/content/markdown-content";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { formatChinaDateTime, formatChinaEventTime } from "~/utils/date-time";
 
 import styles from "./assistant-page.module.css";
-import { shortId, statusLabel, tone } from "./assistant-presenters";
+import {
+  canonicalAssistantEvents,
+  shortId,
+  statusLabel,
+  tone,
+} from "./assistant-presenters";
 import { DecisionCard, DecisionSummary } from "./decision-cards";
 
 export function AssistantPage() {
   const location = useLocation();
+  const routeTargetId = targetIdFromPath(location.pathname);
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
@@ -60,6 +74,10 @@ export function AssistantPage() {
   const [goalDraft, setGoalDraft] = useState("");
   const [selectionDraft, setSelectionDraft] = useState("");
   const [reasoningDraft, setReasoningDraft] = useState("");
+  const [pendingTurn, setPendingTurn] = useState<{
+    sessionId: string;
+    turnId: string;
+  } | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
   const sessions = useQuery({
@@ -84,6 +102,32 @@ export function AssistantPage() {
     queryFn: () => listAssistantEvents(selectedId!),
     enabled: Boolean(selectedId),
   });
+  const latestUserTurnId = useMemo(
+    () =>
+      [...(events.data?.items ?? [])]
+        .reverse()
+        .find((item) => item.event_type === "user_message" && item.turn_id)
+        ?.turn_id ?? null,
+    [events.data],
+  );
+  const trackedTurnId =
+    pendingTurn?.sessionId === selectedId
+      ? pendingTurn.turnId
+      : latestUserTurnId;
+  const turn = useQuery({
+    queryKey: ["v2", "turn", trackedTurnId],
+    queryFn: () => getAssistantTurn(trackedTurnId!),
+    enabled: Boolean(trackedTurnId),
+    refetchInterval: 1_500,
+  });
+  const turnBusy = ["queued", "dispatched", "running"].includes(
+    turn.data?.status ?? "",
+  );
+  useEffect(() => {
+    if (pendingTurn && pendingTurn.turnId === turn.data?.id && !turnBusy) {
+      setPendingTurn(null);
+    }
+  }, [pendingTurn, turn.data?.id, turnBusy]);
   const decisions = useQuery({
     queryKey: ["v2", "decisions", selectedId],
     queryFn: () => listDecisions(selectedId!),
@@ -104,7 +148,9 @@ export function AssistantPage() {
 
     const connect = async () => {
       const cached = queryClient.getQueryData<AssistantEventPage>(key);
-      const cursor = cached?.items.reduce((value, item) => Math.max(value, item.seq), 0) ?? 0;
+      const cursor =
+        cached?.items.reduce((value, item) => Math.max(value, item.seq), 0) ??
+        0;
       activeRequest = new AbortController();
       try {
         await streamAssistantEvents(
@@ -113,8 +159,11 @@ export function AssistantPage() {
           (incoming) => {
             queryClient.setQueryData<AssistantEventPage>(key, (current) => {
               const existing = current?.items ?? [];
-              if (existing.some((item) => item.id === incoming.id)) return current;
-              const items = [...existing, incoming].sort((left, right) => left.seq - right.seq);
+              if (existing.some((item) => item.id === incoming.id))
+                return current;
+              const items = [...existing, incoming].sort(
+                (left, right) => left.seq - right.seq,
+              );
               return {
                 items,
                 total: Math.max(current?.total ?? 0, items.length),
@@ -122,22 +171,43 @@ export function AssistantPage() {
                 after_seq: current?.after_seq ?? 0,
               };
             });
-            void queryClient.invalidateQueries({ queryKey: ["v2", "session", selectedId] });
+            void queryClient.invalidateQueries({ queryKey: key });
+            if (incoming.turn_id) {
+              void queryClient.invalidateQueries({
+                queryKey: ["v2", "turn", incoming.turn_id],
+              });
+            }
+            void queryClient.invalidateQueries({
+              queryKey: ["v2", "session", selectedId],
+            });
             if (incoming.plan_id) {
               void queryClient.invalidateQueries({ queryKey: ["v2", "plan"] });
             }
             if (incoming.decision_id) {
-              void queryClient.invalidateQueries({ queryKey: ["v2", "decisions", selectedId] });
-              void queryClient.invalidateQueries({ queryKey: ["v2", "decision-metrics", selectedId] });
+              void queryClient.invalidateQueries({
+                queryKey: ["v2", "decisions", selectedId],
+              });
+              void queryClient.invalidateQueries({
+                queryKey: ["v2", "decision-metrics", selectedId],
+              });
             }
-            if (incoming.invocation_id || incoming.event_type === "run_status") {
-              void queryClient.invalidateQueries({ queryKey: ["v2", "invocations", selectedId] });
+            if (
+              incoming.invocation_id ||
+              incoming.event_type === "run_status"
+            ) {
+              void queryClient.invalidateQueries({
+                queryKey: ["v2", "invocations", selectedId],
+              });
             }
           },
           activeRequest.signal,
         );
       } catch (error) {
-        if (!stopped && !activeRequest.signal.aborted && !(error instanceof TypeError)) {
+        if (
+          !stopped &&
+          !activeRequest.signal.aborted &&
+          !(error instanceof TypeError)
+        ) {
           console.warn("assistant event stream disconnected", error);
         }
       }
@@ -164,28 +234,50 @@ export function AssistantPage() {
     refetchInterval: 2_000,
   });
   const health = useQuery({
-    queryKey: ["v2", "agentteams-health"],
-    queryFn: getAgentTeamsHealth,
+    queryKey: ["v2", "assistant-provider-health"],
+    queryFn: getAssistantProviderHealth,
     refetchInterval: 10_000,
   });
+  const assistantAvailable = Boolean(health.data?.available);
+  const advancedProvider = health.data?.provider === "agentteams";
+  const assistantName = advancedProvider ? "Manager" : "评测助手";
 
   const refreshWorkspace = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["v2", "sessions"] }),
-      queryClient.invalidateQueries({ queryKey: ["v2", "session", selectedId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["v2", "session", selectedId],
+      }),
       queryClient.invalidateQueries({ queryKey: ["v2", "events", selectedId] }),
-      queryClient.invalidateQueries({ queryKey: ["v2", "decisions", selectedId] }),
-      queryClient.invalidateQueries({ queryKey: ["v2", "decision-metrics", selectedId] }),
+      queryClient.invalidateQueries({
+        queryKey: ["v2", "decisions", selectedId],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["v2", "decision-metrics", selectedId],
+      }),
       queryClient.invalidateQueries({ queryKey: ["v2", "plan"] }),
+      trackedTurnId
+        ? queryClient.invalidateQueries({
+            queryKey: ["v2", "turn", trackedTurnId],
+          })
+        : Promise.resolve(),
     ]);
   };
 
   const createSession = useMutation({
-    mutationFn: () => createAssistantSession(newTitle.trim() || "新的评测会话"),
+    mutationFn: () =>
+      createAssistantSession(
+        newTitle.trim() || "新的评测会话",
+        routeTargetId ?? "default",
+      ),
     onSuccess: async (created) => {
       setSelectedId(created.id);
       setNewTitle("");
-      setNotice("评测会话已创建，正在准备 AgentTeams 协作房间。");
+      setNotice(
+        advancedProvider
+          ? "评测会话已创建，正在准备 AgentTeams 协作房间。"
+          : "评测会话已创建，可以直接提问或描述评测任务。",
+      );
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -198,7 +290,8 @@ export function AssistantPage() {
         content,
         session.data?.active_plan_id ?? null,
       ),
-    onSuccess: async () => {
+    onSuccess: async (receipt) => {
+      setPendingTurn({ sessionId: selectedId!, turnId: receipt.turn_id });
       setMessage("");
       setNotice(null);
       await refreshWorkspace();
@@ -214,10 +307,16 @@ export function AssistantPage() {
         selectedId,
         `确认计划 ${current.id} revision ${current.revision}。请记录 confirm_plan 决策并完成确认，但不要提交 Run。`,
         current.id,
+        {
+          action_type: "confirm_plan",
+          plan_id: current.id,
+          revision: current.revision,
+        },
       );
     },
-    onSuccess: async () => {
-      setNotice("确认请求已交给 Manager，Core 将校验决策和本次用户确认。");
+    onSuccess: async (receipt) => {
+      setPendingTurn({ sessionId: selectedId!, turnId: receipt.turn_id });
+      setNotice("确认请求已提交，Core 将校验计划版本和本次用户确认。");
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -244,9 +343,15 @@ export function AssistantPage() {
         selectedId!,
         `提交已确认计划 ${plan.data!.id} revision ${plan.data!.revision}。请记录 submit_plan 决策并只创建一个 Run。`,
         plan.data!.id,
+        {
+          action_type: "submit_plan",
+          plan_id: plan.data!.id,
+          revision: plan.data!.revision,
+        },
       ),
-    onSuccess: async () => {
-      setNotice("提交请求已交给 Manager；授权成功后 Run 会在后台执行。");
+    onSuccess: async (receipt) => {
+      setPendingTurn({ sessionId: selectedId!, turnId: receipt.turn_id });
+      setNotice("提交请求已进入 Core；校验成功后 Run 会在后台执行。");
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -258,9 +363,15 @@ export function AssistantPage() {
         selectedId!,
         `取消计划 ${plan.data!.id} revision ${plan.data!.revision}。请记录 cancel_plan 决策并说明影响。`,
         plan.data!.id,
+        {
+          action_type: "cancel_plan",
+          plan_id: plan.data!.id,
+          revision: plan.data!.revision,
+        },
       ),
-    onSuccess: async () => {
-      setNotice("取消请求已交给 Manager，等待 Core 策略裁定。");
+    onSuccess: async (receipt) => {
+      setPendingTurn({ sessionId: selectedId!, turnId: receipt.turn_id });
+      setNotice("取消请求已进入 Core，等待状态更新。");
       await refreshWorkspace();
     },
     onError: (error) => setNotice(errorMessage(error)),
@@ -269,8 +380,15 @@ export function AssistantPage() {
   function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = message.trim();
-    if (content && selectedId) send.mutate(content);
+    if (content && selectedId && !managerBusy) send.mutate(content);
   }
+
+  const managerBusy =
+    turnBusy ||
+    send.isPending ||
+    confirm.isPending ||
+    submit.isPending ||
+    cancel.isPending;
 
   const groupedAgents = useMemo(
     () => summarizeAgents(invocations.data?.items ?? []),
@@ -284,7 +402,9 @@ export function AssistantPage() {
   const runStatus = [...(events.data?.items ?? [])]
     .reverse()
     .find((item) => item.event_type === "run_status")?.payload.status;
-  const runTerminal = ["completed", "failed", "cancelled"].includes(String(runStatus ?? ""));
+  const runTerminal = ["completed", "failed", "cancelled"].includes(
+    String(runStatus ?? ""),
+  );
   const providers = plan.data?.preview.providers ?? [];
   const evaluators = plan.data?.preview.primary_evaluators ?? [];
   const curatorPath = adaptiveRoleStatus(
@@ -298,8 +418,13 @@ export function AssistantPage() {
     runTerminal,
   );
   const latestEventId = events.data?.items.at(-1)?.id;
-  const workspaceTargetId = targetIdFromSelection(plan.data?.selection)
-    ?? targetIdFromPath(location.pathname);
+  const visibleEvents = useMemo(
+    () => canonicalAssistantEvents(events.data?.items ?? []),
+    [events.data],
+  );
+  const workspaceTargetId =
+    targetIdFromSelection(plan.data?.selection) ??
+    targetIdFromPath(location.pathname);
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [latestEventId, send.isPending]);
@@ -322,11 +447,17 @@ export function AssistantPage() {
           }}
         >
           <input
+            aria-label="新会话标题"
+            disabled={createSession.isPending}
             onChange={(event) => setNewTitle(event.target.value)}
             placeholder="输入新会话标题"
             value={newTitle}
           />
-          <Button disabled={createSession.isPending} size="sm" type="submit">
+          <Button
+            disabled={createSession.isPending}
+            icon={<MessageSquarePlus />}
+            type="submit"
+          >
             新建
           </Button>
         </form>
@@ -339,10 +470,16 @@ export function AssistantPage() {
               type="button"
             >
               <span>
-                {item.status === "archived" ? <Archive size={13} /> : <Sparkles size={13} />}
+                {item.status === "archived" ? (
+                  <Archive size={13} />
+                ) : (
+                  <Sparkles size={13} />
+                )}
                 <strong>{item.title}</strong>
               </span>
-              <small>{item.last_event_seq} 个事件 · {shortId(item.id)}</small>
+              <small>
+                {item.last_event_seq} 个事件 · {shortId(item.id)}
+              </small>
             </button>
           ))}
           {!sessions.data?.items.length ? (
@@ -350,24 +487,60 @@ export function AssistantPage() {
           ) : null}
         </div>
         <footer>
-          <i className={health.data?.matrix_reachable ? styles.online : ""} />
-          <span>{health.data?.enabled ? "AgentTeams 已启用" : "仅核心模式"}</span>
-          <small>{health.data?.matrix_reachable ? "Matrix 与协作角色运行正常" : "正在检查协作运行时"}</small>
+          <i className={assistantAvailable ? styles.online : ""} />
+          <span>
+            {assistantAvailable
+              ? advancedProvider
+                ? "AgentTeams 已就绪"
+                : "基础评测助手已就绪"
+              : "智能评测助手不可用"}
+          </span>
+          <small>
+            {assistantAvailable
+              ? advancedProvider
+                ? "Matrix 与协作角色运行正常"
+                : "模型负责问答与规划，Core 负责确认和执行"
+              : health.data?.message || "正在检查模型 Provider"}
+          </small>
         </footer>
       </aside>
 
       <main className={styles.conversation}>
         <header className={styles.conversationHeader}>
           <div>
-            <span className="eyebrow">AgentTeams · 智能评测控制室</span>
+            <span className="eyebrow">
+              {advancedProvider
+                ? "AgentTeams · 智能评测控制室"
+                : "AgentRig · 智能评测工作台"}
+            </span>
             <h1>{session.data?.title ?? "智能评测助手"}</h1>
-            <p>自然语言规划 · 人工确认 · 可审计执行</p>
+            <p>资产问答 · 自然语言规划 · 人工确认 · 可审计执行</p>
           </div>
           <div className={styles.roomState}>
-            <Badge tone={session.data?.matrix_room_id ? "success" : "warning"}>
-              {session.data?.matrix_room_id ? "Matrix 房间已就绪" : "等待协作房间"}
+            <Badge
+              tone={
+                managerBusy
+                  ? "accent"
+                  : assistantAvailable
+                    ? "success"
+                    : "warning"
+              }
+            >
+              {managerBusy
+                ? `${assistantName} 正在处理`
+                : !assistantAvailable
+                  ? "智能助手不可用"
+                  : advancedProvider && session.data?.matrix_room_id
+                    ? "Matrix 房间已就绪"
+                    : advancedProvider
+                      ? "等待协作房间"
+                      : "模型 Provider 已就绪"}
             </Badge>
-            <code>{session.data?.matrix_room_id ? shortId(session.data.matrix_room_id) : "—"}</code>
+            <code>
+              {advancedProvider && session.data?.matrix_room_id
+                ? shortId(session.data.matrix_room_id)
+                : health.data?.provider ?? "—"}
+            </code>
           </div>
         </header>
 
@@ -375,33 +548,58 @@ export function AssistantPage() {
           <div className={styles.notice} role="status">
             <CircleAlert size={14} />
             <span>{notice}</span>
-            <button onClick={() => setNotice(null)} type="button"><XCircle size={13} /></button>
+            <button onClick={() => setNotice(null)} type="button">
+              <XCircle size={13} />
+            </button>
           </div>
         ) : null}
 
-        <div className={styles.messages}>
-          {(events.data?.items ?? []).map((item) => {
-            const decision = item.decision_id ? decisionById.get(item.decision_id) : undefined;
+        <div
+          aria-label="评测助手消息记录"
+          className={styles.messages}
+          role="log"
+          tabIndex={0}
+        >
+          {visibleEvents.map((item) => {
+            const decision = item.decision_id
+              ? decisionById.get(item.decision_id)
+              : undefined;
             if (item.event_type === "decision_recorded" && decision) {
               return <DecisionCard decision={decision} key={item.id} />;
             }
             return <EventMessage event={item} key={item.id} />;
           })}
-          {send.isPending ? (
+          {managerBusy ? (
             <div className={`${styles.message} ${styles.managerMessage}`}>
-              <span className={styles.avatar}><Bot size={14} /></span>
-              <div><small>评测主控 Manager</small><p><LoaderCircle className={styles.spin} size={14} /> 正在投递…</p></div>
+              <span className={styles.avatar}>
+                <Bot size={14} />
+              </span>
+              <div>
+                <small>{assistantName}</small>
+                <p>
+                  <LoaderCircle className={styles.spin} size={14} /> 正在处理…
+                </p>
+              </div>
             </div>
           ) : null}
-          {selectedId && !events.data?.items.length ? (
+          {selectedId && !visibleEvents.length ? (
             <div className={styles.welcome}>
-              <span><Sparkles size={22} /></span>
-              <small>智能协作评测</small>
-              <h2>从一句评测目标开始</h2>
-              <p>Manager 会查询正式资产并生成结构化计划；只有你确认后才会提交运行。</p>
+              <span>
+                <Sparkles size={22} />
+              </span>
+              <small>对话式评测工作台</small>
+              <h2>先提问，或描述一项评测任务</h2>
+              <p>
+                助手会直接回答资产与运行问题；只有明确要求评测时才生成计划，且确认后才会提交运行。
+              </p>
               <div className={styles.promptGrid}>
                 {QUICK_PROMPTS.map((prompt) => (
-                  <button key={prompt.label} onClick={() => setMessage(prompt.value)} type="button">
+                  <button
+                    disabled={managerBusy}
+                    key={prompt.label}
+                    onClick={() => setMessage(prompt.value)}
+                    type="button"
+                  >
                     <strong>{prompt.label}</strong>
                     <small>{prompt.description}</small>
                     <ChevronRight size={13} />
@@ -416,7 +614,7 @@ export function AssistantPage() {
         <form className={styles.composer} onSubmit={submitMessage}>
           <div className={styles.composerBox}>
             <textarea
-              disabled={!selectedId || !health.data?.enabled || send.isPending}
+              disabled={!selectedId || !assistantAvailable || managerBusy}
               onChange={(event) => setMessage(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -425,16 +623,23 @@ export function AssistantPage() {
                 }
               }}
               placeholder={
-                health.data?.enabled
-                  ? "描述评测目标、范围或你想追查的问题…"
-                  : "当前为 Core 模式；启用 AgentTeams 后可使用智能助手"
+                managerBusy
+                  ? `${assistantName} 正在处理上一条请求…`
+                  : assistantAvailable
+                    ? "描述评测目标、范围或你想追查的问题…"
+                    : "智能评测助手当前不可用"
               }
               value={message}
             />
             <footer>
               <span>Enter 发送 · Shift + Enter 换行</span>
               <Button
-                disabled={!message.trim() || !selectedId || !health.data?.enabled || send.isPending}
+                disabled={
+                  !message.trim() ||
+                  !selectedId ||
+                  !assistantAvailable ||
+                  managerBusy
+                }
                 type="submit"
                 variant="primary"
               >
@@ -448,31 +653,74 @@ export function AssistantPage() {
       <aside className={styles.context}>
         <section className={styles.currentDecision}>
           <header>
-            <div><span className="eyebrow">自适应决策</span><strong>当前决策</strong></div>
+            <div>
+              <span className="eyebrow">自适应决策</span>
+              <strong>当前决策</strong>
+            </div>
             <BrainCircuit size={16} />
           </header>
-          {latestDecision ? <DecisionSummary decision={latestDecision} metrics={decisionMetrics.data} /> : (
-            <p className={styles.empty}>Manager 形成关键判断后，这里会显示选择、依据和策略裁定。</p>
+          {latestDecision ? (
+            <DecisionSummary
+              decision={latestDecision}
+              metrics={decisionMetrics.data}
+            />
+          ) : (
+            <p className={styles.empty}>
+              {advancedProvider ? "Manager" : "助手"} 形成关键判断后，这里会显示选择、依据和策略裁定。
+            </p>
           )}
         </section>
 
         <section className={styles.agentTeam}>
           <header>
-            <div><span className="eyebrow">动态协作拓扑</span><strong>实际执行路径</strong></div>
+            <div>
+              <span className="eyebrow">动态协作拓扑</span>
+              <strong>实际执行路径</strong>
+            </div>
             <Network size={16} />
           </header>
           <div className={styles.topologyRail}>
-            <span>Manager</span><i /><span>Core Gate</span><i /><span>lassist</span>
+            <span>{advancedProvider ? "Manager" : "Assistant"}</span>
+            <i />
+            <span>Core Gate</span>
+            <i />
+            <span>Target</span>
           </div>
-          <AgentRow icon={<Bot size={14} />} label="评测主控 Manager" status={health.data?.enabled ? "ready" : "offline"} />
-          <AgentRow icon={<GitBranch size={14} />} label="结果模拟 Curator" status={curatorPath} />
-          <AgentRow icon={<ShieldCheck size={14} />} label="证据裁决 Judge" status={judgePath} />
+          <AgentRow
+            icon={<Bot size={14} />}
+            label={advancedProvider ? "评测主控 Manager" : "智能评测助手"}
+            source={advancedProvider ? "AgentTeams" : "Model Provider"}
+            status={
+              managerBusy ? "running" : assistantAvailable ? "ready" : "offline"
+            }
+          />
+          {advancedProvider ? (
+            <>
+              <AgentRow
+                icon={<GitBranch size={14} />}
+                label="结果模拟 Curator"
+                status={curatorPath}
+              />
+              <AgentRow
+                icon={<ShieldCheck size={14} />}
+                label="证据裁决 Judge"
+                status={judgePath}
+              />
+            </>
+          ) : null}
         </section>
 
         <section className={styles.planCard} id="evaluation-plan">
           <header>
-            <div><span className="eyebrow">评测计划</span><strong>当前计划</strong></div>
-            {plan.data ? <Badge tone={tone(plan.data.status)}>{statusLabel(plan.data.status)}</Badge> : null}
+            <div>
+              <span className="eyebrow">评测计划</span>
+              <strong>当前计划</strong>
+            </div>
+            {plan.data ? (
+              <Badge tone={tone(plan.data.status)}>
+                {statusLabel(plan.data.status)}
+              </Badge>
+            ) : null}
           </header>
           {plan.data ? (
             <>
@@ -481,9 +729,18 @@ export function AssistantPage() {
                 <p>{planGoal(plan.data.goal)}</p>
               </div>
               <dl className={styles.planStats}>
-                <div><dt>用例</dt><dd>{plan.data.preview.resolved_case_ids?.length ?? 0}</dd></div>
-                <div><dt>用例运行</dt><dd>{plan.data.preview.planned_case_runs ?? 0}</dd></div>
-                <div><dt>跳过</dt><dd>{plan.data.preview.skipped_items?.length ?? 0}</dd></div>
+                <div>
+                  <dt>用例</dt>
+                  <dd>{plan.data.preview.resolved_case_ids?.length ?? 0}</dd>
+                </div>
+                <div>
+                  <dt>用例运行</dt>
+                  <dd>{plan.data.preview.planned_case_runs ?? 0}</dd>
+                </div>
+                <div>
+                  <dt>跳过</dt>
+                  <dd>{plan.data.preview.skipped_items?.length ?? 0}</dd>
+                </div>
               </dl>
               <div className={styles.planMeta}>
                 <span>结果提供链</span>
@@ -493,12 +750,47 @@ export function AssistantPage() {
               </div>
               {editingPlan ? (
                 <div className={styles.planEditor}>
-                  <label>评测目标 JSON<textarea onChange={(event) => setGoalDraft(event.target.value)} value={goalDraft} /></label>
-                  <label>执行选择 JSON<textarea onChange={(event) => setSelectionDraft(event.target.value)} value={selectionDraft} /></label>
-                  <label>理由摘要 JSON<textarea onChange={(event) => setReasoningDraft(event.target.value)} value={reasoningDraft} /></label>
+                  <label>
+                    评测目标 JSON
+                    <textarea
+                      onChange={(event) => setGoalDraft(event.target.value)}
+                      value={goalDraft}
+                    />
+                  </label>
+                  <label>
+                    执行选择 JSON
+                    <textarea
+                      onChange={(event) =>
+                        setSelectionDraft(event.target.value)
+                      }
+                      value={selectionDraft}
+                    />
+                  </label>
+                  <label>
+                    理由摘要 JSON
+                    <textarea
+                      onChange={(event) =>
+                        setReasoningDraft(event.target.value)
+                      }
+                      value={reasoningDraft}
+                    />
+                  </label>
                   <div>
-                    <Button disabled={editPlan.isPending} onClick={() => editPlan.mutate()} size="sm" variant="primary">保存并预览</Button>
-                    <Button disabled={editPlan.isPending} onClick={() => setEditingPlan(false)} size="sm">放弃</Button>
+                    <Button
+                      disabled={editPlan.isPending || managerBusy}
+                      onClick={() => editPlan.mutate()}
+                      size="sm"
+                      variant="primary"
+                    >
+                      保存并预览
+                    </Button>
+                    <Button
+                      disabled={editPlan.isPending || managerBusy}
+                      onClick={() => setEditingPlan(false)}
+                      size="sm"
+                    >
+                      放弃
+                    </Button>
                   </div>
                 </div>
               ) : null}
@@ -512,69 +804,141 @@ export function AssistantPage() {
                 {plan.data.status === "draft" ? (
                   <>
                     <Button
+                      disabled={managerBusy}
+                      icon={<FilePenLine />}
                       onClick={() => {
                         setGoalDraft(JSON.stringify(plan.data!.goal, null, 2));
-                        setSelectionDraft(JSON.stringify(plan.data!.selection, null, 2));
-                        setReasoningDraft(JSON.stringify(plan.data!.reasoning_summary, null, 2));
+                        setSelectionDraft(
+                          JSON.stringify(plan.data!.selection, null, 2),
+                        );
+                        setReasoningDraft(
+                          JSON.stringify(plan.data!.reasoning_summary, null, 2),
+                        );
                         setEditingPlan(true);
                       }}
                       size="sm"
                     >
-                      <FilePenLine size={13} /> 编辑
+                      编辑计划
                     </Button>
-                    <Button disabled={confirm.isPending || editingPlan} onClick={() => confirm.mutate()} size="sm" variant="primary">
-                      <CheckCircle2 size={13} /> 确认计划
+                    <Button
+                      disabled={managerBusy || editingPlan}
+                      icon={<CheckCircle2 />}
+                      onClick={() => confirm.mutate()}
+                      size="sm"
+                      variant="primary"
+                    >
+                      确认计划
                     </Button>
                   </>
                 ) : null}
                 {plan.data.status === "confirmed" ? (
-                  <Button disabled={submit.isPending} onClick={() => submit.mutate()} size="sm" variant="primary">
-                    <Play size={13} /> 提交运行
+                  <Button
+                    disabled={managerBusy}
+                    icon={<Play />}
+                    onClick={() => submit.mutate()}
+                    size="sm"
+                    variant="primary"
+                  >
+                    提交运行
                   </Button>
                 ) : null}
                 {["draft", "confirmed"].includes(plan.data.status) ? (
-                  <Button disabled={cancel.isPending} onClick={() => cancel.mutate()} size="sm">
-                    取消
+                  <Button
+                    disabled={managerBusy}
+                    icon={<XCircle />}
+                    onClick={() => cancel.mutate()}
+                    size="sm"
+                    variant="danger"
+                  >
+                    取消计划
                   </Button>
                 ) : null}
                 {plan.data.run_id ? (
-                  <Link className={styles.runLink} to={workspaceTargetId
-                    ? `/targets/${encodeURIComponent(workspaceTargetId)}/evaluation/runs/${plan.data.run_id}`
-                    : `/evaluation/runs/${plan.data.run_id}`}>
+                  <Link
+                    className={styles.runLink}
+                    to={
+                      workspaceTargetId
+                        ? `/targets/${encodeURIComponent(workspaceTargetId)}/evaluation/runs/${plan.data.run_id}`
+                        : `/evaluation/runs/${plan.data.run_id}`
+                    }
+                  >
                     查看 Run <ChevronRight size={13} />
                   </Link>
                 ) : null}
               </div>
               {plan.data.last_error ? (
-                <pre className={styles.planError}>{JSON.stringify(plan.data.last_error, null, 2)}</pre>
+                <pre className={styles.planError}>
+                  {JSON.stringify(plan.data.last_error, null, 2)}
+                </pre>
               ) : null}
             </>
           ) : (
-            <p className={styles.empty}>Manager 创建计划后，这里显示结构化预览与确认边界。</p>
+            <p className={styles.empty}>
+              助手创建计划后，这里显示结构化预览与确认边界。
+            </p>
           )}
         </section>
 
         <section className={styles.invocations}>
           <header>
-            <div><span className="eyebrow">协作证据链</span><strong>Worker 调用证据</strong></div>
-            <Badge tone={invocations.data?.total ? "accent" : "neutral"}>{invocations.data?.total ?? 0}</Badge>
+            <div>
+              <span className="eyebrow">{advancedProvider ? "协作证据链" : "执行证据入口"}</span>
+              <strong>{advancedProvider ? "Worker 调用证据" : "Run / Cell 证据"}</strong>
+            </div>
+            <Badge tone={advancedProvider && invocations.data?.total ? "accent" : "neutral"}>
+              {advancedProvider ? invocations.data?.total ?? 0 : plan.data?.run_id ? 1 : 0}
+            </Badge>
           </header>
-          {(invocations.data?.items ?? []).slice(0, 6).map((item) => (
+          {advancedProvider ? (invocations.data?.items ?? []).slice(0, 6).map((item) => (
             <article className={styles.invocationCard} key={item.id}>
               <div className={styles.invocationTitle}>
-                <span>{item.agent_role === "simulation_curator" ? <GitBranch size={12} /> : <ShieldCheck size={12} />}</span>
-                <p><strong>{roleName(item.agent_role)}</strong><small>{shortId(item.id)}</small></p>
-                <Badge tone={tone(item.status)}>{statusLabel(item.status)}</Badge>
+                <span>
+                  {item.agent_role === "simulation_curator" ? (
+                    <GitBranch size={12} />
+                  ) : (
+                    <ShieldCheck size={12} />
+                  )}
+                </span>
+                <p>
+                  <strong>{roleName(item.agent_role)}</strong>
+                  <small>{shortId(item.id)}</small>
+                </p>
+                <Badge tone={tone(item.status)}>
+                  {statusLabel(item.status)}
+                </Badge>
               </div>
               <dl className={styles.evidenceGrid}>
-                <div><dt>请求事件</dt><dd title={item.request_event_id ?? ""}>{item.request_event_id ? shortId(item.request_event_id) : "待生成"}</dd></div>
-                <div><dt>响应事件</dt><dd title={item.response_event_id ?? ""}>{item.response_event_id ? shortId(item.response_event_id) : "待生成"}</dd></div>
-                <div><dt>结果引用</dt><dd title={item.result_ref ?? ""}>{item.result_ref ? shortId(item.result_ref) : "待生成"}</dd></div>
+                <div>
+                  <dt>请求事件</dt>
+                  <dd title={item.request_event_id ?? ""}>
+                    {item.request_event_id
+                      ? shortId(item.request_event_id)
+                      : "待生成"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>响应事件</dt>
+                  <dd title={item.response_event_id ?? ""}>
+                    {item.response_event_id
+                      ? shortId(item.response_event_id)
+                      : "待生成"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>结果引用</dt>
+                  <dd title={item.result_ref ?? ""}>
+                    {item.result_ref ? shortId(item.result_ref) : "待生成"}
+                  </dd>
+                </div>
               </dl>
-              <footer><span>用例运行</span><code>{shortId(item.case_run_id)}</code></footer>
+              <footer>
+                <span>用例运行</span>
+                <code>{shortId(item.case_run_id)}</code>
+              </footer>
             </article>
-          ))}
-          {!invocations.data?.items.length ? <p className={styles.empty}>尚无 Worker 调用。</p> : null}
+          )) : null}
+          {advancedProvider && !invocations.data?.items.length ? <p className={styles.empty}>尚无 Worker 调用。</p> : null}
+          {!advancedProvider ? <p className={styles.empty}>计划提交后，Run、Cell、Attempt 与 Timeline 会成为权威执行证据；基础助手不伪造 Worker 协作链。</p> : null}
         </section>
       </aside>
     </div>
@@ -586,36 +950,74 @@ function EventMessage({ event }: { event: AssistantEvent }) {
   if (event.event_type === "run_status") {
     const status = String(event.payload.status ?? "completed");
     return (
-      <div className={`${styles.activity} ${styles.runActivity}`} id={`assistant-event-${event.id}`}>
+      <div
+        className={`${styles.activity} ${styles.runActivity}`}
+        id={`assistant-event-${event.id}`}
+      >
         <CheckCircle2 size={12} />
-        <span>评测运行{status === "completed" ? "已完成，Manager 正在基于证据诊断" : `状态更新：${statusLabel(status)}`}</span>
+        <span>
+          评测运行
+          {status === "completed"
+            ? "已完成，评测助手正在基于证据诊断"
+            : `状态更新：${statusLabel(status)}`}
+        </span>
         <code>{event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
       </div>
     );
   }
-  if (!["user_message", "assistant_message", "system_notice", "error", "run_status"].includes(event.event_type)) {
+  if (
+    ![
+      "user_message",
+      "assistant_message",
+      "system_notice",
+      "error",
+      "run_status",
+    ].includes(event.event_type)
+  ) {
     return (
       <div className={styles.activity} id={`assistant-event-${event.id}`}>
         <Clock3 size={12} />
         <span>{activityName(event)}</span>
-        <code>{event.invocation_id ? shortId(event.invocation_id) : event.plan_id ? shortId(event.plan_id) : event.run_id ? shortId(event.run_id) : `#${event.seq}`}</code>
+        <code>
+          {event.invocation_id
+            ? shortId(event.invocation_id)
+            : event.plan_id
+              ? shortId(event.plan_id)
+              : event.run_id
+                ? shortId(event.run_id)
+                : `#${event.seq}`}
+        </code>
       </div>
     );
   }
   const user = event.actor_type === "user";
-  const content = String(event.payload.content ?? event.payload.message ?? event.event_type.replaceAll("_", " "));
+  const content = String(
+    event.payload.content ??
+      event.payload.message ??
+      event.event_type.replaceAll("_", " "),
+  );
   return (
-    <div className={`${styles.message} ${user ? styles.userMessage : styles.managerMessage}`} id={`assistant-event-${event.id}`}>
-      <span className={styles.avatar}>{user ? <UserRound size={14} /> : <Bot size={14} />}</span>
+    <div
+      className={`${styles.message} ${user ? styles.userMessage : styles.managerMessage}`}
+      id={`assistant-event-${event.id}`}
+    >
+      <span className={styles.avatar}>
+        {user ? <UserRound size={14} /> : <Bot size={14} />}
+      </span>
       <div>
         <small>{user ? "你" : event.actor_id}</small>
         <div className={styles.messageBody}>
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          <MarkdownContent content={content} headingLevel={3} />
         </div>
         <footer>
-          <time>{new Date(event.created_at).toLocaleTimeString()}</time>
+          <time
+            dateTime={event.created_at}
+            title={`${formatChinaDateTime(event.created_at)} 北京时间`}
+          >
+            {formatChinaEventTime(event.created_at)} · 北京时间
+          </time>
           <span>#{event.seq}</span>
-          {user ? <em>{event.delivery_status}</em> : null}
+          {user ? <em>{deliveryLabel(event.delivery_status)}</em> : null}
         </footer>
       </div>
     </div>
@@ -624,21 +1026,32 @@ function EventMessage({ event }: { event: AssistantEvent }) {
 
 const QUICK_PROMPTS = [
   {
-    label: "运行成功样例",
-    description: "lassist 背景增强全链路",
-    value: "使用 target_lassist_local、profile_lassist_agentteams 和已批准用例 case_lassist_three_agent_demo，生成一次评测计划。不要扩大范围。",
+    label: "查看被测 Agent",
+    description: "直接查询当前已接入的 Target",
+    value: "目前有哪些被测 Agent？",
   },
   {
-    label: "验证安全策略",
-    description: "图片编辑二次确认门禁",
-    value: "只运行已批准用例 case_lassist_confirmation_gate_failure，使用本机 lassist 和当前 AgentTeams Profile，验证图片编辑前的二次确认策略。",
+    label: "查看测试用例",
+    description: "统计已批准、草稿与拒绝状态",
+    value: "目前有哪些已批准测试用例？",
   },
   {
-    label: "解释最近结果",
-    description: "只引用本次 Run 证据",
-    value: "解释最近一次运行的结果，只引用本次 Run 的证据，并区分执行错误与评测失败。",
+    label: "创建版本对比",
+    description: "baseline 与 candidate A/B 回归",
+    value:
+      "使用当前 Target 的 baseline 与 candidate 版本、默认执行配置和已批准用例，生成 A/B 版本对比计划。",
   },
 ] as const;
+
+function deliveryLabel(status: AssistantEvent["delivery_status"]) {
+  const labels: Record<AssistantEvent["delivery_status"], string> = {
+    pending: "处理中",
+    delivered: "已送达",
+    local: "已处理",
+    failed: "失败",
+  };
+  return labels[status];
+}
 
 function roleName(role: AgentInvocation["agent_role"]) {
   return role === "simulation_curator" ? "结果模拟 Curator" : "证据裁决 Judge";
@@ -660,11 +1073,24 @@ function activityName(event: AssistantEvent) {
   return labels[event.event_type] ?? event.event_type.replaceAll("_", " ");
 }
 
-function AgentRow({ icon, label, status }: { icon: ReactNode; label: string; status: string }) {
+function AgentRow({
+  icon,
+  label,
+  source = "AgentTeams",
+  status,
+}: {
+  icon: ReactNode;
+  label: string;
+  source?: string;
+  status: string;
+}) {
   return (
     <div className={styles.agentRow}>
       <span>{icon}</span>
-      <p><strong>{label}</strong><small>AgentTeams</small></p>
+      <p>
+        <strong>{label}</strong>
+        <small>{source}</small>
+      </p>
       <Badge tone={tone(status)}>{statusLabel(status)}</Badge>
     </div>
   );
@@ -679,7 +1105,10 @@ function summarizeAgents(items: AgentInvocation[]) {
   };
 }
 
-function parseJsonObject(value: string, label: string): Record<string, unknown> {
+function parseJsonObject(
+  value: string,
+  label: string,
+): Record<string, unknown> {
   const parsed: unknown = JSON.parse(value);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`${label}必须是 JSON 对象`);
@@ -687,7 +1116,11 @@ function parseJsonObject(value: string, label: string): Record<string, unknown> 
   return parsed as Record<string, unknown>;
 }
 
-function adaptiveRoleStatus(current: string, planned: boolean, terminal: boolean) {
+function adaptiveRoleStatus(
+  current: string,
+  planned: boolean,
+  terminal: boolean,
+) {
   if (current !== "idle") return current;
   if (!planned) return "not_needed";
   return terminal ? "bypassed" : "eligible";
@@ -697,7 +1130,9 @@ function planGoal(goal: Record<string, unknown>) {
   return String(goal.normalized_goal ?? goal.user_request ?? "已准备评测目标");
 }
 
-function targetIdFromSelection(selection?: Record<string, unknown>): string | null {
+function targetIdFromSelection(
+  selection?: Record<string, unknown>,
+): string | null {
   const direct = selection?.target_id;
   if (typeof direct === "string" && direct) return direct;
   const targets = selection?.targets;

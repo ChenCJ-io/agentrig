@@ -1,0 +1,86 @@
+{
+  "schema_version": "agentrig.competition-rehearsal.v1",
+  "rehearsed_at": "2026-08-14T01:43:00+08:00",
+  "status": "rehearsal_only",
+  "target": {
+    "id": "target_editflow_http_sse",
+    "framework": "agno",
+    "framework_version": "2.6.11",
+    "model": "deepseek-v4-flash",
+    "protocol": "http_sse",
+    "tool_count": 5
+  },
+  "before": {
+    "prompt_sha256": "43157c294fef4cc0cacd2089a0973402cb15794421340504f8a35f546f879572",
+    "run_id": "run_4122698d707e4dc29d4740dbc355dfa5",
+    "manifest_hash": "sha256:04c0bad3b1b5b29704cece3dceff036301b46f2afb03fb079e5e315a69f966ec",
+    "case_id": "case_editflow_one_step_mixed_chain",
+    "cell_count": 1,
+    "attempt_count": 5,
+    "pass_count": 3,
+    "fail_count": 2,
+    "failure_class": "behavior_regression"
+  },
+  "candidate_headline": {
+    "prompt_sha256": "71adb390cb86dd05dc5fdc1d9cf2656a436525176ccf178543eaf81a65dff7fd",
+    "run_id": "run_3ee1800bcbbe4f4e92e2e44fc48825ac",
+    "manifest_hash": "sha256:04c0bad3b1b5b29704cece3dceff036301b46f2afb03fb079e5e315a69f966ec",
+    "case_id": "case_editflow_one_step_mixed_chain",
+    "cell_count": 1,
+    "attempt_count": 5,
+    "pass_count": 5,
+    "fail_count": 0
+  },
+  "candidate_matrix": {
+    "run_id": "run_38a956103b0c495b81bffaf0c272e84a",
+    "manifest_hash": "sha256:41f05d702a0fb09bc783722032a10dd2e3f319c2e7d86bb17ac334bd0c8bb694",
+    "case_count": 6,
+    "cell_count": 6,
+    "attempt_count": 30,
+    "pass_count": 30,
+    "fail_count": 0,
+    "case_ids": [
+      "case_editflow_brighten_only",
+      "case_editflow_background",
+      "case_editflow_mixed_chain",
+      "case_editflow_preserve_subject",
+      "case_editflow_crop_only",
+      "case_editflow_asset_miss"
+    ]
+  },
+  "sample_flow": {
+    "capture_run_id": "run_6791c49056af4da4b236d3e550d2869e",
+    "source_tool_call_event_id": "evt_7581c4219cdb427197c520a5cdd1be80",
+    "real_tool_hits": 1,
+    "sample_id": "sample_editflow_inspect_real_20260814",
+    "sample_source_type": "real_tool",
+    "sample_status": "approved",
+    "replay_run_id": "run_6294d74c3814420dad8d780d322861d1",
+    "replay_attempt_count": 5,
+    "replay_pass_count": 5,
+    "sample_hits": 5,
+    "replay_real_tool_attempts": 0
+  },
+  "web_assistant": {
+    "session_id": "asst_b0c42e2e33834864b5ac64b17fa8f9d7",
+    "plan_id": "plan_1a8bdd9c183a45a0a2753f935c189090",
+    "run_id": "run_76307bc45f55414490c598033d6d28b9",
+    "confirmation_reason": "repeated execution",
+    "case_count": 1,
+    "attempt_count": 3,
+    "pass_count": 3
+  },
+  "checks": {
+    "editflow_non_live_tests_passed": 34,
+    "editflow_live_tests_deselected": 1,
+    "web_recording_e2e_passed": 1,
+    "web_typecheck": "pass",
+    "axe_critical_serious": 0
+  },
+  "limitations": [
+    "These identifiers belong to rehearsal databases and must not be presented as formal recording identifiers.",
+    "The captured approved Sample covers inspect_image only, not the complete five-tool chain.",
+    "Rule assertions use stable fixture references for exact propagation; dynamic real-MCP equality is shown as timeline evidence.",
+    "AgentScope/AgentTeams external live and target-scale SLOs remain separate environment claims."
+  ]
+}

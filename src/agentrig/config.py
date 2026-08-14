@@ -17,6 +17,8 @@ agentrig.toml 示例::
 from __future__ import annotations
 
 import os
+from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import (
@@ -25,6 +27,8 @@ from pydantic_settings import (
     SettingsConfigDict,
     TomlConfigSettingsSource,
 )
+
+from .infrastructure.validation import reject_plaintext_secrets
 
 
 class ServerConfig(BaseSettings):
@@ -81,6 +85,11 @@ class ExecutionConfig(BaseSettings):
     real_tool_allowlist: list[str] = Field(default_factory=list)
     python_driver_allowlist: list[str] = Field(default_factory=list)
     subprocess_allowlist: list[str] = Field(default_factory=list)
+    durable_scheduler_enabled: bool = False
+    job_lease_seconds: int = Field(default=60, ge=10, le=3_600)
+    job_max_attempts: int = Field(default=3, ge=1, le=20)
+    worker_poll_seconds: float = Field(default=1.0, gt=0, le=60)
+    worker_registration_ttl_seconds: int = Field(default=30, ge=10, le=300)
 
     @model_validator(mode="after")
     def concurrency_defaults_fit_deployment_limit(self) -> ExecutionConfig:
@@ -146,12 +155,86 @@ class ReportingConfig(BaseSettings):
     max_export_records: int = Field(default=10_000, ge=1, le=100_000)
 
 
+class RunOtlpExportConfig(BaseSettings):
+    """Best-effort, metadata-only export after a Run reaches a terminal state."""
+
+    enabled: bool = False
+    endpoint: str = ""
+    service_name: str = "agentrig"
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    header_secret_refs: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def enabled_export_has_safe_operator_configuration(self) -> RunOtlpExportConfig:
+        if self.enabled:
+            parsed = urlsplit(self.endpoint)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("run_otlp_export.endpoint must be an absolute HTTP(S) URL")
+        for name, reference in self.header_secret_refs.items():
+            if not name or any(
+                not (character.isalnum() or character == "-") for character in name
+            ):
+                raise ValueError("run_otlp_export header names must be valid HTTP names")
+            if not reference.startswith("env:") or reference == "env:":
+                raise ValueError("run_otlp_export headers must use env: references")
+        return self
+
+
+class ProductionEvidenceConfig(BaseSettings):
+    """Production OTLP ingest stays disabled until isolation policies are configured."""
+
+    enabled: bool = False
+    max_request_bytes: int = Field(default=4_000_000, ge=1_024, le=64_000_000)
+    max_spans_per_request: int = Field(default=2_000, ge=1, le=20_000)
+    max_attribute_count: int = Field(default=128, ge=1, le=1_000)
+    max_attribute_value_chars: int = Field(default=4_096, ge=64, le=100_000)
+    default_retention_days: int = Field(default=30, ge=1, le=3_650)
+    max_retention_delete_traces: int = Field(default=10_000, ge=1, le=100_000)
+
+
+class BasicAssistantProviderConfig(BaseSettings):
+    """不依赖 AgentTeams 的 OpenAI-compatible 智能助手。"""
+
+    enabled: bool = False
+    base_url: str = ""
+    model: str = ""
+    secret_ref: str | None = None
+    timeout_seconds: float = Field(default=90.0, gt=0, le=300)
+    options: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("secret_ref")
+    @classmethod
+    def secret_is_environment_reference(cls, value: str | None) -> str | None:
+        if value is not None and (not value.startswith("env:") or value == "env:"):
+            raise ValueError("basic assistant secret_ref must use env:VARIABLE_NAME")
+        return value
+
+    @field_validator("options")
+    @classmethod
+    def options_have_no_plaintext_secrets(
+        cls,
+        value: dict[str, Any],
+    ) -> dict[str, Any]:
+        return reject_plaintext_secrets(value, path="assistant.basic_provider.options")
+
+    @model_validator(mode="after")
+    def enabled_provider_is_complete(self) -> BasicAssistantProviderConfig:
+        if self.enabled and (not self.base_url or not self.model or self.secret_ref is None):
+            raise ValueError(
+                "enabled basic assistant requires base_url, model, and secret_ref"
+            )
+        return self
+
+
 class AssistantConfig(BaseSettings):
     """V2 助手事件流与确认策略的部署上限。"""
 
     sse_poll_interval_seconds: float = Field(default=0.5, gt=0)
     sse_heartbeat_seconds: float = Field(default=15.0, gt=0)
     max_message_chars: int = Field(default=100_000, ge=1, le=1_000_000)
+    basic_provider: BasicAssistantProviderConfig = Field(
+        default_factory=BasicAssistantProviderConfig
+    )
 
 
 class AdaptiveDecisionConfig(BaseSettings):
@@ -189,6 +272,10 @@ class AgentTeamsConfig(BaseSettings):
     """外部 AgentTeams/Matrix 集成开关；默认关闭以保持 V1 自包含。"""
 
     enabled: bool = False
+    profile: str = "v1.1.2-competition"
+    version: str = "v1.1.2"
+    runtime: str = "openclaw"
+    resource_api_version: str = "hiclaw.io/v1beta1"
     health_url: str = ""
     matrix: MatrixConfig = Field(default_factory=MatrixConfig)
     manager_mcp_token_ref: str | None = None
@@ -208,6 +295,30 @@ class AgentTeamsConfig(BaseSettings):
         if value is not None and (not value.startswith("env:") or value == "env:"):
             raise ValueError("role MCP token references must use env:VARIABLE_NAME")
         return value
+
+    @model_validator(mode="after")
+    def selected_profile_is_explicit_and_consistent(self) -> AgentTeamsConfig:
+        supported = {
+            "v1.1.2-competition": (
+                "v1.1.2",
+                "openclaw",
+                "hiclaw.io/v1beta1",
+            ),
+            "v1.2.2-current": (
+                "v1.2.2",
+                "qwenpaw",
+                "agentteams.io/v1beta1",
+            ),
+        }
+        expected = supported.get(self.profile)
+        if expected is None:
+            raise ValueError("unsupported AgentTeams profile; 'latest' is not allowed")
+        actual = (self.version, self.runtime, self.resource_api_version)
+        if actual != expected:
+            raise ValueError(
+                "AgentTeams profile/version/runtime/resource_api_version mismatch"
+            )
+        return self
 
 
 class Settings(BaseSettings):
@@ -231,6 +342,10 @@ class Settings(BaseSettings):
     proxy: ProxyConfig = ProxyConfig()
     target_network: TargetNetworkConfig = Field(default_factory=TargetNetworkConfig)
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
+    run_otlp_export: RunOtlpExportConfig = Field(default_factory=RunOtlpExportConfig)
+    production_evidence: ProductionEvidenceConfig = Field(
+        default_factory=ProductionEvidenceConfig
+    )
     assistant: AssistantConfig = Field(default_factory=AssistantConfig)
     adaptive_decisions: AdaptiveDecisionConfig = Field(
         default_factory=AdaptiveDecisionConfig

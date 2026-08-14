@@ -86,6 +86,23 @@
 .badge--warning { border-color: #ead39a; background: var(--oc-amber-soft); color: var(--oc-amber); }
 .badge--danger { border-color: #efc0bd; background: var(--oc-coral-soft); color: var(--oc-coral); }
 
+.copyable-id {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--oc-muted);
+  cursor: pointer;
+}
+
+.copyable-id:hover { border-color: var(--oc-line); background: var(--oc-surface-1); color: var(--oc-graphite); }
+.copyable-id code { overflow: hidden; font-family: var(--font-mono); font-size: 10px; text-overflow: ellipsis; }
+.copyable-id svg { flex: 0 0 auto; }
+
 .page-header {
   display: flex;
   min-height: 70px;
@@ -314,12 +331,6 @@
   border-color: var(--oc-line-strong);
   background: var(--oc-cobalt);
   color: white;
-}
-
-.topbar__context-icon--evoto {
-  border-color: #e9c678;
-  background: var(--oc-amber-soft);
-  color: var(--oc-amber);
 }
 
 .topbar__context-icon > img {

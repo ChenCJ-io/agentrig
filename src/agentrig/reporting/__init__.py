@@ -5,7 +5,7 @@ from .release_evidence import (
     ReleaseValidationResult,
     validate_release_evidence,
 )
-from .schemas import RunReport, TargetExportPreview
+from .schemas import ComparisonReport, QualityReport, RunReport, TargetExportPreview
 from .service import RenderedDocument, ReportingService
 
 __all__ = [
@@ -13,6 +13,8 @@ __all__ = [
     "ReleaseValidationResult",
     "RenderedDocument",
     "ReportingService",
+    "ComparisonReport",
+    "QualityReport",
     "RunReport",
     "TargetExportPreview",
     "validate_release_evidence",

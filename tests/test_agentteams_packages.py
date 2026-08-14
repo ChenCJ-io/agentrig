@@ -7,6 +7,21 @@ from zipfile import ZipFile
 from scripts.build_agentteams_packages import ROLES, build
 from scripts.sync_agentteams_manager_workspace import BLOCK_START, sync_workspace
 
+from agentrig.skill_contracts import validate_skill_contracts
+
+
+def test_all_repository_skills_have_strict_role_and_schema_contracts() -> None:
+    root = Path(__file__).resolve().parents[1]
+
+    manifest = validate_skill_contracts(root)
+
+    assert len(manifest.skills) == 11
+    assert {item.path for item in manifest.skills} == {
+        path.relative_to(root).as_posix()
+        for path in (root / "skills").glob("**/SKILL.md")
+    }
+    assert manifest.content_hash.startswith("sha256:")
+
 
 def test_agentteams_packages_use_v112_import_layout(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]

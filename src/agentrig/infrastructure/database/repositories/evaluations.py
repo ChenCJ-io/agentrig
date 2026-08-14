@@ -12,8 +12,9 @@ from ..session import Database
 
 
 class SqlEvaluationRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def upsert(
         self,
@@ -34,11 +35,13 @@ class SqlEvaluationRepository:
                 select(EvaluationORM).where(
                     EvaluationORM.case_run_id == case_run_id,
                     EvaluationORM.evaluator_type == evaluator_type.value,
+                    EvaluationORM.project_id == self._project_id,
                 )
             )
             if row is None:
                 row = EvaluationORM(
                     id=new_id("evaluation"),
+                    project_id=self._project_id,
                     case_run_id=case_run_id,
                     evaluator_type=evaluator_type.value,
                     evaluator_source=evaluator_source,
@@ -70,7 +73,10 @@ class SqlEvaluationRepository:
             rows = list(
                 await session.scalars(
                     select(EvaluationORM)
-                    .where(EvaluationORM.case_run_id == case_run_id)
+                    .where(
+                        EvaluationORM.case_run_id == case_run_id,
+                        EvaluationORM.project_id == self._project_id,
+                    )
                     .order_by(EvaluationORM.created_at, EvaluationORM.id)
                 )
             )

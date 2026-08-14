@@ -339,9 +339,25 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
             }
         )
         projected = await services.assistant.list_events(session.id)
+        assert [item.id for item in projected.items] == [receipt.event_id]
+        assert (await services.assistant.get_turn(receipt.turn_id)).status.value == "dispatched"
+
+        await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
+            session.matrix_room_id or "",
+            {
+                "type": "m.room.message",
+                "event_id": "$manager-final",
+                "sender": "@manager:test",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": f"[agentrig-turn:{receipt.turn_id}] Plan is ready.",
+                },
+            },
+        )
+        projected = await services.assistant.list_events(session.id)
         assert projected.items[-1].event_type.value == "assistant_message"
         assert projected.items[-1].turn_id == receipt.turn_id
-        assert projected.items[-1].matrix_event_id == "$manager-response"
+        assert projected.items[-1].matrix_event_id == "$manager-final"
         assert (await services.assistant.get_turn(receipt.turn_id)).status.value == "completed"
         assert any("createRoom" in request.url.path for request in requests)
         sent = next(request for request in requests if "/send/m.room.message/" in request.url.path)
@@ -350,6 +366,8 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
         assert f"assistant_session_id: {session.id}" in sent_body
         assert f"assistant_turn_id: {receipt.turn_id}" in sent_body
         assert "User request:\nevaluate this" in sent_body
+        assert "Send exactly one user-facing reply" in sent_body
+        assert "display_timezone: Asia/Shanghai" in sent_body
         assert sent_content["m.mentions"] == {"user_ids": ["@manager:test"]}
         assert 'href="https://matrix.to/#/@manager:test"' in sent_content["formatted_body"]
 
@@ -414,10 +432,7 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
                     "body": "* replacement fallback",
                     "m.new_content": {
                         "msgtype": "m.text",
-                        "body": (
-                            "Preface that should be hidden.\n\n"
-                            f"[agentrig-turn:{third_receipt.turn_id}] Final summary."
-                        ),
+                        "body": (f"[agentrig-turn:{third_receipt.turn_id}] Final summary."),
                     },
                     "m.relates_to": {
                         "rel_type": "m.replace",
@@ -429,6 +444,21 @@ async def test_matrix_client_and_bridge_delivery_projection() -> None:
         stable_events = await services.assistant.list_events(session.id)
         assert stable_events.items[-1].turn_id == third_receipt.turn_id
         assert stable_events.items[-1].payload["content"] == "Final summary."
+
+        before_duplicate = len(stable_events.items)
+        await bridge._project_event(  # noqa: SLF001 - Matrix contract boundary
+            session.matrix_room_id or "",
+            {
+                "type": "m.room.message",
+                "event_id": "$manager-duplicate-final",
+                "sender": "@manager:test",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": (f"[agentrig-turn:{third_receipt.turn_id}] Duplicate final."),
+                },
+            },
+        )
+        assert len((await services.assistant.list_events(session.id)).items) == (before_duplicate)
 
         invocation = await services.agent_invocations.create_or_get(
             AgentInvocationCreate(

@@ -15,8 +15,9 @@ from ..session import Database
 
 
 class SqlAgentInvocationRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create(
         self,
@@ -27,6 +28,7 @@ class SqlAgentInvocationRepository:
     ) -> AgentInvocationView:
         row = AgentInvocationORM(
             id=invocation_id,
+            project_id=self._project_id,
             agent_role=value.role.value,
             status=AgentInvocationStatus.CREATED.value,
             session_id=value.context.session_id,
@@ -49,7 +51,12 @@ class SqlAgentInvocationRepository:
 
     async def get(self, invocation_id: str) -> AgentInvocationView | None:
         async with self._database.session() as session:
-            row = await session.get(AgentInvocationORM, invocation_id)
+            row = await session.scalar(
+                select(AgentInvocationORM).where(
+                    AgentInvocationORM.id == invocation_id,
+                    AgentInvocationORM.project_id == self._project_id,
+                )
+            )
         return self._view(row) if row is not None else None
 
     async def get_by_idempotency_key(
@@ -62,6 +69,7 @@ class SqlAgentInvocationRepository:
                 select(AgentInvocationORM).where(
                     AgentInvocationORM.agent_role == role.value,
                     AgentInvocationORM.idempotency_key == idempotency_key,
+                    AgentInvocationORM.project_id == self._project_id,
                 )
             )
         return self._view(row) if row is not None else None
@@ -73,7 +81,10 @@ class SqlAgentInvocationRepository:
         limit: int,
         offset: int,
     ) -> AgentInvocationPage:
-        where = AgentInvocationORM.session_id == session_id
+        where = (
+            (AgentInvocationORM.session_id == session_id)
+            & (AgentInvocationORM.project_id == self._project_id)
+        )
         async with self._database.session() as session:
             total = int(
                 await session.scalar(
@@ -100,6 +111,43 @@ class SqlAgentInvocationRepository:
             offset=offset,
         )
 
+    async def list_for_run(
+        self,
+        run_id: str,
+        *,
+        limit: int,
+        offset: int,
+    ) -> AgentInvocationPage:
+        where = (
+            (AgentInvocationORM.run_id == run_id)
+            & (AgentInvocationORM.project_id == self._project_id)
+        )
+        async with self._database.session() as session:
+            total = int(
+                await session.scalar(
+                    select(func.count(AgentInvocationORM.id)).where(where)
+                )
+                or 0
+            )
+            rows = list(
+                await session.scalars(
+                    select(AgentInvocationORM)
+                    .where(where)
+                    .order_by(
+                        AgentInvocationORM.created_at.asc(),
+                        AgentInvocationORM.id.asc(),
+                    )
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+        return AgentInvocationPage(
+            items=[self._view(row) for row in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
     async def list_all(
         self,
         *,
@@ -108,11 +156,17 @@ class SqlAgentInvocationRepository:
     ) -> AgentInvocationPage:
         async with self._database.session() as session:
             total = int(
-                await session.scalar(select(func.count(AgentInvocationORM.id))) or 0
+                await session.scalar(
+                    select(func.count(AgentInvocationORM.id)).where(
+                        AgentInvocationORM.project_id == self._project_id
+                    )
+                )
+                or 0
             )
             rows = list(
                 await session.scalars(
                     select(AgentInvocationORM)
+                    .where(AgentInvocationORM.project_id == self._project_id)
                     .order_by(
                         AgentInvocationORM.created_at.desc(),
                         AgentInvocationORM.id.desc(),
@@ -146,7 +200,12 @@ class SqlAgentInvocationRepository:
     ) -> AgentInvocationView:
         now = utc_now()
         async with self._database.session() as session:
-            row = await session.get(AgentInvocationORM, invocation_id)
+            row = await session.scalar(
+                select(AgentInvocationORM).where(
+                    AgentInvocationORM.id == invocation_id,
+                    AgentInvocationORM.project_id == self._project_id,
+                )
+            )
             assert row is not None
             row.status = status.value
             row.assigned_agent = assigned_agent or row.assigned_agent
@@ -179,7 +238,8 @@ class SqlAgentInvocationRepository:
             rows = list(
                 await session.scalars(
                     select(AgentInvocationORM).where(
-                        AgentInvocationORM.status.not_in(terminal)
+                        AgentInvocationORM.status.not_in(terminal),
+                        AgentInvocationORM.project_id == self._project_id,
                     )
                 )
             )
@@ -196,7 +256,12 @@ class SqlAgentInvocationRepository:
         result_ref: str,
     ) -> AgentInvocationView:
         async with self._database.session() as session:
-            row = await session.get(AgentInvocationORM, invocation_id)
+            row = await session.scalar(
+                select(AgentInvocationORM).where(
+                    AgentInvocationORM.id == invocation_id,
+                    AgentInvocationORM.project_id == self._project_id,
+                )
+            )
             assert row is not None
             row.result_ref = result_ref
             # Worker 结果只在核心消费前暂存；事实落入 RunEvent/EvaluationResult 后即清除。
@@ -211,7 +276,12 @@ class SqlAgentInvocationRepository:
         response_event_id: str,
     ) -> AgentInvocationView:
         async with self._database.session() as session:
-            row = await session.get(AgentInvocationORM, invocation_id)
+            row = await session.scalar(
+                select(AgentInvocationORM).where(
+                    AgentInvocationORM.id == invocation_id,
+                    AgentInvocationORM.project_id == self._project_id,
+                )
+            )
             assert row is not None
             row.response_event_id = response_event_id
             await session.commit()

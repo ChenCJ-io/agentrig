@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
 from ..agents import AgentTaskContext, EvidenceJudgePort, SimulationCuratorPort
 from ..agents.ports import AgentInvocationResultLinker
+from ..capabilities import merge_observed_capabilities
 from ..errors import AgentRigError, ErrorCode
 from ..evaluations.models import (
     EvaluationOutcome,
@@ -18,11 +21,13 @@ from ..evaluations.repository import EvaluationRepository
 from ..evaluations.rule_evaluator import RuleEvaluator
 from ..evaluations.schemas import EvaluationDraft, EvaluationResult
 from ..infrastructure.secrets import SecretResolver
+from ..pricing import apply_pricing_snapshot
 from ..profiles.models import ProviderName, ToolMode
-from ..profiles.schemas import ExecutionProfileConfig
+from ..profiles.schemas import ExecutionProfileConfig, PricingSnapshot
 from ..proxy.scoped import ProxyScope, ProxyScopeRegistry
 from ..targets.drivers import (
     AgentDriver,
+    DescribableAgentDriver,
     DriverEvent,
     DriverEventType,
     DriverPrepareContext,
@@ -50,6 +55,32 @@ from .schemas import CaseRunDetail, RunEvent
 
 class _Cancelled(Exception):
     pass
+
+
+_RUNTIME_EVENT_MAP = {
+    DriverEventType.SESSION_STATUS_CHANGED: RunEventType.SESSION_STATUS,
+    DriverEventType.MODEL_CALL_STARTED: RunEventType.MODEL_CALL,
+    DriverEventType.MODEL_CALL_COMPLETED: RunEventType.MODEL_CALL,
+    DriverEventType.THINKING_STARTED: RunEventType.THINKING,
+    DriverEventType.THINKING_DELTA: RunEventType.THINKING,
+    DriverEventType.THINKING_COMPLETED: RunEventType.THINKING,
+    DriverEventType.DATA_PART: RunEventType.DATA_PART,
+    DriverEventType.TOOL_CALL_STARTED: RunEventType.TOOL_LIFECYCLE,
+    DriverEventType.TOOL_CALL_ARGUMENTS_DELTA: RunEventType.TOOL_LIFECYCLE,
+    DriverEventType.TOOL_CALL_COMPLETED: RunEventType.TOOL_LIFECYCLE,
+    DriverEventType.TOOL_RESULT_OBSERVED: RunEventType.TOOL_LIFECYCLE,
+    DriverEventType.PERMISSION_REQUESTED: RunEventType.PERMISSION,
+    DriverEventType.PERMISSION_RESOLVED: RunEventType.PERMISSION,
+    DriverEventType.EXTERNAL_EXECUTION_REQUESTED: RunEventType.EXTERNAL_EXECUTION,
+    DriverEventType.EXTERNAL_EXECUTION_RESOLVED: RunEventType.EXTERNAL_EXECUTION,
+    DriverEventType.INTERRUPT_REQUESTED: RunEventType.LIFECYCLE,
+    DriverEventType.INTERRUPTED: RunEventType.LIFECYCLE,
+    DriverEventType.RESUMED: RunEventType.LIFECYCLE,
+    DriverEventType.AGENT_STARTED: RunEventType.AGENT_LIFECYCLE,
+    DriverEventType.AGENT_COMPLETED: RunEventType.AGENT_LIFECYCLE,
+    DriverEventType.MEMORY_OPERATION: RunEventType.MEMORY_OPERATION,
+    DriverEventType.WORKSPACE_ARTIFACT: RunEventType.WORKSPACE_ARTIFACT,
+}
 
 
 class CaseExecutor:
@@ -115,10 +146,25 @@ class CaseExecutor:
                     validator=self._validator,
                 )
             if self._real_tool_client is not None:
+                real_tool_spec = next(
+                    (
+                        item
+                        for item in profile.provider_chain
+                        if item.name is ProviderName.REAL_TOOL
+                    ),
+                    None,
+                )
                 custom_providers[ProviderName.REAL_TOOL] = RealToolProvider(
                     self._real_tool_client,
                     allowlist=self._real_tool_allowlist,
                     timeout_seconds=profile.component_timeouts.real_tool,
+                    before_execute=self._recorder.mark_external_side_effect,
+                    namespace=(
+                        str(real_tool_spec.config["namespace"])
+                        if real_tool_spec is not None
+                        and real_tool_spec.config.get("namespace")
+                        else None
+                    ),
                 )
             chain = build_provider_chain(
                 profile.provider_chain,
@@ -146,22 +192,52 @@ class CaseExecutor:
                     )
             async with asyncio.timeout(profile.case_timeout_seconds):
                 secret = self._secrets.resolve(detail.target_snapshot.get("secret_ref"))
-                session = await driver.prepare(
-                    DriverPrepareContext(
-                        case_run_id=case_run_id,
-                        target=detail.target_snapshot,
-                        version=detail.version,
-                        initial_state=dict(
-                            detail.case_snapshot.get("initial_state") or {}
-                        ),
-                        secret_value=secret,
-                        component_timeout_seconds=profile.component_timeouts.driver,
-                        tool_proxy_url=(
-                            self._proxy_public_url if proxy_scope is not None else None
-                        ),
-                        tool_proxy_headers=proxy_headers,
-                    )
+                prepare_context = DriverPrepareContext(
+                    case_run_id=case_run_id,
+                    target=detail.target_snapshot,
+                    version=detail.version,
+                    initial_state=dict(detail.case_snapshot.get("initial_state") or {}),
+                    secret_value=secret,
+                    component_timeout_seconds=profile.component_timeouts.driver,
+                    tool_proxy_url=(
+                        self._proxy_public_url if proxy_scope is not None else None
+                    ),
+                    tool_proxy_headers=proxy_headers,
                 )
+                session = await driver.prepare(prepare_context)
+                capability_snapshot = detail.capability_snapshot
+                if capability_snapshot is not None and isinstance(
+                    driver, DescribableAgentDriver
+                ):
+                    observed = await driver.describe_capabilities(
+                        prepare_context,
+                        session,
+                    )
+                    capability_snapshot = merge_observed_capabilities(
+                        capability_snapshot,
+                        observed,
+                    )
+                    await self._runs.set_capability_snapshot(
+                        case_run_id,
+                        capability_snapshot,
+                    )
+                if capability_snapshot is not None:
+                    memory_events.append(
+                        await self._recorder.record(
+                            case_run_id,
+                            RunEventType.CAPABILITY_SNAPSHOT,
+                            {
+                                "snapshot_id": capability_snapshot.snapshot_id,
+                                "snapshot_hash": capability_snapshot.snapshot_hash,
+                                "collection_status": (
+                                    capability_snapshot.collection_status
+                                ),
+                                "partition_hashes": capability_snapshot.partition_hashes.model_dump(
+                                    mode="json"
+                                ),
+                            },
+                        )
+                    )
                 tool_call_count = await self._run_turns(
                     detail,
                     driver,
@@ -169,7 +245,7 @@ class CaseExecutor:
                     chain,
                     cancel_event,
                     memory_events,
-                    profile.tool_mode,
+                    profile,
                     proxy_scope,
                 )
                 await self._evaluate_and_complete(
@@ -240,7 +316,7 @@ class CaseExecutor:
         chain: ProviderChain,
         cancel_event: asyncio.Event,
         memory_events: list[RunEvent],
-        tool_mode: ToolMode,
+        profile: ExecutionProfileConfig,
         proxy_scope: ProxyScope | None,
     ) -> int:
         tool_call_count = 0
@@ -283,7 +359,8 @@ class CaseExecutor:
                 refused=refused,
                 simulation_state=simulation_state,
                 tool_call_count=tool_call_count,
-                tool_mode=tool_mode,
+                tool_mode=profile.tool_mode,
+                pricing_snapshot=profile.pricing_snapshot,
             )
             memory_events.append(
                 await self._recorder.record(
@@ -296,7 +373,8 @@ class CaseExecutor:
                         **({"session_id": session.id} if session.id else {}),
                         **(
                             {"first_action": first_action[0]}
-                            if first_action and tool_mode is not ToolMode.PROXY
+                            if first_action
+                            and profile.tool_mode is not ToolMode.PROXY
                             else {}
                         ),
                     },
@@ -324,6 +402,7 @@ class CaseExecutor:
         simulation_state: dict[str, Any],
         tool_call_count: int,
         tool_mode: ToolMode,
+        pricing_snapshot: PricingSnapshot | None,
     ) -> int:
         results_to_inject: list[ToolResult] = []
         recorded_calls_to_resolve: list[tuple[ToolCall, RunEvent]] = []
@@ -421,7 +500,10 @@ class CaseExecutor:
                             RunEventType.USAGE,
                             {
                                 "turn_position": int(turn["position"]),
-                                **event.usage,
+                                **apply_pricing_snapshot(
+                                    event.usage,
+                                    pricing_snapshot,
+                                ),
                             },
                         )
                     )
@@ -496,6 +578,17 @@ class CaseExecutor:
                                     },
                                 )
                             )
+                elif event.type in _RUNTIME_EVENT_MAP:
+                    memory_events.append(
+                        await self._recorder.record(
+                            detail.id,
+                            _RUNTIME_EVENT_MAP[event.type],
+                            self._runtime_event_payload(
+                                event,
+                                turn_position=int(turn["position"]),
+                            ),
+                        )
+                    )
         except Exception as exc:
             iterator_error = exc
         await self._flush_assistant_text(
@@ -540,8 +633,56 @@ class CaseExecutor:
                 simulation_state=simulation_state,
                 tool_call_count=tool_call_count,
                 tool_mode=tool_mode,
+                pricing_snapshot=pricing_snapshot,
             )
         return tool_call_count
+
+    @staticmethod
+    def _runtime_event_payload(
+        event: DriverEvent,
+        *,
+        turn_position: int,
+    ) -> dict[str, Any]:
+        raw_payload = dict(event.payload)
+        if event.type in {
+            DriverEventType.THINKING_STARTED,
+            DriverEventType.THINKING_DELTA,
+            DriverEventType.THINKING_COMPLETED,
+        }:
+            content = "".join(
+                str(raw_payload.pop(key, ""))
+                for key in ("text", "content", "delta", "reasoning")
+            )
+            raw_payload["content_exported"] = False
+            raw_payload["content_length"] = len(content)
+        if event.type in {
+            DriverEventType.DATA_PART,
+            DriverEventType.MEMORY_OPERATION,
+            DriverEventType.WORKSPACE_ARTIFACT,
+        }:
+            for key in ("content", "data", "bytes", "body", "memory", "value"):
+                if key not in raw_payload:
+                    continue
+                value = raw_payload.pop(key)
+                encoded = json.dumps(value, ensure_ascii=False, sort_keys=True).encode()
+                raw_payload[f"{key}_sha256"] = hashlib.sha256(encoded).hexdigest()
+                raw_payload[f"{key}_exported"] = False
+        return {
+            "driver_event_schema": event.schema_version,
+            "driver_event_id": event.event_id,
+            "driver_event_type": event.type.value,
+            "turn_position": turn_position,
+            "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
+            "sequence": event.sequence,
+            "parent_event_id": event.parent_event_id,
+            "agent_path": event.agent_path,
+            "request_id": event.request_id,
+            "session_id": event.session_id,
+            "raw_type": event.raw_type,
+            "source": event.source,
+            "redaction": event.redaction,
+            **raw_payload,
+        }
 
     async def _flush_assistant_text(
         self,

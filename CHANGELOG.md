@@ -4,8 +4,37 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增从终态 Run 不可变事实派生的 `QualityReport`、A/B `ComparisonReport` 和版本化
+  `ReleaseGateResult`，提供 JSON/Markdown HTTP API、CLI、稳定来源/结果哈希及默认门禁策略。
+- 新增 ExecutionProfile 冻结价格快照与严格成本归因，缺模型或 token/cache 分项时保持未知而不填零。
+- 新增 AgentTeams v1.1.2 历史与 v1.2.2 当前双 profile、固定 OCI digest、严格观测契约、
+  Skill/package hash、调用原子性和版本化兼容报告。
+- 新增 DriverEvent v2、AG-UI 与 AgentScope Driver，覆盖有序 cursor、permission、interrupt/resume、
+  memory/workspace、model call 和嵌套 Agent 证据。
+- 新增 Target Capability Snapshot/diff/运行计划、19 个 AgentScope 安全用例的四态报告与
+  独立安全门禁。
+- 新增标准 OTLP/HTTP protobuf 生产证据接入、双重脱敏、幂等 Trace/Span、retention/tombstone、
+  Trace→Case 预览、人工审批和不可变 lineage；终态 Run 支持 best-effort 元数据 OTLP 导出。
+- 新增 append-only Review/Annotation/GoldLabel、Judge 版本与分 cohort alignment gate，以及
+  Failure Signal→Pattern→Monitor 治理、签名幂等 Webhook 和复发时间线。
+- 新增 Project/Environment/API Key 隔离、PostgreSQL lease/heartbeat durable worker、取消与旧 token
+  fencing，以及外部 Real Tool 请求前自动持久化的 no-retry 副作用围栏。
+- Durable dispatch 按 Run 批量原子入队、每个 CaseRun 唯一 Job，并可在重启后按 intent 补派；Run/Job
+  取消、reaper、晚到 executor 与多 Worker 收尾统一收敛，Assistant/OTLP completion hook 单次触发。
+- 新增 Production Evidence、Review、Failure Pattern 和 Durable Job 的 Project-scoped Web 工作台、
+  Browser→FastAPI→SQLite→Reference Target 真后端 E2E 与 `scripts/accept_v23.sh`。
+- 新增按 Run 查询 AgentInvocation 的 Repository/Service 契约，使质量报告可以汇总 Worker 调用结果。
+- Public Reference Demo 将已知 A/B 回归作为门禁负向控制，并把 Quality、Comparison 和 Gate JSON
+  纳入 ReleaseEvidence 与离线校验的 `SHA256SUMS`。
+
 ### Changed
 
+- 全部 11 项 Skill 升级为可机械验证的严格 contract，固定输入输出 Schema、角色工具权限和
+  内容 hash，构建时拒绝漂移或越权。
+- 持久化 schema 扩展 Project、Capability、Production Evidence、Review、Failure Governance 和
+  Durable Job 域，并增加 SQLite/PostgreSQL migration 往返验证。
 - 重构中英文项目首页，增加价值定位、真实界面、架构、可验证场景、分层 Quick Start、成熟度与
   文档导航，移除首页中过度密集的部署细节。
 - 新增统一快速开始/安全部署手册与支持指南，重构文档门户、贡献指南、安全策略、Issue 表单和

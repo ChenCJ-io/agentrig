@@ -59,6 +59,7 @@ class AssistantRepository(Protocol):
         actor_id: str,
         content: str,
         active_plan_id: str | None,
+        plan_action: dict[str, Any] | None = None,
     ) -> tuple[AssistantEventView, AssistantTurnView]: ...
 
     async def create_system_turn(

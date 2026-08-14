@@ -6,11 +6,20 @@ from typing import Any
 
 import httpx
 
+from ..capabilities import (
+    TargetCapabilitySnapshot,
+    build_declared_snapshot,
+    merge_observed_capabilities,
+)
 from ..errors import AgentRigError, ErrorCode
 from ..identifiers import new_id
 from ..infrastructure.http_policy import TargetHttpPolicy
 from ..infrastructure.secrets import SecretResolver
-from .drivers import DriverPrepareContext, DriverRegistry
+from .drivers import (
+    DescribableAgentDriver,
+    DriverPrepareContext,
+    DriverRegistry,
+)
 from .options import merge_target_options
 from .repository import TargetRepository
 from .schemas import TargetCheck, TargetCreate, TargetPage, TargetPatch, TargetView
@@ -167,6 +176,79 @@ class TargetService:
             capabilities=capabilities.names(),
             message=message,
         )
+
+    async def probe_capabilities(
+        self,
+        target_id: str,
+        *,
+        version: str | None = None,
+        timeout_seconds: float = 5,
+    ) -> TargetCapabilitySnapshot:
+        """Observe current public capability metadata without mutating a CaseRun."""
+
+        target = await self.get(target_id)
+        if self._drivers is None or self._secrets is None:
+            raise RuntimeError("TargetService probe dependencies are not configured")
+        version_config = next(
+            (item for item in target.versions if item.version == version),
+            None,
+        )
+        if version is not None and version_config is None:
+            raise AgentRigError(
+                ErrorCode.NOT_FOUND,
+                f"target version not found: {version}",
+                details={"target_id": target_id, "version": version},
+            )
+        endpoint = (
+            version_config.endpoint
+            if version_config is not None and version_config.endpoint is not None
+            else target.endpoint
+        )
+        options = merge_target_options(
+            target.options,
+            version_config.options if version_config is not None else {},
+        )
+        if endpoint is not None:
+            await self._http_policy.authorize_url(endpoint)
+        capabilities = self._drivers.validate_configuration(
+            target.driver_type,
+            options=options,
+            secret_configured=target.secret_ref is not None,
+        )
+        probe_id = new_id("targetprobe")
+        snapshot_target = {
+            "id": target.id,
+            "name": target.name,
+            "driver_type": target.driver_type,
+            "version": version,
+            "endpoint": endpoint,
+            "options": options,
+        }
+        snapshot = build_declared_snapshot(
+            case_run_id=probe_id,
+            target=snapshot_target,
+            profile={"tool_mode": "observe_only", "provider_chain": []},
+            driver_capabilities=capabilities,
+        )
+        driver = self._drivers.create(
+            target.driver_type,
+            entrypoint=(str(options["entrypoint"]) if options.get("entrypoint") else None),
+        )
+        context = DriverPrepareContext(
+            case_run_id=probe_id,
+            target=snapshot_target,
+            version=version,
+            secret_value=self._secrets.resolve(target.secret_ref),
+            component_timeout_seconds=timeout_seconds,
+        )
+        session = await driver.prepare(context)
+        try:
+            if isinstance(driver, DescribableAgentDriver):
+                observed = await driver.describe_capabilities(context, session)
+                snapshot = merge_observed_capabilities(snapshot, observed)
+        finally:
+            await driver.close(session)
+        return snapshot
 
     async def authorize_execution(
         self,

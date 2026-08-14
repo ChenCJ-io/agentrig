@@ -127,7 +127,11 @@ class OpenAICompatibleDriver:
         message = data["choices"][0]["message"]
         session.state["messages"].append(message)
         if data.get("usage"):
-            yield DriverEvent(type=DriverEventType.USAGE, usage=data["usage"])
+            usage = dict(data["usage"])
+            model = data.get("model") or session.state.get("model")
+            if model:
+                usage["model"] = str(model)
+            yield DriverEvent(type=DriverEventType.USAGE, usage=usage)
         calls = [
             ToolCall(
                 id=str(item["id"]),

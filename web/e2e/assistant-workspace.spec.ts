@@ -7,15 +7,28 @@ const runId = "run_demo";
 const createdAt = "2026-08-05T03:00:00Z";
 
 test.beforeEach(async ({ page }) => {
-  await page.route(/^http:\/\/127\.0\.0\.1:4174\/api\//, (route) => mockApi(route));
+  await page.route(/^http:\/\/127\.0\.0\.1:4174\/api\//, (route) =>
+    mockApi(route),
+  );
 });
 
-test("renders an auditable assistant decision and navigates to its source", async ({ page }) => {
+test("renders an auditable assistant decision and navigates to its source", async ({
+  page,
+}) => {
   await page.goto("/targets/target_lassist_local/assistant");
 
-  await expect(page.getByRole("heading", { name: "Lassist 回归验收" })).toBeVisible();
-  await expect(page.getByRole("article").getByText("生成有界评测计划", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Lassist 回归验收" }),
+  ).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    page.getByRole("article").getByText("生成有界评测计划", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("计划已提交运行", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("11:00:00 · 北京时间", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: /查看 Run/ })).toHaveAttribute(
     "href",
     `/targets/target_lassist_local/evaluation/runs/${runId}`,
@@ -27,25 +40,130 @@ test("renders an auditable assistant decision and navigates to its source", asyn
   expect(box?.height).toBeGreaterThan(850);
 
   await page.getByText("查看决策依据与取舍", { exact: true }).click();
-  const caseLink = page.getByTitle("打开测试用例：case_lassist_three_agent_demo");
+  const caseLink = page.getByTitle(
+    "打开测试用例：case_lassist_three_agent_demo",
+  );
   await expect(caseLink).toBeVisible();
   await expect(caseLink).toHaveAttribute(
     "href",
     "/targets/target_lassist_local/evaluation/test-cases?case_id=case_lassist_three_agent_demo",
   );
   await caseLink.click();
-  await expect(page).toHaveURL(/\/evaluation\/test-cases\?case_id=case_lassist_three_agent_demo$/);
+  await expect(page).toHaveURL(
+    /\/evaluation\/test-cases\?case_id=case_lassist_three_agent_demo$/,
+  );
 });
 
-test("has no serious or critical accessibility violations", async ({ page }) => {
+test("has no serious or critical accessibility violations", async ({
+  page,
+}) => {
   await page.goto("/targets/target_lassist_local/assistant");
-  await expect(page.getByRole("heading", { name: "Lassist 回归验收" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Lassist 回归验收" }),
+  ).toBeVisible({
+    timeout: 15_000,
+  });
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
-  const blocking = results.violations.filter((item) => ["critical", "serious"].includes(item.impact ?? ""));
-  expect(blocking, blocking.map((item) => `${item.id}: ${item.help}`).join("\n")).toEqual([]);
+  const blocking = results.violations.filter((item) =>
+    ["critical", "serious"].includes(item.impact ?? ""),
+  );
+  expect(
+    blocking,
+    blocking.map((item) => `${item.id}: ${item.help}`).join("\n"),
+  ).toEqual([]);
+});
+
+test("keeps session creation and draft plan actions readable", async ({
+  page,
+}) => {
+  await page.route(
+    `http://127.0.0.1:4174/api/v2/evaluation-plans/${planId}`,
+    (route) =>
+      json(route, {
+        ...plan(),
+        status: "draft",
+        run_id: null,
+      }),
+  );
+  await page.goto("/targets/target_lassist_local/assistant");
+
+  const titleInput = page.getByLabel("新会话标题");
+  const createButton = page.getByRole("button", { name: "新建" });
+  await expect(titleInput).toBeVisible({ timeout: 15_000 });
+  await expect(createButton).toBeVisible();
+  await expect(createButton).toHaveCSS("white-space", "nowrap");
+
+  const creationLayout = await titleInput.evaluate((input) => {
+    const form = input.parentElement;
+    const button = form?.querySelector("button");
+    const formBox = form?.getBoundingClientRect();
+    const inputBox = input.getBoundingClientRect();
+    const buttonBox = button?.getBoundingClientRect();
+    return {
+      aligned: buttonBox
+        ? Math.abs(inputBox.top - buttonBox.top) < 1 &&
+          Math.abs(inputBox.height - buttonBox.height) < 1
+        : false,
+      contained:
+        Boolean(formBox && buttonBox) && buttonBox!.right <= formBox!.right + 1,
+    };
+  });
+  expect(creationLayout).toEqual({ aligned: true, contained: true });
+
+  const actionButtons = ["编辑计划", "确认计划", "取消计划"].map((name) =>
+    page.getByRole("button", { name }),
+  );
+  for (const button of actionButtons) {
+    await expect(button).toBeVisible();
+    await expect(button).toHaveCSS("white-space", "nowrap");
+  }
+  const widths = await Promise.all(
+    actionButtons.map(
+      async (button) => (await button.boundingBox())?.width ?? 0,
+    ),
+  );
+  expect(Math.min(...widths)).toBeGreaterThan(90);
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2);
+});
+
+test("locks chat and plan actions while the Manager turn is running", async ({
+  page,
+}) => {
+  await page.route(
+    `http://127.0.0.1:4174/api/v2/evaluation-plans/${planId}`,
+    (route) => json(route, { ...plan(), status: "draft", run_id: null }),
+  );
+  await page.route(
+    "http://127.0.0.1:4174/api/v2/assistant/turns/turn_demo",
+    (route) =>
+      json(route, {
+        id: "turn_demo",
+        session_id: sessionId,
+        trigger_event_id: "event_user",
+        status: "running",
+        matrix_request_event_id: "$request",
+        matrix_response_event_id: null,
+        started_at: createdAt,
+        finished_at: null,
+        error_code: null,
+        error_message: null,
+        model_metadata: {},
+        created_at: createdAt,
+      }),
+  );
+  await page.goto("/targets/target_lassist_local/assistant");
+
+  await expect(
+    page.getByPlaceholder("Manager 正在处理上一条请求…"),
+  ).toBeDisabled({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "确认计划" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "取消计划" })).toBeDisabled();
+  await expect(
+    page.getByText("Manager 正在处理", { exact: true }),
+  ).toBeVisible();
 });
 
 async function mockApi(route: Route): Promise<void> {
@@ -54,7 +172,11 @@ async function mockApi(route: Route): Promise<void> {
   const path = url.pathname;
 
   if (path.endsWith("/stream")) {
-    await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: "",
+    });
     return;
   }
   if (path === "/api/targets") {
@@ -73,6 +195,23 @@ async function mockApi(route: Route): Promise<void> {
     await json(route, { ...page(events()), after_seq: 0 });
     return;
   }
+  if (path === "/api/v2/assistant/turns/turn_demo") {
+    await json(route, {
+      id: "turn_demo",
+      session_id: sessionId,
+      trigger_event_id: "event_user",
+      status: "completed",
+      matrix_request_event_id: "$request",
+      matrix_response_event_id: "$response",
+      started_at: createdAt,
+      finished_at: createdAt,
+      error_code: null,
+      error_message: null,
+      model_metadata: {},
+      created_at: createdAt,
+    });
+    return;
+  }
   if (path === `/api/v2/assistant/sessions/${sessionId}/decisions`) {
     await json(route, page([decision()]));
     return;
@@ -86,7 +225,13 @@ async function mockApi(route: Route): Promise<void> {
       in_flight_count: 0,
       success_rate: 1,
       evidence_reference_count: 9,
-      evidence_kind_coverage: ["assistant_event", "evaluation_plan", "run", "target", "test_case"],
+      evidence_kind_coverage: [
+        "assistant_event",
+        "evaluation_plan",
+        "run",
+        "target",
+        "test_case",
+      ],
       confirmation_bound_count: 2,
       provenance_linked_count: 3,
       provenance_link_rate: 1,
@@ -112,12 +257,25 @@ async function mockApi(route: Route): Promise<void> {
     });
     return;
   }
+  if (path === "/api/v2/assistant/provider-health") {
+    await json(route, {
+      enabled: true,
+      available: true,
+      provider: "agentteams",
+      message: "AgentTeams 智能评测助手已就绪",
+    });
+    return;
+  }
 
   await json(route, page([]));
 }
 
 async function json(route: Route, value: unknown): Promise<void> {
-  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(value) });
+  await route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(value),
+  });
 }
 
 function page(items: unknown[]) {
@@ -249,7 +407,13 @@ function decision() {
       unknown: [],
       constraints: ["不扩大范围"],
     },
-    options: [{ action_type: "create_plan", label: "创建计划", expected_effect: "生成可确认预览" }],
+    options: [
+      {
+        action_type: "create_plan",
+        label: "创建计划",
+        expected_effect: "生成可确认预览",
+      },
+    ],
     selected_action: {
       action_type: "create_plan",
       parameters: { target_id: "target_lassist_local" },
@@ -259,14 +423,42 @@ function decision() {
       tradeoffs: ["覆盖面较小，但可快速验收完整证据链"],
     },
     evidence_refs: [
-      { kind: "target", resource_id: "target_lassist_local", version: "local", snapshot_hash: null, label: "Lassist" },
-      { kind: "test_case", resource_id: "case_lassist_three_agent_demo", version: "approved", snapshot_hash: null, label: "三 Agent 演示" },
-      { kind: "evaluation_plan", resource_id: planId, version: "1", snapshot_hash: null, label: "评测计划" },
-      { kind: "run", resource_id: runId, version: null, snapshot_hash: null, label: "评测运行" },
+      {
+        kind: "target",
+        resource_id: "target_lassist_local",
+        version: "local",
+        snapshot_hash: null,
+        label: "Lassist",
+      },
+      {
+        kind: "test_case",
+        resource_id: "case_lassist_three_agent_demo",
+        version: "approved",
+        snapshot_hash: null,
+        label: "三 Agent 演示",
+      },
+      {
+        kind: "evaluation_plan",
+        resource_id: planId,
+        version: "1",
+        snapshot_hash: null,
+        label: "评测计划",
+      },
+      {
+        kind: "run",
+        resource_id: runId,
+        version: null,
+        snapshot_hash: null,
+        label: "评测运行",
+      },
     ],
     confidence: 0.96,
     context_hash: "context_hash",
-    policy_verdict: { verdict: "allow", reasons: ["资产已审核"], rule_version: "v2.1" },
+    policy_verdict: {
+      verdict: "allow",
+      reasons: ["资产已审核"],
+      rule_version: "v2.1",
+    },
     confirmation_event_id: "event_user",
     action_idempotency_key: "action_demo",
     action_ref_type: "evaluation_plan",
@@ -290,7 +482,13 @@ function plan() {
     origin_decision_id: "decision_demo",
     goal: { summary: "验证 Lassist 三 Agent 链路" },
     selection: {
-      targets: [{ role: "candidate", target_id: "target_lassist_local", version: "9.2.0" }],
+      targets: [
+        {
+          role: "candidate",
+          target_id: "target_lassist_local",
+          version: "9.2.0",
+        },
+      ],
       case_ids: ["case_lassist_three_agent_demo"],
       profile_id: "profile_lassist_agentteams",
     },

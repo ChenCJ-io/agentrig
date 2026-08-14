@@ -2,11 +2,18 @@
 
 > 项目版本：AgentRig `0.2.0a0`
 >
-> 清单日期：2026-08-10
+> 清单复核：2026-08-14
 
 本清单对齐《参赛手册》附录 B，覆盖 Skill 名称、类型、使用场景、输入输出、
 调用条件、依赖、失败处理、安全边界、复用价值和多 Agent 协作关系。每个 Skill 的
-可执行详情以仓库中对应 `SKILL.md` 为准。
+可执行详情以仓库中对应 `SKILL.md` 为准；`skills/contracts.json` 固定内容 SHA-256、allowed tools、
+输入/输出 Schema 与兼容版本，`scripts/validate_skill_contracts.py` 是统一验收入口。
+
+本次新增验证了外部控制方的真实使用方式：公开 EditFlow 项目提供
+`prompt-regression-governance`，Codex 按其合同完成 Target/Schema/Case 审计、Before/Candidate、
+30 次回归，以及 real-tool event → Draft Sample → 人工审核 → 5 次 Sample-only 回放。项目 Skill 保存
+业务回归知识，AgentRig Core Skill/MCP 保存通用执行与证据合同，两者不是同一个层次。旧 lassist
+1/1 Codex Run 保留为兼容附录。
 
 ## 1. 总览
 
@@ -53,11 +60,17 @@
 ## 4. 版本、发布和回滚
 
 - 11 个 Skill 与 AgentRig 源码共同进入 Git 版本控制，当前产品版本为 `0.2.0a0`。
-- `scripts/build_agentteams_packages.py` 确定性构建 Manager/Curator/Judge 角色包；AgentTeams 运行基线锁定为
-  `v1.1.2`。
-- 回滚单位是经验证的 AgentRig Release + 对应角色包，不在运行中单独热替换一段 Prompt。
+- `scripts/build_agentteams_packages.py` 分别为 `v1.1.2-competition` 和 `v1.2.2-current` 确定性构建
+  Manager/Curator/Judge 角色包；两个 profile 的 manifest、资源 API、runtime 和 hash 互不覆盖。
+- `v1.1.2` 的比赛 Live 证据保持只读；`v1.2.2` 本地合同/资源已通过，外部 observed hash、membership
+  和 invocation 仍需目标集群 compat report 才能标记 Live Verified。
+- 回滚单位是经验证的 AgentRig Release + 明确 profile + 对应角色包，不在运行中单独热替换 Prompt。
 - 开源分发使用 MIT License；源码、Skill、角色包生成器、测试和文档作为同一仓库交付。
 - 正式公开 Release/Tag 将在最终提交前创建；未创建前不将其描述为已发布稳定版。
+
+2026-08-11 实测：11 个合同全部通过；validator 同时校验 manifest 中的内容 hash、每个角色的最小
+工具集、外部 Schema 文件和 AgentTeams package 引用。AgentScope/AG-UI 是 Target Driver，不是新的
+比赛协作角色，也不会改变 6 Manager + 2 Worker + 3 Core 的 Skill 数量。
 
 ## 5. 上下文能力选择
 

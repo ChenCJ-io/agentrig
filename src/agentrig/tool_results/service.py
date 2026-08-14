@@ -47,7 +47,15 @@ class SampleService:
                 {
                     **value.model_dump(),
                     "tool_name": source["tool_name"],
-                    "match_arguments": source["arguments"],
+                    "match_arguments": _without_redacted(source["arguments"]),
+                    "ignored_argument_paths": list(
+                        dict.fromkeys(
+                            [
+                                *value.ignored_argument_paths,
+                                *_redacted_paths(source["arguments"]),
+                            ]
+                        )
+                    ),
                     "content": source["result"],
                 }
             )
@@ -122,3 +130,31 @@ class SampleService:
                 "only draft samples can be modified or deleted",
                 details={"sample_id": value.id, "status": value.status},
             )
+
+
+def _redacted_paths(value: object, prefix: str = "") -> list[str]:
+    paths: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if child == "[REDACTED]":
+                paths.append(path)
+            else:
+                paths.extend(_redacted_paths(child, path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            path = f"{prefix}.{index}" if prefix else str(index)
+            paths.extend(_redacted_paths(child, path))
+    return paths
+
+
+def _without_redacted(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            key: _without_redacted(child)
+            for key, child in value.items()
+            if child != "[REDACTED]"
+        }
+    if isinstance(value, list):
+        return [_without_redacted(child) for child in value]
+    return value

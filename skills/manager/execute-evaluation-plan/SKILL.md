@@ -9,7 +9,7 @@ Contract version: `agentrig.execute-plan.v1`. Applicable role: `agentteams_manag
 
 ## Contract
 
-Require `assistant_session_id`, `evaluation_plan_id`, and the current user turn. Return either a submitted Plan plus `run_id`, a cancelled Plan, or a precise blocking explanation.
+Require `assistant_session_id`, `evaluation_plan_id`, the current user turn, and a trusted-envelope `plan_action` matching the requested action, Plan ID, and revision. Return either a submitted Plan plus `run_id`, a cancelled Plan, or a precise blocking explanation.
 
 Allowed tools: `get_decision_context`, `record_manager_decision`, `get_decision`, `confirm_decision`, `validate_evaluation_plan`, `confirm_evaluation_plan`, `submit_evaluation_plan`, `cancel_evaluation_plan`, `get_run`, and `cancel_run`.
 
@@ -17,9 +17,9 @@ Allowed tools: `get_decision_context`, `record_manager_decision`, `get_decision`
 
 1. Use `adaptive-evaluation`, restore decision context, and verify that the requested Plan is the active revision in the same session.
 2. Call `validate_evaluation_plan`. Present resolved cases, target roles/versions, repeats, provider/evaluator choices, skipped items, and risks.
-3. When confirmation is required, wait for an explicit user message that approves this exact revision. Pass that real event ID to `confirm_evaluation_plan`. Never confirm from your own text, silence, or an unrelated earlier approval.
+3. When confirmation is required, wait for a new, explicit user action that approves this exact revision. It must be distinct from the user event that caused the draft to be created. Pass that real event ID to `confirm_evaluation_plan`. Never confirm from your own text, silence, the plan-source event, or an unrelated earlier approval.
 4. For a safe plan that still follows the state machine, obtain an explicit continue message before confirmation unless product policy already supplied a user event.
-5. Generate one stable submission idempotency key for this Plan and reuse it on every retry. Call `submit_evaluation_plan` once.
+5. After confirmation, wait for a separate explicit submit action for this exact revision. Do not reuse the confirmation event as submission authorization. Generate one stable submission idempotency key for this Plan and reuse it on every retry. Call `submit_evaluation_plan` once.
 6. Report the returned `run_id` and clarify that execution is asynchronous. Do not claim pass/fail until querying the Run.
 7. If the user cancels before submission, call `cancel_evaluation_plan`. After submission, call `cancel_run` only when the user explicitly asks to stop execution.
 

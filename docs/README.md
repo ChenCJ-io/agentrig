@@ -17,7 +17,12 @@
 | 了解产品界面和交互设计 | [完整产品与界面开发设计](./05-V2-完整产品与界面开发设计.md) |
 | 理解证据化决策、委派和恢复策略 | [自适应评测闭环](./06-V2.1-基于证据的自适应评测闭环-开发设计.md) |
 | 查看下一阶段可复现交付方案 | [V2.2 质量门禁 RFC](./07-V2.2-可复现交付与质量门禁-RFC.md) |
+| 运行 AgentScope 2.0 验证与生产证据闭环 | [V2.3 实施与验收包](./09-V2.3-Agent运行时验证与生产证据闭环/README.md) |
+| 一键验收 V2.3—V2.5 本地或 Live 范围 | [V2.3 验收运行手册](./09-V2.3-Agent运行时验证与生产证据闭环/11-验收运行手册.md) |
+| 评审被测 Agent 选择器与页面联动规则 | [被测 Agent 上下文联动 RFC](./10-被测Agent上下文选择与联动-RFC.md) |
+| 评审公开脱敏修图 Agent 的实现方案 | [EditFlow Demo Agent 架构设计](./13-EditFlow-DemoAgent架构设计.md) |
 | 核对比赛材料、评分映射和真实证据 | [GOAI 2026 交付中心](./competition/README.md) |
+| 复核 AgentScope 前端迁移与真实 lassist 闭环 | [前端迁移方案](./12-AgentScope前端迁移方案/README.md) / [实测记录](./competition/12-lassist真实闭环验收.md) |
 
 ## 权威文档
 
@@ -32,12 +37,16 @@
 | [06-V2.1 自适应评测闭环](./06-V2.1-基于证据的自适应评测闭环-开发设计.md) | Implemented | 结构化决策、动态委派、故障恢复和质量指标 |
 | [07-V2.2 质量门禁 RFC](./07-V2.2-可复现交付与质量门禁-RFC.md) | Proposed | 公开复现、Release Evidence、可观测性和后续路线 |
 | [08-快速开始与安全部署](./08-快速开始与安全部署.md) | Current | 最短运行路径、鉴权、网络和部署安全 |
+| [09-V2.3 实施与验收包](./09-V2.3-Agent运行时验证与生产证据闭环/README.md) | Implemented / Live Pending | 01—09 的代码、迁移、API/CLI、本地证据，以及外部环境验收入口 |
+| [10-被测 Agent 上下文联动 RFC](./10-被测Agent上下文选择与联动-RFC.md) | Proposed | 被测 Agent 选择、路由上下文、助手会话绑定与历史快照边界 |
+| [13-EditFlow Demo Agent 架构设计](./13-EditFlow-DemoAgent架构设计.md) | Proposed | 脱敏修图 ReAct Agent、Session DB、外置工具与评测闭环 |
 
 状态含义：
 
 - **Implemented**：对应功能已经进入当前代码；
 - **Verified**：除实现外还包含可重复的本机或 CI 验收记录；
 - **Current**：当前推荐操作入口；
+- **Live Pending**：本地实现和确定性验收已完成，但指定外部 Runtime 或数据库的实机证据尚未生成；
 - **Proposed**：待评审方案，不改变现有实现承诺。
 
 ## 其他入口
@@ -52,8 +61,11 @@
 
 ## 文档治理
 
-当前实现事实以 00—06 和 08 为准。07 在状态转为 Accepted 前只是后续 RFC；04 和比赛证据报告
-记录特定参考环境的验收事实，不代表所有部署自动具备相同外部依赖。
+当前实现事实以 00—06、08—09、代码和自动化测试为准。07 仍是历史 RFC，10 为待评审 RFC；
+09 的 01—09 工作包已
+进入当前代码，其中 PostgreSQL 集成已实测，AgentScope/AgentTeams Live 与目标部署容量 SLO 仍必须由
+对应环境生成证据才能升级为 Verified。04 和比赛证据报告记录特定参考环境的验收事实，不代表所有
+部署自动具备相同外部依赖。
 
 形成 V1/V2 时的讨论记录和早期设计稿保存在
 [`design-history/`](./design-history/README.md)，仅用于追溯决策，不作为当前 API、代码结构或

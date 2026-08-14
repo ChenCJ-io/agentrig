@@ -1,0 +1,20 @@
+{
+  "schema_version": "agentrig.agentteams-profile.v1",
+  "profile": "v1.1.2-competition",
+  "agentteams_version": "v1.1.2",
+  "source_git_sha": "a99457830fafb99c991bdb666aa8a1eef2f83b12",
+  "runtime_name": "openclaw",
+  "resource_api_version": "hiclaw.io/v1beta1",
+  "resource_schema_hash": "sha256:9855527201764868d070de13356d78e0e994db7617ddad2cd97a07877aecd525",
+  "controller_image": "higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/hiclaw-controller:v1.1.2",
+  "runtime_images": {
+    "manager": "higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/hiclaw-manager:v1.1.2",
+    "worker": "higress-registry.cn-hangzhou.cr.aliyuncs.com/higress/hiclaw-worker:v1.1.2"
+  },
+  "roles": {
+    "manager": "default",
+    "curator": "agentrig-curator",
+    "judge": "agentrig-judge"
+  },
+  "historical_read_only": true
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from mcp import types
@@ -53,22 +54,34 @@ class RealToolProvider:
         *,
         allowlist: list[str],
         timeout_seconds: float,
+        before_execute: Callable[[], Awaitable[None]] | None = None,
+        namespace: str | None = None,
     ) -> None:
         self._client = client
         self._allowlist = set(allowlist)
         self._timeout_seconds = timeout_seconds
+        self._before_execute = before_execute
+        self._namespace = namespace.strip() if namespace else None
+        if self._namespace and NAMESPACE_SEP in self._namespace:
+            raise ValueError(f"real tool namespace cannot contain {NAMESPACE_SEP!r}")
 
     async def resolve(self, context: ProviderContext) -> ProviderResponse:
-        if not self._allowed(context.tool_call.name):
+        backend_tool_name = self._backend_tool_name(context.tool_call.name)
+        if not self._allowed(backend_tool_name):
             return ProviderResponse(
                 status=ProviderStatus.ERROR,
                 message="real tool is not in the deployment allowlist",
-                metadata={"tool_name": context.tool_call.name},
+                metadata={
+                    "tool_name": context.tool_call.name,
+                    "backend_tool_name": backend_tool_name,
+                },
             )
         try:
+            if self._before_execute is not None:
+                await self._before_execute()
             async with asyncio.timeout(self._timeout_seconds):
                 result = await self._client.call(
-                    context.tool_call.name,
+                    backend_tool_name,
                     context.tool_call.arguments,
                 )
         except TimeoutError:
@@ -84,8 +97,16 @@ class RealToolProvider:
         return ProviderResponse(
             status=ProviderStatus.HIT,
             result=result,
-            metadata={"tool_name": context.tool_call.name},
+            metadata={
+                "tool_name": context.tool_call.name,
+                "backend_tool_name": backend_tool_name,
+            },
         )
+
+    def _backend_tool_name(self, tool_name: str) -> str:
+        if not self._namespace or NAMESPACE_SEP in tool_name:
+            return tool_name
+        return f"{self._namespace}{NAMESPACE_SEP}{tool_name}"
 
     def _allowed(self, tool_name: str) -> bool:
         if tool_name in self._allowlist:

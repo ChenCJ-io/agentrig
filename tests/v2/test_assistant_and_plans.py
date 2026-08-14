@@ -173,9 +173,7 @@ async def _plan(
             goal={"user_request": "evaluate search"},
             selection={
                 "case_ids": ["case_v2_plan"],
-                "targets": [
-                    {"target_id": "target_v2_plan", "version": "v1"}
-                ],
+                "targets": [{"target_id": "target_v2_plan", "version": "v1"}],
                 "profile_id": "profile_v2_plan",
             },
             created_by="agentteams_manager",
@@ -183,7 +181,22 @@ async def _plan(
     )
     assert plan.preview["planned_case_runs"] == 1
     assert plan.confirmation.required is False
-    return plan.id, event_id, session_id
+    await services.assistant.cancel_turn(turn_id)
+    confirmation = await services.assistant.send_message(
+        session_id,
+        AssistantMessageCreate(
+            client_message_id=f"confirm-{plan.id}",
+            content=f"confirm {plan.id} revision {plan.revision}",
+            active_plan_id=plan.id,
+            plan_action={
+                "action_type": "confirm_plan",
+                "plan_id": plan.id,
+                "revision": plan.revision,
+            },
+        ),
+        actor_id="user-1",
+    )
+    return plan.id, confirmation.event_id, session_id
 
 
 async def test_message_is_idempotent_and_events_have_monotonic_seq(
@@ -193,6 +206,63 @@ async def test_message_is_idempotent_and_events_have_monotonic_seq(
     page = await services.assistant.list_events(session_id)
     assert [item.seq for item in page.items] == [1]
     assert page.items[0].payload["content"] == "evaluate search"
+
+
+async def test_new_message_is_rejected_while_previous_turn_is_open(
+    services: ServiceContainer,
+) -> None:
+    session_id, _, turn_id = await _message(services)
+    with pytest.raises(AgentRigError) as conflict:
+        await services.assistant.send_message(
+            session_id,
+            AssistantMessageCreate(
+                client_message_id="message-2",
+                content="a second request",
+            ),
+            actor_id="user-1",
+        )
+    assert conflict.value.detail.code is ErrorCode.ASSISTANT_TURN_CONFLICT
+    assert conflict.value.detail.retryable is True
+
+    await services.assistant.cancel_turn(turn_id)
+    accepted = await services.assistant.send_message(
+        session_id,
+        AssistantMessageCreate(
+            client_message_id="message-2",
+            content="a second request",
+        ),
+        actor_id="user-1",
+    )
+    assert accepted.turn_id != turn_id
+
+
+async def test_plan_source_message_cannot_confirm_its_own_draft(
+    services: ServiceContainer,
+) -> None:
+    session_id, event_id, turn_id = await _message(services)
+    plan = await services.evaluation_plans.create(
+        EvaluationPlanCreate(
+            session_id=session_id,
+            source_turn_id=turn_id,
+            goal={"user_request": "evaluate search"},
+            selection={
+                "case_ids": ["case_v2_plan"],
+                "targets": [{"target_id": "target_v2_plan", "version": "v1"}],
+                "profile_id": "profile_v2_plan",
+            },
+            created_by="agentteams_manager",
+        )
+    )
+
+    with pytest.raises(AgentRigError) as confirmation_required:
+        await services.evaluation_plans.confirm(
+            plan.id,
+            EvaluationPlanConfirm(
+                confirmation_event_id=event_id,
+                confirmed_by="user-1",
+            ),
+        )
+    assert confirmation_required.value.detail.code is ErrorCode.PLAN_CONFIRMATION_REQUIRED
 
 
 async def test_plan_preview_confirm_submit_and_idempotent_retry(
@@ -221,10 +291,84 @@ async def test_plan_preview_confirm_submit_and_idempotent_retry(
     context = await services.assistant.get_context(session_id)
     assert context["active_plan"]["run_id"] == run.run_id
     event_types = {
-        item.event_type.value
-        for item in (await services.assistant.list_events(session_id)).items
+        item.event_type.value for item in (await services.assistant.list_events(session_id)).items
     }
     assert "run_status" in event_types
+
+
+async def test_managed_plan_actions_are_bound_to_distinct_user_events(
+    services: ServiceContainer,
+) -> None:
+    plan_id, confirmation_event_id, session_id = await _plan(services)
+    plan = await services.evaluation_plans.get(plan_id)
+    confirmation_event = await services.assistant.get_event(confirmation_event_id)
+    assert confirmation_event.turn_id is not None
+    confirm_decision = await services.decisions.record(
+        ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=confirmation_event.turn_id,
+            trigger="user_confirmation",
+            decision_kind="submission",
+            objective="confirm the exact plan revision",
+            observation_summary={"known": ["the user selected confirm"]},
+            options=[{"action_type": "confirm_plan", "label": "confirm plan"}],
+            selected_action={"action_type": "confirm_plan"},
+            rationale_summary={"summary": "the structured action matches the plan"},
+            evidence_refs=[{"kind": "evaluation_plan", "resource_id": plan_id}],
+            idempotency_key="bound-confirm-action",
+        )
+    )
+    services.evaluation_plans._enforce_managed_mutations = True  # noqa: SLF001
+    confirmed = await services.evaluation_plans.confirm(
+        plan_id,
+        EvaluationPlanConfirm(
+            confirmation_event_id=confirmation_event_id,
+            confirmed_by="user-1",
+            decision_id=confirm_decision.id,
+        ),
+    )
+    assert confirmed.status.value == "confirmed"
+
+    await services.assistant.cancel_turn(confirmation_event.turn_id)
+    submit_receipt = await services.assistant.send_message(
+        session_id,
+        AssistantMessageCreate(
+            client_message_id="bound-submit-action",
+            content=f"submit {plan_id} revision {plan.revision}",
+            active_plan_id=plan_id,
+            plan_action={
+                "action_type": "submit_plan",
+                "plan_id": plan_id,
+                "revision": plan.revision,
+            },
+        ),
+        actor_id="user-1",
+    )
+    submit_decision = await services.decisions.record(
+        ManagerDecisionProposal(
+            session_id=session_id,
+            turn_id=submit_receipt.turn_id,
+            trigger="user_confirmation",
+            decision_kind="submission",
+            objective="submit the exact confirmed plan once",
+            observation_summary={"known": ["the user selected submit"]},
+            options=[{"action_type": "submit_plan", "label": "submit plan"}],
+            selected_action={"action_type": "submit_plan"},
+            rationale_summary={"summary": "the structured action matches the plan"},
+            evidence_refs=[{"kind": "evaluation_plan", "resource_id": plan_id}],
+            idempotency_key="bound-submit-decision",
+        )
+    )
+    await services.decisions.authorize(submit_decision.id, submit_receipt.event_id)
+    submitted, run = await services.evaluation_plans.submit(
+        plan_id,
+        EvaluationPlanSubmit(
+            idempotency_key="bound-submit-run",
+            decision_id=submit_decision.id,
+        ),
+    )
+    await services.scheduler.wait(run.run_id)
+    assert submitted.run_id == run.run_id
 
 
 async def test_draft_plan_can_be_edited_and_repreviewed(
@@ -345,9 +489,7 @@ async def test_decision_is_idempotent_and_links_plan_provenance(
             **proposal.model_dump(mode="json"),
             "session_id": other_session_id,
             "turn_id": other_turn_id,
-            "evidence_refs": [
-                {"kind": "assistant_event", "resource_id": other_event_id}
-            ],
+            "evidence_refs": [{"kind": "assistant_event", "resource_id": other_event_id}],
         }
     )
     with pytest.raises(AgentRigError) as conflict:
@@ -384,10 +526,25 @@ async def test_decision_is_idempotent_and_links_plan_provenance(
         "plan_created",
     }
 
+    await services.assistant.cancel_turn(turn_id)
+    confirmation = await services.assistant.send_message(
+        session_id,
+        AssistantMessageCreate(
+            client_message_id="decision-plan-confirm",
+            content=f"confirm {plan.id} revision {plan.revision}",
+            active_plan_id=plan.id,
+            plan_action={
+                "action_type": "confirm_plan",
+                "plan_id": plan.id,
+                "revision": plan.revision,
+            },
+        ),
+        actor_id="user-1",
+    )
     await services.evaluation_plans.confirm(
         plan.id,
         EvaluationPlanConfirm(
-            confirmation_event_id=event_id,
+            confirmation_event_id=confirmation.event_id,
             confirmed_by="user-1",
         ),
     )
@@ -595,9 +752,7 @@ async def test_recovery_decisions_enforce_configured_worker_budget(
             ],
             selected_action={"action_type": "request_worker_correction"},
             rationale_summary={"summary": "One correction attempt is permitted."},
-            evidence_refs=[
-                {"kind": "agent_invocation", "resource_id": invocation.id}
-            ],
+            evidence_refs=[{"kind": "agent_invocation", "resource_id": invocation.id}],
             idempotency_key=key,
         )
 

@@ -11,8 +11,9 @@ from ..session import Database
 
 
 class SqlSampleRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create(
         self,
@@ -23,6 +24,7 @@ class SqlSampleRepository:
     ) -> SampleView:
         row = SampleORM(
             id=sample_id,
+            project_id=self._project_id,
             name=value.name,
             tool_name=value.tool_name,
             sample_kind=value.sample_kind.value,
@@ -44,7 +46,11 @@ class SqlSampleRepository:
     async def get(self, sample_id: str) -> SampleView | None:
         async with self._database.session() as session:
             row = await session.get(SampleORM, sample_id)
-            return self._view(row) if row is not None else None
+            return (
+                self._view(row)
+                if row is not None and row.project_id == self._project_id
+                else None
+            )
 
     async def list_page(
         self,
@@ -54,8 +60,10 @@ class SqlSampleRepository:
         limit: int,
         offset: int,
     ) -> SamplePage:
-        query = select(SampleORM)
-        count_query = select(func.count(SampleORM.id))
+        query = select(SampleORM).where(SampleORM.project_id == self._project_id)
+        count_query = select(func.count(SampleORM.id)).where(
+            SampleORM.project_id == self._project_id
+        )
         if status is not None:
             query = query.where(SampleORM.status == status.value)
             count_query = count_query.where(SampleORM.status == status.value)
@@ -81,7 +89,7 @@ class SqlSampleRepository:
     async def update(self, sample_id: str, value: SampleCreate) -> SampleView:
         async with self._database.session() as session:
             row = await session.get(SampleORM, sample_id)
-            assert row is not None
+            assert row is not None and row.project_id == self._project_id
             row.name = value.name
             row.tool_name = value.tool_name
             row.sample_kind = value.sample_kind.value
@@ -98,7 +106,7 @@ class SqlSampleRepository:
     async def delete(self, sample_id: str) -> bool:
         async with self._database.session() as session:
             row = await session.get(SampleORM, sample_id)
-            if row is None:
+            if row is None or row.project_id != self._project_id:
                 return False
             await session.delete(row)
             await session.commit()
@@ -107,7 +115,7 @@ class SqlSampleRepository:
     async def set_status(self, sample_id: str, status: SampleStatus) -> SampleView:
         async with self._database.session() as session:
             row = await session.get(SampleORM, sample_id)
-            assert row is not None
+            assert row is not None and row.project_id == self._project_id
             row.status = status.value
             row.updated_at = utc_now()
             await session.commit()
@@ -125,6 +133,7 @@ class SqlSampleRepository:
                 await session.scalars(
                     select(SampleORM)
                     .where(
+                        SampleORM.project_id == self._project_id,
                         or_(
                             SampleORM.tool_name == tool_name,
                             SampleORM.sample_kind == "sequence",

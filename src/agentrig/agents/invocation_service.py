@@ -91,6 +91,19 @@ class AgentInvocationService:
             offset=max(0, offset),
         )
 
+    async def list_for_run(
+        self,
+        run_id: str,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AgentInvocationPage:
+        return await self._repository.list_for_run(
+            run_id,
+            limit=max(1, min(limit, 200)),
+            offset=max(0, offset),
+        )
+
     async def list_all(
         self,
         *,

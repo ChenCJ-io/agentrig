@@ -34,7 +34,9 @@ scripts/reference_demo.sh down
 ```
 
 Strict validation checks the Git SHA, exact versions, SBOM, public configuration, artifact hashes, and
-Run/CaseRun references without network access.
+Run/CaseRun references without network access. The policy-regression scenario also exports
+`quality-report.json`, `comparison-report.json`, and an expected-failing `release-gate.json` from the same
+source snapshot, proving that the gate blocks the known regression.
 
 ## Minimal local server
 
@@ -79,10 +81,18 @@ backends = { business = "http://127.0.0.1:9001/mcp/" }
 real_tool_allowlist = []
 python_driver_allowlist = []
 subprocess_allowlist = []
+durable_scheduler_enabled = false
 
 [target_network]
 allow_private_networks = false
 allowed_hosts = ["localhost", "127.0.0.1", "::1"]
+
+[run_otlp_export]
+enabled = false
+endpoint = ""
+
+[production_evidence]
+enabled = false
 ```
 
 Persistent databases require an Alembic migration before startup:
@@ -90,6 +100,11 @@ Persistent databases require an Alembic migration before startup:
 ```bash
 uv run agentrig db upgrade
 ```
+
+Execution profiles may embed an immutable `agentrig.pricing-snapshot.v1`. Cost is calculated only when the
+event model and required token/cache fields match that frozen snapshot; otherwise reports keep cost `null`
+and explain the limitation. Terminal Run OTLP export is best-effort and metadata-only. Production OTLP
+ingest remains disabled by default and requires a Project, an enabled Ingest Source, and its dedicated token.
 
 ## Authentication and secrets
 
@@ -141,6 +156,19 @@ scripts/local_demo.sh verify
 ```
 
 Reference CI is deterministic evidence for the Core path; it must not be presented as live AgentTeams proof.
+
+## V2.3—V2.5 acceptance
+
+Run all deterministic contracts, migrations, Python/Web checks, and the real
+Browser→FastAPI→SQLite→Reference Target path with:
+
+```bash
+scripts/accept_v23.sh local
+```
+
+The version-pinned AgentScope 2.0.6, AgentTeams v1.1.2/v1.2.2, and PostgreSQL checks require controlled
+external environments. See the [acceptance runbook](./09-V2.3-Agent运行时验证与生产证据闭环/11-验收运行手册.md)
+and run `scripts/accept_v23.sh live`; an unexecuted live check is not a pass.
 
 ## Validation
 

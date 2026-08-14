@@ -25,6 +25,7 @@ class ErrorCode(StrEnum):
     EVALUATION_ERROR = "evaluation_error"
     CONFLICT = "conflict"
     AGENTTEAMS_UNAVAILABLE = "agentteams_unavailable"
+    ASSISTANT_PROVIDER_UNAVAILABLE = "assistant_provider_unavailable"
     MATRIX_DELIVERY_FAILED = "matrix_delivery_failed"
     ASSISTANT_TURN_CONFLICT = "assistant_turn_conflict"
     PLAN_CONFIRMATION_REQUIRED = "plan_confirmation_required"

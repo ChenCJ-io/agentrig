@@ -10,12 +10,14 @@ from ..session import Database
 
 
 class SqlProfileRepository:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, project_id: str = "default") -> None:
         self._database = database
+        self._project_id = project_id
 
     async def create(self, profile_id: str, value: ProfileCreate) -> ProfileView:
         row = ExecutionProfileORM(
             id=profile_id,
+            project_id=self._project_id,
             name=value.name,
             description=value.description,
             config=value.config.model_dump(mode="json"),
@@ -30,14 +32,26 @@ class SqlProfileRepository:
     async def get(self, profile_id: str) -> ProfileView | None:
         async with self._database.session() as session:
             row = await session.get(ExecutionProfileORM, profile_id)
-            return self._view(row) if row is not None else None
+            return (
+                self._view(row)
+                if row is not None and row.project_id == self._project_id
+                else None
+            )
 
     async def list_page(self, *, limit: int, offset: int) -> ProfilePage:
         async with self._database.session() as session:
-            total = int(await session.scalar(select(func.count(ExecutionProfileORM.id))) or 0)
+            total = int(
+                await session.scalar(
+                    select(func.count(ExecutionProfileORM.id)).where(
+                        ExecutionProfileORM.project_id == self._project_id
+                    )
+                )
+                or 0
+            )
             rows = list(
                 await session.scalars(
                     select(ExecutionProfileORM)
+                    .where(ExecutionProfileORM.project_id == self._project_id)
                     .order_by(ExecutionProfileORM.created_at, ExecutionProfileORM.id)
                     .limit(limit)
                     .offset(offset)
@@ -53,7 +67,7 @@ class SqlProfileRepository:
     async def update(self, profile_id: str, value: ProfileCreate) -> ProfileView:
         async with self._database.session() as session:
             row = await session.get(ExecutionProfileORM, profile_id)
-            assert row is not None
+            assert row is not None and row.project_id == self._project_id
             row.name = value.name
             row.description = value.description
             row.config = value.config.model_dump(mode="json")
@@ -66,7 +80,7 @@ class SqlProfileRepository:
     async def delete(self, profile_id: str) -> bool:
         async with self._database.session() as session:
             row = await session.get(ExecutionProfileORM, profile_id)
-            if row is None:
+            if row is None or row.project_id != self._project_id:
                 return False
             await session.delete(row)
             await session.commit()

@@ -83,11 +83,52 @@ class AcpTargetOptions(BaseModel):
     )
 
 
+class AgUiTargetOptions(BaseModel):
+    """Public AG-UI transport and runtime metadata options."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_path: str = ""
+    health_path: str = "/health"
+    cancel_path: str | None = None
+    capability_path: str = "/capabilities"
+    capability_probe: bool = True
+    auth_header: str = "Authorization"
+    auth_scheme: str = "Bearer"
+    request_headers: dict[str, str] = Field(default_factory=dict)
+    thread_id: str | None = None
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    context: list[dict[str, Any]] = Field(default_factory=list)
+    forwarded_props: dict[str, Any] = Field(default_factory=dict)
+    framework: str = "ag-ui"
+    framework_version: str | None = None
+    protocol_version: str = "1"
+    max_reconnects: int = Field(default=1, ge=0, le=10)
+    max_event_bytes: int = Field(
+        default=256 * 1_024,
+        ge=1_024,
+        le=4 * 1_024 * 1_024,
+    )
+    max_events: int = Field(default=10_000, ge=1, le=100_000)
+    runtime: dict[str, Any] = Field(default_factory=dict)
+    models: list[dict[str, Any]] = Field(default_factory=list)
+    skills: list[dict[str, Any]] = Field(default_factory=list)
+    permission_mode: str | None = None
+    workspace: dict[str, Any] = Field(default_factory=dict)
+    memory: dict[str, Any] = Field(default_factory=dict)
+    collaboration: dict[str, Any] = Field(default_factory=dict)
+
+
 def options_schema(driver_type: str) -> dict[str, Any] | None:
     """返回内置 Driver 的 options JSON Schema。"""
 
     if driver_type == "acp":
         return AcpTargetOptions.model_json_schema(by_alias=True)
+    if driver_type in {"ag_ui", "agentscope"}:
+        schema = AgUiTargetOptions.model_json_schema(by_alias=True)
+        if driver_type == "agentscope":
+            schema["title"] = "AgentScopeTargetOptions"
+        return schema
     return None
 
 
@@ -118,5 +159,14 @@ def options_example(driver_type: str) -> dict[str, Any] | None:
                     },
                 }
             ],
+        }
+    if driver_type in {"ag_ui", "agentscope"}:
+        return {
+            "run_path": "/ag-ui",
+            "health_path": "/health",
+            "capability_path": "/capabilities",
+            "framework": "agentscope" if driver_type == "agentscope" else "ag-ui",
+            "framework_version": "2.0.6" if driver_type == "agentscope" else None,
+            "protocol_version": "1",
         }
     return None

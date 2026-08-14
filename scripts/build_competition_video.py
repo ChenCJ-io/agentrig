@@ -1,121 +1,166 @@
 #!/usr/bin/env python3
-"""Build the GOAI competition demo video from verified UI captures and deck pages.
+"""Build the long-form AgentRig GOAI review cut with fixed 1080p frames.
 
-The build is deterministic apart from the macOS ``say`` voice synthesis. It creates a
-6:55 H.264/AAC MP4 with burned Chinese subtitles plus a standalone SRT file.
+The video deliberately uses no zoom, pan, cursor replay, or simulated typing. Every
+product frame is either a page from the submitted deck or a real browser capture from
+the EditFlow rehearsal. This is a review/previsualization cut, not a substitute for the
+formal Codex-led screen recording. Narration uses a calm Microsoft neural male voice.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import hashlib
+import json
 import math
 import re
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+import edge_tts
 import imageio_ffmpeg
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPETITION_DIR = ROOT / "docs" / "competition"
-CAPTURE_DIR = COMPETITION_DIR / "assets" / "video"
+LIVE_DIR = COMPETITION_DIR / "assets" / "live"
 DECK_PDF = COMPETITION_DIR / "AgentRig-GOAI-2026-初赛方案.pdf"
-DEFAULT_OUTPUT = (
-    ROOT / "dist" / "competition" / "GOAI-2026-AgentRig-初赛材料" / "AgentRig-GOAI-2026-Demo.mp4"
-)
+MEDIA_DIR = ROOT / "dist" / "competition" / "media"
+DEFAULT_OUTPUT = MEDIA_DIR / "AgentRig-GOAI-2026-Demo.mp4"
 
 
 @dataclass(frozen=True)
 class Scene:
-    duration: int
-    image: str
+    source: str
+    title: str
     narration: str
 
 
 SCENES = (
     Scene(
-        18,
-        "slide-01.png",
-        "Agent 不缺一次成功的 Demo，缺的是每次升级后都能回答：哪里变了，为什么通过，"
-        "证据是什么。AgentRig 将一次性演示变成可持续回归的评测基础设施。",
+        "slide:1",
+        "一次 Prompt 修改，怎样获得发布证据",
+        "一个 Agent 的 Prompt 只改一行，也可能同时改变工具选择、参数传播、调用顺序、结果引用和最终回答。"
+        "一次演示成功，不能证明回归稳定。AgentRig 要做的，是让每次变化都留下可重复、可比较、可归因的发布证据。"
+        "本片使用公开脱敏的 EditFlow 修图 Agent，展示一条已经真实彩排通过、正式拍摄时可以完整复现的闭环。",
     ),
     Scene(
-        30,
-        "slide-04.png",
-        "这条真实路径中，AgentTeams Manager 负责理解目标和编排计划，Simulation Curator "
-        "负责生成受控工具结果，Evidence Judge 负责依据冻结证据独立裁决。被测的 lassist "
-        "是评测对象，不计入三个协作 Agent。",
+        "slide:2",
+        "Agent 回归的真实难题",
+        "Agent 的风险不只在最终文字。它可能选错工具、遗漏前置检查、编造素材标识、丢失人物保护约束，"
+        "或者把旧图片引用传给下一步。真实工具回归又可能生成图片、发信、支付或写入生产，重复执行昂贵且有风险；"
+        "纯 Mock 则绕过模型推理、协议和工具选择。我们需要同时保留决策真实性，并控制执行副作用。",
     ),
     Scene(
-        40,
-        "04-approval-boundary.png",
-        "用户只描述评测目标。Manager 查询已批准用例、Target 和 Profile，生成可预览计划。"
-        "范围、数量、结果提供链和评判器都在提交前显式展示。确认必须绑定同会话的真实用户"
-        "事件和同一 plan revision；没有确认，就没有 Run。",
+        "slide:3",
+        "AgentRig 不替 Agent 回答",
+        "被测 Agent 仍然使用自己的模型，真实完成 HTTP 或 SSE 会话、上下文维护、工具选择和参数生成。"
+        "AgentRig 只在工具边界提供 Fixture、经审核的 Sample、Simulator 或 Real Tool，并独立记录 Manifest、"
+        "Cell、Attempt 和事件。事实与 Rule、Judge、人工审核的裁决分离，因此一次失败可以被解释，而不是被一张总分遮住。",
     ),
     Scene(
-        37,
-        "03-agentteams-evidence.png",
-        "Curator 和 Judge 是两个独立 Worker。AgentRig 保存 Matrix 的请求与响应事件 ID、"
-        "输入输出 hash、结果引用和终态。这证明任务确实经过 AgentTeams 定向投递和 Worker "
-        "回写，不是进程内的伪造捷径。",
+        "slide:4",
+        "从身份到发布门禁",
+        "AgentRig 先冻结 Target、模型可见 Prompt、工具能力和版本身份；Case、Profile 与 Sample 定义风险和成本边界；"
+        "Preview 生成 Canonical Manifest，Run 再展开 Cell 和独立 Attempt。每次工具调用、结果来源与裁决都进入 Timeline，"
+        "最终 Report 和 Release Gate 引用同一条证据链。修复会创建新的 Run，绝不覆盖原始失败。",
     ),
     Scene(
-        45,
-        "05-success-evidence.png",
-        "进入 Run 详情，可以看到完整事实链。用户要求背景增强，lassist 真实产生 "
-        "apply image prompt 工具调用。这里展示的不是离线伪造日志，而是同一个 CaseRun 中的"
-        "用户消息、驱动请求、工具调用和事件编号。",
+        "slide:5",
+        "Codex 主入口与 Web 辅助入口",
+        "开发者在 EditFlow 项目中启动 Codex。Codex 能读取代码和 Prompt Diff，执行项目 Skill，并通过 AgentRig MCP"
+        "查询、创建和运行评测资产。普通用户则可以在 AgentRig Web 助手中用自然语言生成自己的计划。"
+        "两种模型上下文不同，给出不同方案完全允许；统一的是 Target、Case、Profile、人工确认和证据合同，"
+        "而不是强迫它们得到同一份计划。",
     ),
     Scene(
-        30,
-        "06-success-overview.png",
-        "Curator 只读取冻结的工具上下文，看不到 rubric。它返回的候选还要通过 JSON Schema "
-        "和状态验证，才能作为受控 ToolResult 回注给被测 Agent。所有步骤都写入只追加的 "
-        "RunEvent。",
+        "slide:6",
+        "公开脱敏的真实被测 Agent",
+        "EditFlow 基于 Agno 和 DeepSeek，使用 PostgreSQL 保存 Session，通过 HTTP 和 SSE 暴露 Target，"
+        "并把五个修图工具交给 external execution。模型推理、协议、会话和工具决策都是真实的；"
+        "公开本地 MCP 返回确定性图片引用，不上传任何图片，也不调用第三方图片接口。"
+        "这样既保留真实决策难度，又能让评委在本地复现。",
     ),
     Scene(
-        42,
-        "05-success-evidence.png",
-        "执行结束后，确定性 Rule 三项全部通过；Evidence Judge 又独立对三个语义标准判定 "
-        "pass，并引用本次 Run 的真实 event ID。两份 Evaluation 相互独立，Judge 不能覆盖 "
-        "Rule，也不能发明不存在的证据。",
+        "slide:7",
+        "Before 暴露模型方差",
+        "headline Case 要求一步完成调亮、雪山背景、四比五裁剪，并保持人物。Broad Prompt 允许自由修图工具"
+        "吞并组合编辑。对同一个冻结 Case 和 Manifest 连续执行五个独立 Attempt，只有三次通过，"
+        "两次因为 inspect image 落在 retouch 之后而行为失败。父 Run 虽然 completed，业务验收仍是 fail。"
+        "这说明跑一次成功远远不够。",
     ),
     Scene(
-        30,
-        "07-policy-failure.png",
-        "评测平台不应只演示绿灯。接下来切换到二次确认策略场景。这个用例要求图片编辑前先"
-        "向用户明确确认；我们会故意保留一次产品策略回归，让失败路径同样可以被复现和审计。",
+        "slide:8",
+        "Skill 把 Prompt Diff 变成风险资产",
+        "Codex 先读取 prompt regression governance Skill，冻结 Git、Before Prompt SHA 和行为不变量，"
+        "再通过 MCP 查询已有 Case。已有覆盖被标记为 Reuse，需要增强断言的标记为 Change，"
+        "变更新增风险才创建 New，与本次修改无关的明确 Exclude。真正现场创建的是一步完成也不能绕过专用工具边界。"
+        "所有 Case 和 Sample 先是 Draft，创建者不能批准自己的资产。",
     ),
     Scene(
-        50,
-        "08-failure-evidence.png",
-        "旧版 lassist 没有请求二次确认，就直接调用了编辑工具。即使 Curator 成功返回工具"
-        "结果，Rule 的 tool not called 仍然失败，Judge 也引用同一工具事件判定 fail。Run 的"
-        "执行状态是 completed，但评测结论是未通过；工具成功，不等于策略正确。",
+        "slide:9",
+        "最小 Prompt 修复与身份变化",
+        "Codex 只修改模型可见边界：retouch photo 只负责亮度和对比度；背景素材必须搜索后应用；比例必须裁剪；"
+        "每一步继续消费最新的 output image reference，人物保护传播到相关工具。HTTP 适配层没有增加关键词路由，"
+        "也没有为录制写死答案。重启后 Prompt SHA 从四三一五七开头变为七一一艾迪比开头；SHA 不变，Candidate 就没有验收资格。",
     ),
     Scene(
-        33,
-        "slide-09.png",
-        "故障也不会被抹掉。首次负向运行触发有界超时后，系统保留已有 RunEvent、Rule 失败和"
-        "Curator 回执，不伪造尚未发生的 Judge 结论。修正配置后新建 Run，旧 Attempt 依然可"
-        "审计，幂等恢复不会覆盖历史。",
+        "live:editflow-02-candidate-run.png",
+        "Candidate 与完整回归矩阵",
+        "Candidate 先对相同 headline Case 再跑五次，从三比二变成五比零。随后执行六个相关 Case、"
+        "每个五次，共三十个独立 Attempt，三十次全部通过。简单调亮没有过度路由，素材搜索为空时没有编造 asset ID，"
+        "人物保护和图片引用按契约传播。这里展示的是 Run、Cell 和 Attempt 的真实矩阵，而不是手工拼接的绿色数字。",
     ),
     Scene(
-        33,
-        "slide-14.png",
-        "AgentRig 共提供十一个可复用 Skill：六个 Manager Skill、两个 Worker Skill 和三个 "
-        "Core Skill。每个核心 Skill 都声明输入输出、调用条件、依赖工具、失败处理、安全边界"
-        "和版本回滚。三个角色使用物理隔离的 MCP 工具集，Prompt 不是权限边界。",
+        "live:editflow-03-timeline.png",
+        "下钻到内部行为",
+        "AgentRig 不只判断最终文字。完整 Timeline 记录 inspect image、search assets、retouch photo、apply asset"
+        "和 crop photo 的顺序，保留每个参数、Provider 来源和工具结果。素材 ID 可以追溯到搜索返回，"
+        "preserve subject 在相关工具中保持为真，image reference 每一步都来自前一步输出。"
+        "评委可以直接看到 Agent 做了什么，以及为什么通过。",
     ),
     Scene(
-        27,
-        "slide-12.png",
-        "AgentTeams 负责谁与谁协作，AgentRig 负责什么是已经发生的事实。我们不替 Agent 做"
-        "决定，而是让每个决定都经过分工、验证并留下证据，最终成为企业 Agent 的持续回归、"
-        "发布门禁和审计基础设施。",
+        "slide:12",
+        "一次真实采集，五次零真实调用重放",
+        "对于必须观察真实结果的工具，AgentRig 先通过本地 MCP 执行一次 inspect image，并把 source 等于 real tool"
+        "的事件持久化。Codex 只能从这条事件创建 Sample 草稿；人类确认来源和适用边界后批准。"
+        "Sample-only Profile 随后回放五次，五次全部命中 Sample，而这个 Replay Run 中 real tool Provider Attempt 为零。"
+        "真实来源、人工责任和回归成本因此同时可审计。",
+    ),
+    Scene(
+        "live:editflow-05-assistant.png",
+        "普通用户自然语言发起",
+        "不使用 Codex 的产品或测试人员，也可以在 Web 助手中描述评测目标。模型生成一个 Case、三次 Attempt 的可编辑计划。"
+        "因为重复执行会消耗资源，Core 触发人工确认；确认只解除门禁，仍不创建 Run，另一次提交才真正执行。"
+        "最终三个 Attempt 全部通过。不同入口共享的是可治理资产和证据结构，不是同一种语言模型能力。",
+    ),
+    Scene(
+        "slide:14",
+        "为什么这是平台，不是 Demo 脚本",
+        "AgentRig 用 Driver 接入 HTTP SSE、OpenAI compatible、AgentScope 和 AG UI；用 Provider Chain 在 Fixture、"
+        "审核 Sample、Simulator 与 Real Tool 之间切换；用 Canonical Manifest、Cell、Attempt、Event 和 Timeline"
+        "形成事实内核；再由 Rule、Judge、人工审核、报告和 Release Gate 消费证据。"
+        "项目隔离、耐久任务、审计日志、生产 Trace 回灌和失败模式让闭环可以进入团队工程。",
+    ),
+    Scene(
+        "slide:15",
+        "从 AgentScope 实践到开源合同",
+        "AgentRig 与 AgentScope 来自同一类真实评测实践，也复用了部分工作台交互经验。不同之处是，AgentRig 把内部依赖"
+        "抽成协议无关、可本地部署、可独立组合的开源合同。公开 EditFlow 证明流程可以复现；真实 lassist 兼容验收作为附录，"
+        "证明平台并不只适配一个专门为比赛构建的 Demo Agent。AgentTeams 多角色只在动态策展或语义裁决真正需要时启用。",
+    ),
+    Scene(
+        "slide:16",
+        "证据化结论与诚实边界",
+        "本次彩排得到 Before 三比二、Candidate headline 五比零、最终矩阵三十比零、Sample replay 五比零、"
+        "Web 助手三比零，EditFlow 三十四项非 Live 测试通过，真实浏览器可访问性没有严重或致命问题。"
+        "正式拍摄会从干净数据库生成全新 Run ID，Sample 只声明覆盖 inspect image，动态引用等值以 Timeline 为准。"
+        "Codex 负责思考和改变软件，AgentRig 负责让每次改变可复用、可执行、可追溯。",
     ),
 )
 
@@ -145,53 +190,154 @@ def ffmpeg_duration(ffmpeg: str, media: Path) -> float:
     return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
 
-def render_deck_pages(work_dir: Path) -> None:
-    if not DECK_PDF.exists():
+def render_deck_pages(work_dir: Path) -> dict[int, Path]:
+    if not DECK_PDF.is_file():
         raise FileNotFoundError(f"Missing deck PDF: {DECK_PDF}")
     pdftoppm = shutil.which("pdftoppm")
     if not pdftoppm:
         raise RuntimeError("pdftoppm is required to render the deck pages")
-    run([pdftoppm, "-png", "-r", "144", str(DECK_PDF), str(work_dir / "slide")])
+    run([pdftoppm, "-png", "-r", "144", str(DECK_PDF), str(work_dir / "deck")])
+    pages: dict[int, Path] = {}
+    for path in work_dir.glob("deck-*.png"):
+        match = re.search(r"-(\d+)\.png$", path.name)
+        if match:
+            pages[int(match.group(1))] = path
+    if len(pages) != 16:
+        raise RuntimeError(f"Expected 16 rendered deck pages, got {len(pages)}")
+    return pages
 
 
-def source_image(scene: Scene, work_dir: Path) -> Path:
-    if scene.image.startswith("slide-"):
-        path = work_dir / scene.image
+def source_image(scene: Scene, pages: dict[int, Path]) -> Path:
+    if scene.source.startswith("slide:"):
+        path = pages[int(scene.source.removeprefix("slide:"))]
+    elif scene.source.startswith("live:"):
+        path = LIVE_DIR / scene.source.removeprefix("live:")
     else:
-        path = CAPTURE_DIR / scene.image
-    if not path.exists():
+        raise ValueError(f"Unsupported scene source: {scene.source}")
+    if not path.is_file():
         raise FileNotFoundError(f"Missing scene image: {path}")
     return path
 
 
-def synthesize_narration(scene: Scene, output: Path, voice: str, initial_rate: int) -> float:
-    say = shutil.which("say")
-    if not say:
-        raise RuntimeError("macOS say is required to build the narration")
-
-    rate = initial_rate
-    for _ in range(3):
-        run([say, "-v", voice, "-r", str(rate), "-o", str(output), scene.narration])
-        duration = ffmpeg_duration(imageio_ffmpeg.get_ffmpeg_exe(), output)
-        available = scene.duration - 1.0
-        if duration <= available:
-            return duration
-        rate = math.ceil(rate * duration / available * 1.03)
-    raise RuntimeError(
-        f"Narration for {scene.image} is {duration:.2f}s, longer than {available:.2f}s"
-    )
+async def synthesize_narration(
+    text: str,
+    output: Path,
+    *,
+    voice: str,
+    rate: str,
+    pitch: str,
+) -> None:
+    communicator = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
+    await communicator.save(str(output))
 
 
-def build_scene(ffmpeg: str, scene: Scene, image: Path, audio: Path, output: Path) -> None:
-    frames = scene.duration * 24
+def synthesize_macos_narration(
+    value: str,
+    output: Path,
+    *,
+    voice: str,
+    rate: int,
+) -> None:
+    binary = shutil.which("say")
+    if not binary:
+        raise RuntimeError("macOS say is required for --engine macos")
+    run([binary, "-v", voice, "-r", str(rate), "-o", str(output), value])
+
+
+def srt_timestamp(seconds: float) -> str:
+    milliseconds = round(seconds * 1000)
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def split_caption(value: str, max_chars: int = 23) -> list[str]:
+    clauses = [
+        part.strip() for part in re.findall(r"[^。！？；]+[。！？；]?", value) if part.strip()
+    ]
+    cues: list[str] = []
+    for clause in clauses:
+        remainder = clause
+        while len(remainder) > max_chars:
+            positions = [remainder.rfind(mark, 0, max_chars + 1) for mark in "，：、 "]
+            best = max(positions)
+            cut = best + 1 if best >= max_chars // 2 else max_chars
+            cues.append(remainder[:cut].strip())
+            remainder = remainder[cut:].strip()
+        if remainder:
+            cues.append(remainder)
+    return cues
+
+
+def scene_cues(
+    scene: Scene, narration_duration: float, offset: float = 0.0
+) -> list[tuple[float, float, str]]:
+    values = split_caption(scene.narration)
+    weights = [max(1, len(re.sub(r"\s+", "", value))) for value in values]
+    total = sum(weights)
+    cursor = offset + 0.5
+    result: list[tuple[float, float, str]] = []
+    for value, weight in zip(values, weights, strict=True):
+        duration = narration_duration * weight / total
+        result.append((cursor, cursor + duration, value))
+        cursor += duration
+    return result
+
+
+def write_srt(cues: list[tuple[float, float, str]], output: Path) -> None:
+    lines: list[str] = []
+    for index, (start, end, value) in enumerate(cues, start=1):
+        lines.extend([str(index), f"{srt_timestamp(start)} --> {srt_timestamp(end)}", value, ""])
+    output.write_text("\n".join(lines), encoding="utf-8")
+
+
+def escape_filter_path(path: Path) -> str:
+    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
+def drawtext_filters(cues: list[tuple[float, float, str]], work_dir: Path, index: int) -> str:
+    font = Path("/System/Library/Fonts/STHeiti Medium.ttc")
+    if not font.is_file():
+        raise FileNotFoundError(f"Required Chinese subtitle font is unavailable: {font}")
+    filters: list[str] = []
+    for cue_index, (start, end, value) in enumerate(cues, start=1):
+        text_file = work_dir / f"subtitle-{index:02d}-{cue_index:02d}.txt"
+        text_file.write_text(value, encoding="utf-8")
+        filters.append(
+            "drawtext="
+            f"fontfile='{escape_filter_path(font)}':"
+            f"textfile='{escape_filter_path(text_file)}':"
+            "fontcolor=white:fontsize=42:"
+            "box=1:boxcolor=black@0.64:boxborderw=16:"
+            "x=(w-text_w)/2:y=h-104:"
+            f"enable='between(t,{start:.3f},{end:.3f})'"
+        )
+    return ",".join(filters)
+
+
+def build_scene(
+    ffmpeg: str,
+    *,
+    image: Path,
+    audio: Path,
+    cues: list[tuple[float, float, str]],
+    work_dir: Path,
+    index: int,
+    duration: float,
+    output: Path,
+) -> None:
+    subtitle_filter = drawtext_filters(cues, work_dir, index)
+    # A looped still image is intentional: no zoompan, no cursor tweening and no
+    # stabilization guesswork. The upper product frame therefore remains pixel-stable.
     video_filter = (
         "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,"
-        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x101216,"
-        f"zoompan=z='min(zoom+0.00008,1.035)':"
-        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1920x1080:fps=24,"
-        "format=yuv420p[v];"
-        f"[1:a]adelay=600|600,apad,atrim=0:{scene.duration},"
-        "loudnorm=I=-16:TP=-1.5:LRA=11[a]"
+        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0xF4F5F3,"
+        f"fps=30,format=yuv420p,{subtitle_filter}[v];"
+        f"[1:a]adelay=500|500,apad,atrim=0:{duration:.3f},"
+        "afade=t=in:st=0:d=0.08,afade=t=out:st="
+        f"{max(0.1, duration - 0.18):.3f}:d=0.12,"
+        "loudnorm=I=-16:TP=-1.5:LRA=9[a]"
     )
     run(
         [
@@ -203,7 +349,7 @@ def build_scene(ffmpeg: str, scene: Scene, image: Path, audio: Path, output: Pat
             "-loop",
             "1",
             "-framerate",
-            "24",
+            "30",
             "-i",
             str(image),
             "-i",
@@ -215,19 +361,25 @@ def build_scene(ffmpeg: str, scene: Scene, image: Path, audio: Path, output: Pat
             "-map",
             "[a]",
             "-t",
-            str(scene.duration),
+            f"{duration:.3f}",
             "-r",
-            "24",
+            "30",
             "-c:v",
             "libx264",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.1",
             "-preset",
-            "medium",
+            "slow",
             "-crf",
-            "20",
+            "17",
+            "-pix_fmt",
+            "yuv420p",
             "-c:a",
             "aac",
             "-b:a",
-            "160k",
+            "192k",
             "-ar",
             "48000",
             "-ac",
@@ -239,98 +391,10 @@ def build_scene(ffmpeg: str, scene: Scene, image: Path, audio: Path, output: Pat
     )
 
 
-def srt_timestamp(seconds: float) -> str:
-    milliseconds = round(seconds * 1000)
-    hours, remainder = divmod(milliseconds, 3_600_000)
-    minutes, remainder = divmod(remainder, 60_000)
-    secs, millis = divmod(remainder, 1000)
-    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
-
-
-def subtitle_text(narration: str) -> str:
-    replacements = {
-        "plan revision": "EvaluationPlan revision",
-        "Matrix 的请求与响应事件 ID": "Matrix request/response event ID",
-        "apply image prompt": "apply_image_prompt",
-        "只追加的 RunEvent": " append-only RunEvent",
-        "确定性 Rule 三项全部通过": "Rule 3/3 全部通过",
-        "真实 event ID": " Evidence refs（真实 event ID）",
-        "tool not called": "tool_not_called",
-        "Run 的执行状态是 completed，但评测结论是未通过": "completed ≠ pass",
-        "幂等恢复": "idempotency 恢复",
-    }
-    text = narration
-    for source, target in replacements.items():
-        text = text.replace(source, target)
-    return text
-
-
-def split_caption(text: str, max_chars: int = 25) -> list[str]:
-    protected_terms = (
-        "Matrix request/response event ID",
-        "EvaluationPlan revision",
-        "apply_image_prompt",
-        "append-only RunEvent",
-        "Rule 3/3",
-        "Evidence refs",
-        "completed ≠ pass",
-    )
-    placeholders = {f"§{index}§": term for index, term in enumerate(protected_terms)}
-    for placeholder, term in placeholders.items():
-        text = text.replace(term, placeholder)
-    clauses = [
-        item.strip() for item in re.findall(r"[^。！？；]+[。！？；]?", text) if item.strip()
-    ]
-    cues: list[str] = []
-    for clause in clauses:
-        remainder = clause
-        while len(remainder) > max_chars:
-            breakpoints = [remainder.rfind(mark, 0, max_chars + 1) for mark in "，：、 "]
-            best = max(breakpoints)
-            cut = best + 1 if best >= max_chars // 2 else max_chars
-            cues.append(remainder[:cut].strip())
-            remainder = remainder[cut:].strip()
-        if remainder:
-            cues.append(remainder)
-    return [_restore_placeholders(cue, placeholders) for cue in cues]
-
-
-def _restore_placeholders(text: str, placeholders: dict[str, str]) -> str:
-    for placeholder, term in placeholders.items():
-        text = text.replace(placeholder, term)
-    return text
-
-
-def build_srt(narration_durations: list[float], output: Path) -> None:
-    lines: list[str] = []
-    scene_start = 0.0
-    cue_number = 1
-    for scene, narration_duration in zip(SCENES, narration_durations, strict=True):
-        cues = split_caption(subtitle_text(scene.narration))
-        weights = [max(1, len(re.sub(r"\s+", "", cue))) for cue in cues]
-        total_weight = sum(weights)
-        cursor = scene_start + 0.6
-        for cue, weight in zip(cues, weights, strict=True):
-            cue_duration = narration_duration * weight / total_weight
-            end = min(scene_start + scene.duration - 0.3, cursor + cue_duration)
-            lines.extend(
-                [
-                    str(cue_number),
-                    f"{srt_timestamp(cursor)} --> {srt_timestamp(end)}",
-                    cue,
-                    "",
-                ]
-            )
-            cursor = end
-            cue_number += 1
-        scene_start += scene.duration
-    output.write_text("\n".join(lines), encoding="utf-8")
-
-
-def concat_scenes(ffmpeg: str, scene_files: list[Path], work_dir: Path, output: Path) -> None:
-    concat_file = work_dir / "concat.txt"
-    concat_file.write_text(
-        "\n".join(f"file '{path.as_posix()}'" for path in scene_files) + "\n",
+def concat_scenes(ffmpeg: str, scenes: list[Path], work_dir: Path, output: Path) -> None:
+    manifest = work_dir / "concat.txt"
+    manifest.write_text(
+        "\n".join(f"file '{path.as_posix()}'" for path in scenes) + "\n",
         encoding="utf-8",
     )
     run(
@@ -345,43 +409,8 @@ def concat_scenes(ffmpeg: str, scene_files: list[Path], work_dir: Path, output: 
             "-safe",
             "0",
             "-i",
-            str(concat_file),
+            str(manifest),
             "-c",
-            "copy",
-            str(output),
-        ]
-    )
-
-
-def escape_filter_path(path: Path) -> str:
-    return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-
-
-def burn_subtitles(ffmpeg: str, source: Path, srt: Path, output: Path) -> None:
-    subtitle_filter = (
-        f"subtitles=filename='{escape_filter_path(srt)}':"
-        "force_style='FontName=PingFang SC,FontSize=18,PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00000000,BorderStyle=1,Outline=2,"
-        "Shadow=1,MarginV=48,Alignment=2'"
-    )
-    run(
-        [
-            ffmpeg,
-            "-hide_banner",
-            "-loglevel",
-            "warning",
-            "-y",
-            "-i",
-            str(source),
-            "-vf",
-            subtitle_filter,
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",
-            "-crf",
-            "20",
-            "-c:a",
             "copy",
             "-movflags",
             "+faststart",
@@ -390,11 +419,23 @@ def burn_subtitles(ffmpeg: str, source: Path, srt: Path, output: Path) -> None:
     )
 
 
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--voice", default="Tingting")
-    parser.add_argument("--rate", type=int, default=165)
+    parser.add_argument("--engine", choices=("edge", "macos"), default="edge")
+    parser.add_argument("--voice", default="zh-CN-YunxiNeural")
+    parser.add_argument("--rate", default="-4%")
+    parser.add_argument("--pitch", default="-2Hz")
+    parser.add_argument("--macos-voice", default="Eddy (中文（中国大陆）)")
+    parser.add_argument("--macos-rate", type=int, default=165)
     return parser.parse_args()
 
 
@@ -403,30 +444,111 @@ def main() -> None:
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     srt_output = output.with_suffix(".srt")
+    metadata_output = output.with_suffix(".json")
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
 
+    scene_metadata: list[dict[str, object]] = []
+    global_cues: list[tuple[float, float, str]] = []
+    timeline = 0.0
     with tempfile.TemporaryDirectory(prefix="agentrig-video-") as temp:
         work_dir = Path(temp)
-        render_deck_pages(work_dir)
+        pages = render_deck_pages(work_dir)
         scene_files: list[Path] = []
-        narration_durations: list[float] = []
         for index, scene in enumerate(SCENES, start=1):
-            print(f"Building scene {index:02d}/{len(SCENES)} ({scene.duration}s)", flush=True)
-            audio = work_dir / f"narration-{index:02d}.aiff"
-            narration_durations.append(synthesize_narration(scene, audio, args.voice, args.rate))
+            print(f"Synthesizing scene {index:02d}/{len(SCENES)}: {scene.title}", flush=True)
+            if args.engine == "edge":
+                audio = work_dir / f"narration-{index:02d}.mp3"
+                asyncio.run(
+                    synthesize_narration(
+                        scene.narration,
+                        audio,
+                        voice=args.voice,
+                        rate=args.rate,
+                        pitch=args.pitch,
+                    )
+                )
+            else:
+                audio = work_dir / f"narration-{index:02d}.aiff"
+                synthesize_macos_narration(
+                    scene.narration,
+                    audio,
+                    voice=args.macos_voice,
+                    rate=args.macos_rate,
+                )
+            narration_duration = ffmpeg_duration(ffmpeg, audio)
+            duration = math.ceil((narration_duration + 1.7) * 2) / 2
+            local_srt = work_dir / f"scene-{index:02d}.srt"
+            local_cues = scene_cues(scene, narration_duration)
+            write_srt(local_cues, local_srt)
+            global_cues.extend(
+                (start + timeline, end + timeline, value) for start, end, value in local_cues
+            )
+
             scene_output = work_dir / f"scene-{index:02d}.mp4"
-            build_scene(ffmpeg, scene, source_image(scene, work_dir), audio, scene_output)
+            build_scene(
+                ffmpeg,
+                image=source_image(scene, pages),
+                audio=audio,
+                cues=local_cues,
+                work_dir=work_dir,
+                index=index,
+                duration=duration,
+                output=scene_output,
+            )
             scene_files.append(scene_output)
+            scene_metadata.append(
+                {
+                    "index": index,
+                    "title": scene.title,
+                    "source": scene.source,
+                    "start_seconds": round(timeline, 3),
+                    "duration_seconds": duration,
+                    "narration_seconds": round(narration_duration, 3),
+                }
+            )
+            timeline += duration
 
-        build_srt(narration_durations, srt_output)
-        joined = work_dir / "joined.mp4"
-        concat_scenes(ffmpeg, scene_files, work_dir, joined)
-        burn_subtitles(ffmpeg, joined, srt_output, output)
+        write_srt(global_cues, srt_output)
+        concat_scenes(ffmpeg, scene_files, work_dir, output)
 
-    duration = ffmpeg_duration(ffmpeg, output)
+    actual_duration = ffmpeg_duration(ffmpeg, output)
+    metadata = {
+        "schema_version": "agentrig.competition-video.v3",
+        "generated_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
+        "output": output.name,
+        "sha256": sha256(output),
+        "duration_seconds": round(actual_duration, 3),
+        "resolution": "1920x1080",
+        "fps": 30,
+        "video": "H.264 High / CRF 17 / yuv420p",
+        "audio": "AAC 192 kbps / 48 kHz / stereo / -16 LUFS target",
+        "narration": (
+            {
+                "engine": "edge-tts",
+                "voice": args.voice,
+                "rate": args.rate,
+                "pitch": args.pitch,
+            }
+            if args.engine == "edge"
+            else {
+                "engine": "macos-say",
+                "voice": args.macos_voice,
+                "rate_words_per_minute": args.macos_rate,
+                "purpose": "local review fallback; formal cut prefers human narration",
+            }
+        ),
+        "camera_motion": "none; fixed source frame per scene",
+        "cut_purpose": "review previsualization; formal submission uses a fresh Codex-led capture",
+        "subtitles": srt_output.name,
+        "scenes": scene_metadata,
+    }
+    metadata_output.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print(f"Built {output}")
     print(f"Subtitles {srt_output}")
-    print(f"Duration {duration:.2f}s ({duration / 60:.2f} minutes)")
+    print(f"Metadata {metadata_output}")
+    print(f"Duration {actual_duration:.2f}s ({actual_duration / 60:.2f} minutes)")
 
 
 if __name__ == "__main__":

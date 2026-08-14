@@ -1,10 +1,71 @@
+import type { AssistantEvent } from "~/api/v2";
+
 export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger";
 
+export function canonicalAssistantEvents(
+  items: AssistantEvent[],
+): AssistantEvent[] {
+  const latestManagerReply = new Map<string, AssistantEvent>();
+  for (const item of items) {
+    if (
+      item.event_type !== "assistant_message" ||
+      item.actor_type !== "manager"
+    ) {
+      continue;
+    }
+    if (!item.turn_id) continue;
+    const current = latestManagerReply.get(item.turn_id);
+    if (!current || item.seq > current.seq)
+      latestManagerReply.set(item.turn_id, item);
+  }
+  return items.filter((item) => {
+    if (
+      item.event_type !== "assistant_message" ||
+      item.actor_type !== "manager"
+    ) {
+      return true;
+    }
+    return Boolean(
+      item.turn_id && latestManagerReply.get(item.turn_id)?.id === item.id,
+    );
+  });
+}
+
 export function tone(value: string): BadgeTone {
-  if (["completed", "submitted", "ready", "delivered", "authorized", "succeeded"].includes(value)) return "success";
-  if (["failed", "timed_out", "cancelled", "offline", "error", "denied"].includes(value)) return "danger";
-  if (["running", "dispatched", "confirmed", "executing", "eligible"].includes(value)) return "accent";
-  if (["queued", "created", "draft", "pending", "awaiting_confirmation", "stale"].includes(value)) return "warning";
+  if (
+    [
+      "completed",
+      "submitted",
+      "ready",
+      "delivered",
+      "authorized",
+      "succeeded",
+    ].includes(value)
+  )
+    return "success";
+  if (
+    ["failed", "timed_out", "cancelled", "offline", "error", "denied"].includes(
+      value,
+    )
+  )
+    return "danger";
+  if (
+    ["running", "dispatched", "confirmed", "executing", "eligible"].includes(
+      value,
+    )
+  )
+    return "accent";
+  if (
+    [
+      "queued",
+      "created",
+      "draft",
+      "pending",
+      "awaiting_confirmation",
+      "stale",
+    ].includes(value)
+  )
+    return "warning";
   return "neutral";
 }
 
@@ -75,12 +136,14 @@ export function decisionActionLabel(value: string): string {
 }
 
 export function policyLabel(value: string): string {
-  return {
-    allow: "Core 已允许",
-    require_confirmation: "需要用户确认",
-    deny: "Core 已拒绝",
-    stale: "事实已变化",
-  }[value] ?? value;
+  return (
+    {
+      allow: "Core 已允许",
+      require_confirmation: "需要用户确认",
+      deny: "Core 已拒绝",
+      stale: "事实已变化",
+    }[value] ?? value
+  );
 }
 
 export function evidenceKindLabel(value: string): string {

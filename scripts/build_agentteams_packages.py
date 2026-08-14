@@ -1,4 +1,4 @@
-"""Build deterministic AgentTeams v1.1.2 Manager/Worker package archives."""
+"""Build deterministic, version-explicit AgentTeams Manager/Worker packages."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import json
 import shutil
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+
+from agentrig.skill_contracts import validate_skill_contracts
 
 ROLES = {
     "manager": [
@@ -33,24 +35,49 @@ def add_bytes(archive: ZipFile, content: bytes, destination: str) -> None:
     archive.writestr(info, content)
 
 
-def build(root: Path, output: Path) -> list[Path]:
+def build(
+    root: Path,
+    output: Path,
+    *,
+    profile: str = "v1.1.2-competition",
+) -> list[Path]:
+    contract_manifest = validate_skill_contracts(root)
+    contracts = {item.id: item for item in contract_manifest.skills}
+    runtime = "openclaw" if profile == "v1.1.2-competition" else "qwenpaw"
+    agentteams_version = "v1.1.2" if profile == "v1.1.2-competition" else "v1.2.2"
     output.mkdir(parents=True, exist_ok=True)
     built: list[Path] = []
     for role, skill_names in ROLES.items():
         destination = output / f"agentrig-{role}.zip"
         package = root / "deploy" / "agentteams" / "packages" / role
         with ZipFile(destination, "w") as archive:
-            manifest = {
+            manifest: dict[str, object] = {
                 "version": "1.0",
                 "source": {"hostname": "agentrig-build"},
                 "worker": {
                     "suggested_name": f"agentrig-{role}",
-                    "runtime": "openclaw",
+                    "runtime": runtime,
                     "apt_packages": [],
                     "pip_packages": [],
                     "npm_packages": [],
                 },
             }
+            if profile == "v1.2.2-current":
+                manifest["agentrig_contract"] = {
+                    "schema_version": "agentrig.agentteams-package.v1",
+                    "profile": profile,
+                    "agentteams_version": agentteams_version,
+                    "role": role,
+                    "skill_contract_manifest_hash": contract_manifest.content_hash,
+                    "skills": [
+                        {
+                            "id": skill_name,
+                            "contract_version": contracts[skill_name].contract_version,
+                            "content_sha256": contracts[skill_name].content_sha256,
+                        }
+                        for skill_name in skill_names
+                    ],
+                }
             add_bytes(
                 archive,
                 (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode(),
@@ -84,12 +111,17 @@ def main() -> int:
         type=Path,
         default=Path("deploy/agentteams/dist"),
     )
+    parser.add_argument(
+        "--profile",
+        choices=("v1.1.2-competition", "v1.2.2-current"),
+        default="v1.1.2-competition",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     output = args.output if args.output.is_absolute() else root / args.output
     if output.exists():
         shutil.rmtree(output)
-    for item in build(root, output):
+    for item in build(root, output, profile=args.profile):
         print(item.relative_to(root))
     return 0
 

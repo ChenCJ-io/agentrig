@@ -90,6 +90,25 @@ class RealToolDriver:
         del session
 
 
+class SensitiveRealToolDriver(RealToolDriver):
+    async def send_user_message(
+        self,
+        session: DriverSession,
+        message: str,
+    ) -> AsyncIterator[DriverEvent]:
+        del session, message
+        yield DriverEvent(
+            type=DriverEventType.TOOL_CALLS,
+            tool_calls=[
+                ToolCall(
+                    id="sensitive_call",
+                    name="tools__search",
+                    arguments={"q": "hello", "api_key": "never-store"},
+                )
+            ],
+        )
+
+
 async def test_fixture_is_ordered_one_shot_unless_repeatable() -> None:
     provider = FixtureProvider()
     context = ProviderContext(
@@ -228,6 +247,14 @@ async def test_sequence_sample_consumes_steps_in_order_per_chain() -> None:
 
 async def test_real_tool_requires_allowlist() -> None:
     client = FakeRealToolClient()
+    fences: list[str] = []
+
+    async def fence() -> None:
+        fences.append("persisted-before-call")
+
+    async def reject_fence() -> None:
+        raise RuntimeError("durable lease is stale")
+
     context = ProviderContext(
         case_run_id="cr",
         turn_position=1,
@@ -242,10 +269,44 @@ async def test_real_tool_requires_allowlist() -> None:
         client,
         allowlist=["tools:*"],
         timeout_seconds=1,
+        before_execute=fence,
+    ).resolve(context)
+    fenced = await RealToolProvider(
+        client,
+        allowlist=["tools:*"],
+        timeout_seconds=1,
+        before_execute=reject_fence,
     ).resolve(context)
     assert denied.status is ProviderStatus.ERROR
     assert allowed.status is ProviderStatus.HIT
+    assert fenced.status is ProviderStatus.ERROR
+    assert fences == ["persisted-before-call"]
     assert len(client.calls) == 1
+
+
+async def test_real_tool_profile_namespace_maps_agent_tool_to_mcp_backend() -> None:
+    client = FakeRealToolClient()
+    context = ProviderContext(
+        case_run_id="cr",
+        turn_position=1,
+        tool_call=ToolCall(
+            id="call",
+            name="search",
+            arguments={"q": "hello"},
+        ),
+    )
+    response = await RealToolProvider(
+        client,
+        allowlist=["editflow:*"],
+        timeout_seconds=1,
+        namespace="editflow",
+    ).resolve(context)
+    assert response.status is ProviderStatus.HIT
+    assert client.calls == [("editflow__search", {"q": "hello"})]
+    assert response.metadata == {
+        "tool_name": "search",
+        "backend_tool_name": "editflow__search",
+    }
 
 
 async def test_real_tool_evidence_requires_explicit_sample_creation() -> None:
@@ -315,5 +376,73 @@ async def test_real_tool_evidence_requires_explicit_sample_creation() -> None:
         assert sample.status is SampleStatus.DRAFT
         assert sample.tool_name == "tools__search"
         assert sample.content == {"items": [{"id": 1}]}
+    finally:
+        await services.close()
+
+
+async def test_real_tool_sample_drops_redacted_arguments_and_ignores_their_paths() -> None:
+    database = Database("sqlite+aiosqlite:///:memory:")
+    registry = DriverRegistry()
+    registry.register("sensitive_real_tool_test", SensitiveRealToolDriver)
+    services = ServiceContainer.build(
+        Settings(execution=ExecutionConfig(real_tool_allowlist=["tools:*"])),
+        database=database,
+        drivers=registry,
+        real_tool_client=FakeRealToolClient(),
+    )
+    await services.initialize()
+    try:
+        await services.cases.create(
+            TestCaseCreate(
+                id="case_sensitive_real",
+                name="real redaction",
+                primary_evaluator="rule",
+                turns=[
+                    {
+                        "position": 1,
+                        "user_message": "search",
+                        "assertions": [
+                            {"kind": "tool_called", "tool_name": "tools__search"}
+                        ],
+                    }
+                ],
+            )
+        )
+        await services.targets.create(
+            TargetCreate(
+                id="target_sensitive_real",
+                name="real redaction",
+                driver_type="sensitive_real_tool_test",
+            )
+        )
+        await services.profiles.create(
+            ProfileCreate(
+                id="profile_sensitive_real",
+                name="real redaction",
+                config={
+                    "provider_chain": [{"name": "real_tool"}],
+                    "primary_evaluator": "rule",
+                },
+            )
+        )
+        submitted = await services.runs.run_cases(
+            RunCasesRequest(
+                case_ids=["case_sensitive_real"],
+                targets=[{"target_id": "target_sensitive_real"}],
+                profile_id="profile_sensitive_real",
+            )
+        )
+        await services.scheduler.wait(submitted.run_id)
+        page = await services.runs.list_case_runs(submitted.run_id)
+        detail = await services.runs.get_case_run(page.items[0].id)
+        call = next(
+            event for event in detail.events if event.event_type is RunEventType.TOOL_CALL
+        )
+        sample = await services.samples.create(
+            SampleCreate(name="redacted real result", source_tool_call_id=call.id)
+        )
+        assert sample.match_arguments == {"q": "hello"}
+        assert sample.ignored_argument_paths == ["api_key"]
+        assert "never-store" not in str(sample.model_dump(mode="json"))
     finally:
         await services.close()

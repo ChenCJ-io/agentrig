@@ -1,0 +1,69 @@
+apiVersion: agentteams.io/v1beta1
+kind: Manager
+metadata:
+  name: default
+spec:
+  model: qwen3.5-plus
+  runtime: qwenpaw
+  package: file://./dist/agentrig-manager.zip
+  mcpServers:
+    - name: agentrig-manager
+      url: https://aigw-local.agentteams.io/mcp-servers/agentrig-manager/mcp
+      transport: http
+---
+apiVersion: agentteams.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-manager
+spec:
+  workerName: agentrig-manager
+  model: qwen3.5-plus
+  runtime: qwenpaw
+  package: file://./dist/agentrig-manager.zip
+  mcpServers:
+    - name: agentrig-manager
+      url: https://aigw-local.agentteams.io/mcp-servers/agentrig-manager/mcp
+      transport: http
+---
+apiVersion: agentteams.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-curator
+spec:
+  workerName: agentrig-curator
+  model: qwen3.5-plus
+  runtime: qwenpaw
+  package: file://./dist/agentrig-curator.zip
+  mcpServers:
+    - name: agentrig-curator
+      url: https://aigw-local.agentteams.io/mcp-servers/agentrig-curator/mcp
+      transport: http
+---
+apiVersion: agentteams.io/v1beta1
+kind: Worker
+metadata:
+  name: agentrig-judge
+spec:
+  workerName: agentrig-judge
+  model: qwen3.5-plus
+  runtime: qwenpaw
+  package: file://./dist/agentrig-judge.zip
+  mcpServers:
+    - name: agentrig-judge
+      url: https://aigw-local.agentteams.io/mcp-servers/agentrig-judge/mcp
+      transport: http
+---
+apiVersion: agentteams.io/v1beta1
+kind: Team
+metadata:
+  name: agentrig-evaluation
+spec:
+  description: AgentRig evidence-first evaluation team
+  workerMembers:
+    - name: agentrig-manager
+      role: team_leader
+    - name: agentrig-curator
+      role: worker
+    - name: agentrig-judge
+      role: worker
+  peerMentions: false

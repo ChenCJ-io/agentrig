@@ -9,6 +9,8 @@ from typing import Any, cast
 from ...errors import AgentRigError, ErrorCode
 from ..driver_schemas import options_example, options_schema
 from .acp import AcpDriver
+from .ag_ui import AgUiDriver
+from .agentscope import AgentScopeDriver
 from .base import (
     AgentDriver,
     ConfigurableAgentDriver,
@@ -35,6 +37,8 @@ class DriverRegistry:
             "acp": lambda: AcpDriver(
                 executable_allowlist=self._subprocess_allowlist
             ),
+            "ag_ui": AgUiDriver,
+            "agentscope": AgentScopeDriver,
             "http_sse": HttpSseDriver,
             "pixcake_http_sse": PixcakeHttpSseDriver,
             "openai_compatible": OpenAICompatibleDriver,
