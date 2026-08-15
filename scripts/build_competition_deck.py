@@ -315,10 +315,10 @@ def build() -> Presentation:
         ("3 Agent", "AgentTeams 协同"),
         ("11 + 8", "Skill 合同 + CI Job 全绿"),
     ]
-    for i, (v, l) in enumerate(stats):
+    for i, (value, label) in enumerate(stats):
         x = 1.05 + i * 2.34
-        text(slide, v, x, 5.68, 2.2, 0.35, size=17, color=WHITE, bold=True, font="Helvetica Neue")
-        text(slide, l, x, 6.22, 2.2, 0.24, size=8.6, color="A8B0AC")
+        text(slide, value, x, 5.68, 2.2, 0.35, size=17, color=WHITE, bold=True, font="Helvetica Neue")
+        text(slide, label, x, 6.22, 2.2, 0.24, size=8.6, color="A8B0AC")
     text(
         slide,
         "开发者 Codex/CLI 与普通用户 Web 助手共用同一条证据合同；完整证据台账见末页。",
