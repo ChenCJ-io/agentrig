@@ -163,14 +163,18 @@ def copy_repository_snapshot(repository: Path, destination: Path) -> int:
 
 def copy_source_snapshot(destination: Path) -> int:
     count = copy_repository_snapshot(ROOT, destination)
-    # Competition documents are intentionally ignored by Git but belong in this handoff.
-    shutil.copytree(
-        COMPETITION_DIR,
-        destination / "docs" / "competition",
-        dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns(
-            "__pycache__", "*.pyc", "lassist-*.png", "15-*", "16-*", "17-*"
-        ),
+    # Competition docs and the V2.3 plan ship at the package top level; keep the
+    # engineering snapshot lean and point readers there instead of duplicating.
+    for extra in ("docs/competition", "docs/09-V2.3-Agent运行时验证与生产证据闭环"):
+        target = destination / extra
+        if target.is_dir():
+            shutil.rmtree(target)
+    (destination / "docs" / "competition-README.md").write_text(
+        "# 比赛材料位置\n\n"
+        "比赛文档、方案 PDF/PPTX 与截图见提交包顶层 `01-报名材料/`；\n"
+        "V2.3 方案与验收手册见 `04-V2.3-Agent运行时验证与生产证据闭环/`；\n"
+        "完整源内容见公开仓库 https://github.com/ChenCJ-io/agentrig 的 `docs/` 目录。\n",
+        encoding="utf-8",
     )
     return count
 
