@@ -251,6 +251,87 @@ async def synthesize_narration(
             await asyncio.sleep(2 * attempt)
 
 
+
+# Applied to narration audio only; subtitles keep the on-screen terminology.
+# Ordered: longer phrases first. Chinese entries fix polyphones via homophones;
+# English entries map jargon to natural spoken Chinese (product names stay).
+SPEECH_LEXICON = (
+    # polyphone fixes
+    ("一行", "一航"),
+    ("调亮", "条亮"),
+    # multi-word phrases
+    ("prompt regression governance Skill", "提示词回归治理技能"),
+    ("Canonical Manifest", "规范执行清单"),
+    ("Sample-only Profile", "仅样本执行配置"),
+    ("real tool Provider Attempt", "真实工具尝试"),
+    ("Provider Chain", "结果提供链"),
+    ("Release Gate", "发布门禁"),
+    ("Broad Prompt", "宽泛提示词"),
+    ("headline Case", "主线用例"),
+    ("output image reference", "输出图片引用"),
+    ("preserve subject", "人物保护约束"),
+    ("inspect image", "图片检查"),
+    ("search assets", "素材搜索"),
+    ("retouch photo", "修图工具"),
+    ("apply asset", "素材应用"),
+    ("crop photo", "裁剪工具"),
+    ("asset ID", "素材编号"),
+    ("OpenAI compatible", "OpenAI 兼容"),
+    ("external execution", "外部执行"),
+    ("PostgreSQL", "数据库"),
+    ("Web 助手", "网页助手"),
+    # verdict / lifecycle words
+    ("completed", "已完成"),
+    ("ACCEPT", "验收通过"),
+    ("Candidate", "改后版本"),
+    ("Before", "改前版本"),
+    # single terms
+    ("Prompt Diff", "提示词差异"),
+    ("Real Tool", "真实工具"),
+    ("real tool", "真实工具"),
+    ("Prompt", "提示词"),
+    ("Fixture", "固定结果"),
+    ("Simulator", "模拟器"),
+    ("Sample", "样本"),
+    ("Manifest", "执行清单"),
+    ("Timeline", "时间线"),
+    ("Attempt", "尝试"),
+    ("Profile", "执行配置"),
+    ("Preview", "预览"),
+    ("Provider", "结果来源"),
+    ("headline", "主线"),
+    ("Driver", "驱动层"),
+    ("Event", "事件"),
+    ("Trace", "轨迹"),
+    ("Draft", "草稿"),
+    ("Judge", "裁判"),
+    ("Rule", "规则"),
+    ("Skill", "技能"),
+    ("Case", "用例"),
+    ("Cell", "单元"),
+    ("retouch", "修图"),
+    ("before", "改前"),
+    ("source", "来源"),
+    ("fail", "失败"),
+    ("Run", "运行"),
+    ("Gate", "门禁"),
+    # acronyms: force letter-by-letter reading
+    ("HTTP", "H T T P"),
+    ("SSE", "S S E"),
+    ("AG UI", "A G U I"),
+    ("SHA", "S H A"),
+)
+
+
+def speech_text(value: str) -> str:
+    for term, spoken in SPEECH_LEXICON:
+        if term.isascii():
+            value = re.sub(rf"(?<![A-Za-z]){re.escape(term)}(?![A-Za-z])", spoken, value)
+        else:
+            value = value.replace(term, spoken)
+    return value
+
+
 _KOKORO_PIPELINE = None
 
 
@@ -275,6 +356,7 @@ def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: 
         _KOKORO_PIPELINE = KPipeline(
             lang_code="z", repo_id=repo, model=model, en_callable=en_callable
         )
+    value = speech_text(value)
     chunks = [result.audio.numpy() for result in _KOKORO_PIPELINE(value, voice=voice, speed=speed)]
     if not chunks:
         raise RuntimeError("kokoro produced no audio")
@@ -481,7 +563,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--engine", choices=("edge", "macos", "kokoro"), default="edge")
-    parser.add_argument("--kokoro-voice", default="zf_001")
+    parser.add_argument("--kokoro-voice", default="zm_010")
     parser.add_argument("--kokoro-speed", type=float, default=0.82)
     parser.add_argument("--voice", default="zh-CN-YunxiNeural")
     parser.add_argument("--rate", default="-4%")
@@ -593,6 +675,7 @@ def main() -> None:
                 "speed": args.kokoro_speed,
                 "model": "hexgrad/Kokoro-82M-v1.1-zh",
                 "purpose": "local neural narration; fully offline and reproducible",
+                "speech_lexicon": "polyphone fixes + spoken-Chinese jargon mapping (audio only)",
             }
             if args.engine == "kokoro"
             else {
