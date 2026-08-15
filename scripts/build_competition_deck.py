@@ -22,6 +22,8 @@ ACCEPTANCE = LIVE / "editflow-04-acceptance.png"
 ASSISTANT = LIVE / "editflow-05-assistant.png"
 CODEX_SKILL = LIVE / "codex-01-skill-session.png"
 CODEX_VERDICT = LIVE / "codex-02-regression-verdict.png"
+PI_ARCHIVE = LIVE / "skill-pi-archive.png"
+SKILL_ECO = LIVE / "skill-ecosystem.png"
 
 W, H, TOTAL = 13.333, 7.5, 16
 INK, TEXT, MUTED, FAINT = "121617", "2B312F", "67706B", "929A95"
@@ -462,7 +464,7 @@ def build() -> Presentation:
     text(slide, "DEVELOPER", 0.78, 2.02, 1.5, 0.22, size=8.5, color=BLUE, bold=True)
     text(slide, "Codex + 项目 Skill + MCP", 0.78, 2.32, 5.1, 0.36, size=17, color=INK, bold=True)
     picture(slide, CODEX_VERDICT, 0.78, 2.88, 5.95, 3.17)
-    chip(slide, "主入口 · 真实会话 · run_79367a…", 0.78, 6.16, 2.9, fill=GREEN_SOFT, color=GREEN)
+    chip(slide, "主入口 · 真实会话 · run_33efe8…", 0.78, 6.16, 2.9, fill=GREEN_SOFT, color=GREEN)
     box(slide, 6.98, 2.0, 5.6, 4.25, fill=WHITE, stroke=LINE)
     text(slide, "PRODUCT / QA", 7.28, 2.28, 1.8, 0.22, size=8.5, color=GREEN, bold=True)
     text(slide, "AgentRig 智能评测助手", 7.28, 2.75, 4.8, 0.4, size=20, color=INK, bold=True)
@@ -650,8 +652,8 @@ def build() -> Presentation:
         prs,
         8,
         "Codex + Skill",
-        "不是盲目增加用例，而是按 Prompt Diff 治理风险",
-        "项目 Skill 先冻结身份与不变量，再查询 AgentRig 资产并分类。",
+        "不是盲目增加用例，而是按 Prompt Diff 治理风险并沉淀存档",
+        "项目 Skill 先冻结身份与不变量、分类资产，最终把整次迭代固化为 PI 存档。",
     )
     classes = [
         ("REUSE", "复用", "已有用例已覆盖，直接进入矩阵", GREEN, GREEN_SOFT),
@@ -665,39 +667,51 @@ def build() -> Presentation:
         chip(slide, tag, x + 0.25, 2.3, 0.92, fill=soft, color=accent)
         text(slide, name, x + 0.25, 2.93, 1.2, 0.3, size=16, color=INK, bold=True)
         text(slide, detail, x + 0.25, 3.46, 2.2, 0.5, size=10.2, color=MUTED, spacing=1.25)
-    text(slide, "本次防回归矩阵", 0.8, 4.71, 2.2, 0.3, size=15, color=INK, bold=True)
+    picture(slide, PI_ARCHIVE, 0.78, 4.48, 6.55, 2.29)
+    text(slide, "本次防回归矩阵", 7.75, 4.48, 2.4, 0.28, size=13.5, color=INK, bold=True)
     cases = [
-        ("Change", "brighten_only_no_over_routing", "简单调亮不能拆成素材或裁剪"),
-        ("Change", "asset_search_miss_no_invention", "搜索为空不能编造 asset_id"),
-        ("Change", "preserve_subject_propagation", "人物保护必须跨工具传播"),
-        ("New", "one_step_mixed_chain_boundary", "一步完成也不能绕过专用工具边界"),
+        ("Change", "brighten_only 不过度路由"),
+        ("Change", "asset miss 不编造 asset_id"),
+        ("Change", "preserve_subject 跨工具传播"),
+        ("New", "一步完成不破坏专用工具边界"),
     ]
-    for i, (kind, name, detail) in enumerate(cases):
-        y = 5.18 + i * 0.4
+    for i, (kind, detail) in enumerate(cases):
+        y = 4.92 + i * 0.35
         text(
             slide,
             kind,
-            0.82,
+            7.77,
             y,
             0.78,
             0.22,
-            size=8.6,
+            size=8.4,
             color=BLUE if kind == "New" else AMBER,
             bold=True,
         )
-        text(slide, name, 1.7, y, 3.55, 0.22, size=9.6, color=TEXT, font="Menlo", bold=True)
-        text(slide, detail, 5.45, y, 6.45, 0.22, size=9.6, color=MUTED)
+        text(slide, detail, 8.6, y, 3.9, 0.22, size=9.6, color=TEXT)
+    box(slide, 7.75, 6.38, 4.8, 0.5, fill=RED_SOFT, stroke=None)
     text(
         slide,
-        "Draft → 人工审核 → approved；创建者不能批准自己创建的资产。",
-        2.1,
-        6.77,
-        9.1,
-        0.22,
-        size=9.8,
+        "Draft → 人工审核 → approved；\n创建者不能批准自己创建的资产",
+        7.95,
+        6.44,
+        4.45,
+        0.4,
+        size=8.8,
         color=RED,
         bold=True,
-        align=PP_ALIGN.CENTER,
+        spacing=1.15,
+    )
+    text(
+        slide,
+        "迭代存档 docs/prompt-iterations/PI-20260814-01：before/after Prompt · 身份 · 用例 · Run · 指标 · 报告",
+        0.78,
+        6.86,
+        6.6,
+        0.24,
+        size=8.6,
+        color=MUTED,
+        font="Menlo",
     )
 
     # 09 — prompt identity
@@ -955,32 +969,39 @@ def build() -> Presentation:
         "把 AgentScope 的真实闭环经验，抽成可本地部署的开放合同",
         "AgentRig 不是复制一个内部页面，而是开放身份、资产、运行、证据和 Gate。",
     )
+    picture(slide, SKILL_ECO, 0.78, 2.04, 7.35, 3.92)
+    text(
+        slide,
+        "真实工程 Skill 生态（lassist · 已脱敏）",
+        0.78,
+        6.08,
+        7.3,
+        0.24,
+        size=9.2,
+        color=MUTED,
+        font="Menlo",
+    )
     columns = [
-        (
-            "AgentScope 实践",
-            ["真实业务评测闭环", "工作台交互经验", "AgentTeams 协作范式"],
-            BLUE,
-            BLUE_SOFT,
-        ),
-        (
-            "AgentRig 开源内核",
-            ["协议无关 Driver", "低副作用 Provider", "Canonical Evidence"],
-            GREEN,
-            GREEN_SOFT,
-        ),
-        (
-            "生态消费方式",
-            ["Codex + 项目 Skill", "普通用户 Web Assistant", "CI / 发布 Gate"],
-            AMBER,
-            AMBER_SOFT,
-        ),
+        ("AgentScope 实践", ["真实业务评测闭环", "11 个评测/治理 Skill 常态使用", "AgentTeams 协作范式"], BLUE, BLUE_SOFT),
+        ("AgentRig 开源内核", ["协议无关 Driver", "低副作用 Provider", "Canonical Evidence"], GREEN, GREEN_SOFT),
+        ("生态消费方式", ["Codex + 项目 Skill + PI 存档", "普通用户 Web Assistant", "CI / 发布 Gate"], AMBER, AMBER_SOFT),
     ]
     for i, (title_value, values, accent, soft) in enumerate(columns):
-        x = 0.78 + i * 4.13
-        box(slide, x, 2.04, 3.72, 3.9, fill=WHITE, stroke=LINE)
-        chip(slide, f"0{i + 1}", x + 0.3, 2.33, 0.5, fill=soft, color=accent)
-        text(slide, title_value, x + 0.3, 2.96, 3.05, 0.35, size=17, color=INK, bold=True)
-        bullets(slide, values, x + 0.3, 3.66, 3.02, 1.44, size=11, color=MUTED, gap=10)
+        y = 2.04 + i * 1.34
+        box(slide, 8.4, y, 4.15, 1.2, fill=WHITE, stroke=LINE)
+        chip(slide, f"0{i + 1}", 8.62, y + 0.16, 0.5, fill=soft, color=accent)
+        text(slide, title_value, 9.3, y + 0.14, 3.2, 0.28, size=13, color=INK, bold=True)
+        text(
+            slide,
+            " · ".join(values),
+            8.62,
+            y + 0.58,
+            3.75,
+            0.55,
+            size=8.8,
+            color=MUTED,
+            spacing=1.25,
+        )
     box(slide, 1.25, 6.27, 10.83, 0.52, fill=DARK, stroke=None)
     text(
         slide,

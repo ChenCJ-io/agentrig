@@ -99,8 +99,9 @@ SCENES = (
         "Skill 把 Prompt Diff 变成风险资产",
         "Codex 先读取 prompt regression governance Skill，冻结 Git、Before Prompt SHA 和行为不变量，"
         "再通过 MCP 查询已有 Case。已有覆盖被标记为 Reuse，需要增强断言的标记为 Change，"
-        "变更新增风险才创建 New，与本次修改无关的明确 Exclude。真正现场创建的是一步完成也不能绕过专用工具边界。"
-        "所有 Case 和 Sample 先是 Draft，创建者不能批准自己的资产。",
+        "变更新增风险才创建 New，与本次修改无关的明确 Exclude。所有 Case 和 Sample 先是 Draft，"
+        "创建者不能批准自己的资产。每次迭代最终沉淀为 PI 存档：变更前后 Prompt、身份、用例、Run 与指标，"
+        "连同人话报告一起进入仓库，供审阅与追溯。",
     ),
     Scene(
         "slide:9",
@@ -150,7 +151,7 @@ SCENES = (
     Scene(
         "slide:15",
         "从 AgentScope 实践到开源合同",
-        "AgentRig 与 AgentScope 来自同一类真实评测实践，也复用了部分工作台交互经验。不同之处是，AgentRig 把内部依赖"
+        "AgentRig 与 AgentScope 来自同一类真实评测实践：真实生产 Agent 工程中沉淀了十余个评测与治理 Skill，覆盖用例构建、回归执行、会话挖掘与样本采集。不同之处是，AgentRig 把内部依赖"
         "抽成协议无关、可本地部署、可独立组合的开源合同。公开 EditFlow 证明流程可以复现；真实 lassist 兼容验收作为附录，"
         "证明平台并不只适配一个专门为比赛构建的 Demo Agent。AgentTeams 多角色只在动态策展或语义裁决真正需要时启用。",
     ),

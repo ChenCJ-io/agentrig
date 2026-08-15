@@ -57,7 +57,7 @@ MCP 可以创建和修改 Draft，不能批准 Case 或 Sample。人工审核不
 | Capture | `run_db173d3e5b314568bfad82d2b3fc59ef`，real MCP hit 1 |
 | Sample | `sample_934464c5a0414796839cac6d821b1339`，real_tool provenance，approved |
 | Replay | `run_1a209c84b61f4390bf468af8865f0b90`，5/5，real_tool Attempt 0 |
-| Codex CLI 确认批次 | `run_79367abb0d5b4db2b743e143d130cb99`，同 Manifest，5/5（Codex 真实会话提交） |
+| Codex CLI 确认批次 | `run_33efe83470d54f728f1dc6b0dad36153`，同 Manifest，5/5（Codex 真实会话提交） |
 | Repository | Ruff pass；34 non-live tests passed |
 
 Before 与 Candidate headline 的 Manifest 都是
@@ -76,7 +76,7 @@ AgentRig MCP 提供通用资产和执行 API；Core 冻结事实、控制副作�
 `$prompt-regression-governance` Skill，经 agentrig MCP 冻结 Target/Case 身份、展示
 baseline→candidate 的最小 Prompt Diff，并提交 `repeat_count=5` 的回归批次：
 
-- Run：`run_79367abb0d5b4db2b743e143d130cb99`，5/5 `evaluation_state=pass`，每次 8/8 断言；
+- Run：`run_33efe83470d54f728f1dc6b0dad36153`，5/5 `evaluation_state=pass`，每次 8/8 断言；
 - Manifest 与 Before/Candidate 完全一致（`sha256:bb5008e6…6766aa`）；
 - Codex 自行执行 Ruff 与 34 项非 live 测试，全部通过；
 - Codex 对本会话给出 **PARTIAL**——因为它只被要求跑 headline，没有跑全量 smoke 矩阵，

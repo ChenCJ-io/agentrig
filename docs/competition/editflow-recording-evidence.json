@@ -99,7 +99,7 @@
     "session": "codex exec · prompt-regression-governance",
     "cli": "codex-cli 0.147.0",
     "driver": "OpenAI Codex (developer entry), MCP -> recording AgentRig 8024",
-    "run_id": "run_79367abb0d5b4db2b743e143d130cb99",
+    "run_id": "run_33efe83470d54f728f1dc6b0dad36153",
     "manifest_hash": "sha256:bb5008e637bc33dafb626ea314eb5917de7efdaf2639eab0a9001021586766aa",
     "case_id": "case_editflow_one_step_mixed_chain",
     "attempt_count": 5,
@@ -112,6 +112,8 @@
     "captures": [
       "codex-01-skill-session.png",
       "codex-02-regression-verdict.png"
-    ]
+    ],
+    "skill_language": "zh-CN",
+    "note": "英文 Skill 阶段的等价确认批次 run_79367abb… 亦保留在录制库中"
   }
 }
