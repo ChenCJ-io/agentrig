@@ -28,6 +28,7 @@ PROD_LIVE_1 = LIVE / "prod-live-01-session.png"
 PROD_LIVE_2 = LIVE / "prod-live-02-regression.png"
 PROD_LIVE_3 = LIVE / "prod-live-03-report.png"
 PROD_PI = LIVE / "prod-pi-report.png"
+PROD_PLATFORM = LIVE / "prod-platform-batches.png"
 
 W, H, TOTAL = 13.333, 7.5, 18
 INK, TEXT, MUTED, FAINT = "121617", "2B312F", "67706B", "929A95"
@@ -1040,9 +1041,9 @@ def build() -> Presentation:
         color=MUTED,
         font="Menlo",
     )
-    picture(slide, PROD_LIVE_2, 8.12, 2.0, 4.42, 2.45)
+    picture(slide, PROD_PLATFORM, 8.12, 2.0, 4.42, 2.29)
     picture(slide, PROD_LIVE_3, 8.12, 4.6, 4.42, 2.45)
-    text(slide, "哨兵异常 → 归因 → 修用例/修输入", 8.12, 4.5 - 0.04, 4.42, 0.2, size=8.2, color=MUTED)
+    text(slide, "内部评测平台:30 个批次任务,LIVE API 常态运行", 8.12, 4.38, 4.42, 0.2, size=8.2, color=MUTED)
     text(slide, "v4 终态:四表面 −16%,硬例 20/20", 8.12, 7.09, 4.42, 0.2, size=8.2, color=MUTED)
 
     # 17 — production PI acceptance report
