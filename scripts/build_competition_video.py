@@ -344,7 +344,7 @@ def speech_text(value: str) -> str:
 _KOKORO_PIPELINE = None
 
 
-def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.82) -> None:
+def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.85) -> None:
     """Local neural TTS (Kokoro-82M-v1.1-zh) with English terms via misaki G2P."""
     global _KOKORO_PIPELINE
     import numpy as np
@@ -573,7 +573,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--engine", choices=("edge", "macos", "kokoro"), default="edge")
     parser.add_argument("--kokoro-voice", default="zm_010")
-    parser.add_argument("--kokoro-speed", type=float, default=0.82)
+    parser.add_argument("--kokoro-speed", type=float, default=0.85)
     parser.add_argument("--voice", default="zh-CN-YunxiNeural")
     parser.add_argument("--rate", default="-4%")
     parser.add_argument("--pitch", default="-2Hz")
