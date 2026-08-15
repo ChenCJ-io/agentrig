@@ -50,28 +50,28 @@ SCENES = (
         "本片使用公开的 EditFlow 修图 Agent，展示一条已经正式录制通过、可从干净状态完整复现的闭环。",
     ),
     Scene(
-        "slide:2",
+        "slide:3",
         "Agent 回归的真实难题",
         "Agent 的风险不只在最终文字。它可能选错工具、遗漏前置检查、编造素材标识、丢失人物保护约束，"
         "或者把旧图片引用传给下一步。真实工具回归又可能生成图片、发信、支付或写入生产，重复执行昂贵且有风险；"
         "纯 Mock 则绕过模型推理、协议和工具选择。我们需要同时保留决策真实性，并控制执行副作用。",
     ),
     Scene(
-        "slide:3",
+        "slide:4",
         "AgentRig 不替 Agent 回答",
         "被测 Agent 仍然使用自己的模型，真实完成 HTTP 或 SSE 会话、上下文维护、工具选择和参数生成。"
         "AgentRig 只在工具边界提供 Fixture、经审核的 Sample、Simulator 或 Real Tool，并独立记录 Manifest、"
         "Cell、Attempt 和事件。事实与 Rule、Judge、人工审核的裁决分离，因此一次失败可以被解释，而不是被一张总分遮住。",
     ),
     Scene(
-        "slide:4",
+        "slide:5",
         "从身份到发布门禁",
         "AgentRig 先冻结 Target、模型可见 Prompt、工具能力和版本身份；Case、Profile 与 Sample 定义风险和成本边界；"
         "Preview 生成 Canonical Manifest，Run 再展开 Cell 和独立 Attempt。每次工具调用、结果来源与裁决都进入 Timeline，"
         "最终 Report 和 Release Gate 引用同一条证据链。修复会创建新的 Run，绝不覆盖原始失败。",
     ),
     Scene(
-        "slide:5",
+        "slide:6",
         "Codex 主入口与 Web 辅助入口",
         "开发者在 EditFlow 项目中启动 Codex。Codex 能读取代码和 Prompt Diff，执行项目 Skill，并通过 AgentRig MCP"
         "查询、创建和运行评测资产。普通用户则可以在 AgentRig Web 助手中用自然语言生成自己的计划。"
@@ -79,7 +79,16 @@ SCENES = (
         "而不是强迫它们得到同一份计划。",
     ),
     Scene(
-        "slide:6",
+        "slide:8",
+        "三职能 Agent 与真实协同",
+        "多 Agent 协同以 AgentTeams 为设计基点：Evaluation Manager 负责目标理解与计划，"
+        "Simulation Curator 生成受控模拟结果，Evidence Judge 做独立语义裁决。"
+        "三角色的完整协同闭环已在 AgentTeams 早期版本中真实运行；Manager 常驻规划，"
+        "Curator 和 Judge 按场景条件触发，确定性规则与固定结果是低成本快速路径。"
+        "每个结论都进入同一条证据合同。",
+    ),
+    Scene(
+        "slide:9",
         "公开可复现的真实被测 Agent",
         "EditFlow 基于 Agno 和 DeepSeek，使用 PostgreSQL 保存 Session，通过 HTTP 和 SSE 暴露 Target，"
         "并把五个修图工具交给 external execution。模型推理、协议、会话和工具决策都是真实的；"
@@ -87,7 +96,7 @@ SCENES = (
         "这样既保留真实决策难度，又能让评委在本地复现。",
     ),
     Scene(
-        "slide:7",
+        "slide:10",
         "Before 暴露模型方差",
         "headline Case 要求一步完成调亮、雪山背景、四比五裁剪，并保持人物。Broad Prompt 允许自由修图工具"
         "吞并组合编辑。对同一个冻结 Case 和 Manifest 连续执行五个独立 Attempt，只有两次通过，"
@@ -95,7 +104,7 @@ SCENES = (
         "这说明跑一次成功远远不够。",
     ),
     Scene(
-        "slide:8",
+        "slide:11",
         "Skill 把 Prompt Diff 变成风险资产",
         "Codex 先读取 prompt regression governance Skill，冻结 Git、Before Prompt SHA 和行为不变量，"
         "再通过 MCP 查询已有 Case。已有覆盖被标记为 Reuse，需要增强断言的标记为 Change，"
@@ -104,7 +113,7 @@ SCENES = (
         "连同人话报告一起进入仓库，供审阅与追溯。",
     ),
     Scene(
-        "slide:9",
+        "slide:12",
         "最小 Prompt 修复与身份变化",
         "Codex 只修改模型可见边界：retouch photo 只负责亮度和对比度；背景素材必须搜索后应用；比例必须裁剪；"
         "每一步继续消费最新的 output image reference，人物保护传播到相关工具。HTTP 适配层没有增加关键词路由，"
@@ -126,7 +135,7 @@ SCENES = (
         "评委可以直接看到 Agent 做了什么，以及为什么通过。",
     ),
     Scene(
-        "slide:12",
+        "slide:15",
         "一次真实采集，五次零真实调用重放",
         "对于必须观察真实结果的工具，AgentRig 先通过本地 MCP 执行一次 inspect image，并把 source 等于 real tool"
         "的事件持久化。Codex 只能从这条事件创建 Sample 草稿；人类确认来源和适用边界后批准。"
@@ -141,7 +150,7 @@ SCENES = (
         "最终三个 Attempt 全部通过。不同入口共享的是可治理资产和证据结构，不是同一种语言模型能力。",
     ),
     Scene(
-        "slide:14",
+        "slide:17",
         "为什么这是平台，不是 Demo 脚本",
         "AgentRig 用 Driver 接入 HTTP SSE、OpenAI compatible、AgentScope 和 AG UI；用 Provider Chain 在 Fixture、"
         "审核 Sample、Simulator 与 Real Tool 之间切换；用 Canonical Manifest、Cell、Attempt、Event 和 Timeline"
@@ -149,21 +158,21 @@ SCENES = (
         "项目隔离、耐久任务、审计日志、生产 Trace 回灌和失败模式让闭环可以进入团队工程。",
     ),
     Scene(
-        "slide:15",
+        "slide:18",
         "从 AgentScope 实践到开源合同",
         "AgentRig 与 AgentScope 来自同一类真实评测实践：真实生产 Agent 工程中沉淀了十余个评测与治理 Skill，覆盖用例构建、回归执行、会话挖掘与样本采集。不同之处是，AgentRig 把内部依赖"
         "抽成协议无关、可本地部署、可独立组合的开源合同。公开 EditFlow 证明流程可以复现；真实 lassist 兼容验收作为附录，"
         "证明平台并不只适配一个专门为比赛构建的 Demo Agent。AgentTeams 多角色只在动态策展或语义裁决真正需要时启用。",
     ),
     Scene(
-        "slide:16",
+        "slide:19",
         "真实生产项目中的常态使用",
         "这套 Skill 治理不是为比赛准备的演示：在真实生产 Agent 工程中，同一个提示词回归治理 Skill "
         "驱动完成了 Router 上线捆绑的四表面描述瘦身——五十五个 Cell 的正式矩阵、两千零六十四项单测基线、"
         "四轮实证输入修正与 before 归因闭环，最终以硬性规则二十比二十、带披露的 ACCEPT 报告归档。",
     ),
     Scene(
-        "slide:18",
+        "slide:22",
         "证据化结论与诚实边界",
         "本次正式录制得到 Before 二比三、Candidate headline 五比零、最终矩阵三十比零、Sample replay 五比零、"
         "Web 助手三比零，EditFlow 三十四项非 Live 测试通过，真实浏览器可访问性没有严重或致命问题。"
@@ -210,8 +219,8 @@ def render_deck_pages(work_dir: Path) -> dict[int, Path]:
         match = re.search(r"-(\d+)\.png$", path.name)
         if match:
             pages[int(match.group(1))] = path
-    if len(pages) != 18:
-        raise RuntimeError(f"Expected 18 rendered deck pages, got {len(pages)}")
+    if len(pages) != 22:
+        raise RuntimeError(f"Expected 22 rendered deck pages, got {len(pages)}")
     return pages
 
 

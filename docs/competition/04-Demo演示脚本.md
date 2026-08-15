@@ -60,7 +60,7 @@ Codex Preview 1 Cell / 5 Attempts / 0 skipped，携带 Manifest Hash 提交。�
 
 ## 第四幕｜Candidate 与 30 次回归（约 65 秒）
 
-先展示 headline 同 Manifest 从 3/5 到 5/5；再展示六 Case × 五次的最终矩阵。至少展开一条混合修图
+先展示 headline 同 Manifest 从 2/5 到 5/5；再展示六 Case × 五次的最终矩阵。至少展开一条混合修图
 Timeline，画面必须能看见：
 
 - `inspect_image` 在改变图片前；

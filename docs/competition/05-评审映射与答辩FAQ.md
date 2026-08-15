@@ -7,7 +7,7 @@
 | 场景价值 | 真实工具昂贵/有副作用，纯 Mock 绕过决策 | Real MCP 采一次，Sample-only 回放五次 |
 | Agent 与 Skill | EditFlow Agno Agent；项目 Prompt Skill；AgentRig MCP | Codex 读取 Skill、治理 Case、修 Prompt |
 | 技术真实性 | DeepSeek、HTTP/SSE、Session、Prompt SHA、Manifest | Before/Candidate 身份和 Timeline 下钻 |
-| 评测可靠性 | Cell 下独立 Attempt；Rule 与生命周期解耦 | 同 Case 从 3/5 到 5/5，最终 30/30 |
+| 评测可靠性 | Cell 下独立 Attempt；Rule 与生命周期解耦 | 同 Case 从 2/5 到 5/5，最终 30/30 |
 | 安全治理 | Case/Sample Draft；人类批准；confirm 与 submit 分离 | 展示两次人工边界 |
 | 失败诊断 | behavior、case、evaluator、infra 分离 | 展示 Fixture miss 先修 Case，不算行为回归 |
 | 普通用户可用 | 模型助手自然语言生成可编辑 Plan | Plan → confirm → submit → 3/3 Run |
@@ -69,5 +69,6 @@ Attempt 为 0。准确说法是“该 Replay Run 无真实工具尝试”，不�
 
 ### 目前还没有闭合什么？
 
-正式视频尚未录制，彩排 ID 不能冒充正式 ID；Sample 只覆盖 `inspect_image`；动态 real-MCP 引用等值以
-Timeline 证明，Rule 还没有通用跨事件变量；AgentTeams 外部 Live、Kubernetes 和目标容量需独立环境验收。
+正式录制已完成，全部 ID 来自干净录制库并记录在台账；Sample 只覆盖 `inspect_image`；动态 real-MCP
+引用等值以 Timeline 证明，Rule 还没有通用跨事件变量；AgentTeams 外部集群 Live、Kubernetes 和目标容量
+需独立环境验收。

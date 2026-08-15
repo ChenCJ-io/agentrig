@@ -168,7 +168,9 @@ def copy_source_snapshot(destination: Path) -> int:
         COMPETITION_DIR,
         destination / "docs" / "competition",
         dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "lassist-*.png"),
+        ignore=shutil.ignore_patterns(
+            "__pycache__", "*.pyc", "lassist-*.png", "15-*", "16-*", "17-*"
+        ),
     )
     return count
 
@@ -341,7 +343,7 @@ def write_readme(path: Path, *, source_dirty: bool) -> None:
     content = (
         f"# GOAI 2026 · AgentRig 初赛{status}\n\n"
         "赛道：Agent Infra 新智基座  \n"
-        "项目：AgentRig——真实 Agent 的低副作用回归测试台  \n"
+        "项目：AgentRig——多 Agent 协同的低副作用评测与回归平台  \n"
         "材料快照：2026-08-14（Asia/Shanghai）\n\n"
         "## 建议上传顺序\n\n"
         "1. 从 `01-报名材料/09-初赛提交表单.md` 复制项目字段与作品简介。\n"
@@ -422,10 +424,9 @@ def write_validation(
         f"- {gitleaks_text}\n\n"
         "## 未完成的外部事实\n\n"
         "- 可选的真人旁白版视频与更短剪辑（当前为正式录制合成版 + 合成旁白）；\n"
-        "- AgentScope v2.0.6 endpoint Live acceptance；\n"
-        "- AgentTeams v1.2.2 集群 observation/compat report；\n"
+        "- AgentScope v2.0.6 endpoint 与 AgentTeams 外部集群的独立环境 Live 验收；\n"
         "- Kubernetes/Helm、目标容量/SLO、公开 Release/Tag；\n"
-        "- 团队信息、仓库公开、协议接受、上传与最终提交。\n\n"
+        "- 平台/邮件提交、协议接受与上传后回验（团队信息与仓库公开已完成）。\n\n"
         "当前为 dirty 候选包时，参赛人提交源码后必须在干净 checkout 重跑 "
         "`validate-evidence --require-clean-source` 与 CI，再重建本包。\n",
     )
@@ -557,7 +558,7 @@ def main() -> None:
         slides = count_pptx_slides(COMPETITION_DIR / "AgentRig-GOAI-2026-初赛方案.pptx")
         subtitles = srt_metadata(srt_source)
         video = video_metadata(ffmpeg, video_source)
-        if intro_length() > 500 or slides != 18 or pdf["pages"] != 18:
+        if intro_length() > 500 or slides != 22 or pdf["pages"] != 22:
             raise RuntimeError("competition document constraints failed")
         if not 360 <= video["duration_seconds"] <= 600:
             raise RuntimeError("demo video must remain between 6:00 and 10:00")

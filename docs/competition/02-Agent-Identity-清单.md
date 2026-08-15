@@ -1,8 +1,10 @@
 # Agent Identity 清单
 
-> 定位说明（2026-08-14）：本清单描述 AgentTeams 语义协作扩展，不是 AgentRig 最小运行前提。
-> 本次 EditFlow 主演示使用确定性 Core + fixture/sample + rule；只有需要复杂规划、生成式模拟或语义裁决时，
-> 才启用 Manager / Curator / Judge。三个角色不会为了参赛形式被强制加入每个 Run。
+> 定位说明（2026-08-15）：本方案以 AgentTeams 为协同设计基点，编排三个不同职能 Agent——
+> Evaluation Manager（目标理解与计划）、Simulation Curator（受控模拟结果）、Evidence Judge
+> （独立语义裁决）。Manager 常驻规划；Curator/Judge 按场景条件触发；确定性 Rule/Fixture 是
+> 低成本快速路径。协同的完整历史 Live 运行在 AgentTeams v1.1.2 中完成；我们不为参赛形式把
+> 三个角色强制塞进每个 Run，但每个结论都进入同一条证据合同。
 
 ## 1. 系统协作关系
 

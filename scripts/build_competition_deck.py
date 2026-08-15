@@ -30,7 +30,7 @@ PROD_LIVE_3 = LIVE / "prod-live-03-report.png"
 PROD_PI = LIVE / "prod-pi-report.png"
 PROD_PLATFORM = LIVE / "prod-platform-batches.png"
 
-W, H, TOTAL = 13.333, 7.5, 18
+W, H, TOTAL = 13.333, 7.5, 22
 INK, TEXT, MUTED, FAINT = "121617", "2B312F", "67706B", "929A95"
 DARK, PAPER, WHITE, LINE = "171B1F", "F7F6F2", "FFFFFF", "D8DDD9"
 BLUE, BLUE_SOFT = "285CF5", "E9EFFF"
@@ -285,10 +285,55 @@ def build() -> Presentation:
     )
     footer(slide, 1, dark=True)
 
-    # 02 — problem
+
+    # 02 — one-page overview
     slide = new_slide(
         prs,
         2,
+        "一页纸速览",
+        "AgentRig：多 Agent 低副作用评测与回归平台",
+        "以 AgentTeams 为协同基点的三 Agent 评测编排；真实决策、受控副作用、可审计证据。",
+    )
+    dims = [
+        ("场景价值 25%", "Prompt/工具描述变更后的发布回归", "公开 EditFlow 全链 + 真实生产项目日常使用", BLUE, BLUE_SOFT),
+        ("多 Agent 协同 25%", "AgentTeams 三职能 Agent", "Manager 规划 · Curator 受控模拟 · Judge 独立裁决（v1.1.2 历史 Live）", GREEN, GREEN_SOFT),
+        ("Skill 工程 25%", "11 个 Skill 合同 + PI 迭代存档", "输入输出/触发/依赖/失败/安全边界齐备,生产工程常态使用", AMBER, AMBER_SOFT),
+        ("工程落地 20% + 开源 5%", "可运行 · 可复现 · 可审计", "CI 全绿 · MIT 双仓公开 · SBOM/Gitleaks · 全部 ID 可回溯", RED, RED_SOFT),
+    ]
+    for i, (tag, head, detail, accent, soft) in enumerate(dims):
+        x = 0.75 + (i % 2) * 6.05
+        y = 2.0 + (i // 2) * 1.62
+        box(slide, x, y, 5.75, 1.42, fill=WHITE, stroke=LINE)
+        chip(slide, tag, x + 0.24, y + 0.16, 1.85, fill=soft, color=accent)
+        text(slide, head, x + 2.3, y + 0.18, 3.3, 0.3, size=12.5, color=INK, bold=True)
+        text(slide, detail, x + 0.24, y + 0.72, 5.3, 0.55, size=9.6, color=MUTED, spacing=1.25)
+    box(slide, 0.75, 5.44, 11.83, 1.32, fill=DARK, stroke=None)
+    stats = [
+        ("2/5 → 5/5", "Before → Candidate"),
+        ("30 / 30", "六 Case 回归矩阵"),
+        ("5/5 · 0 真实调用", "Sample 回放"),
+        ("3 Agent", "AgentTeams 协同"),
+        ("11 + 8", "Skill 合同 + CI Job 全绿"),
+    ]
+    for i, (v, l) in enumerate(stats):
+        x = 1.05 + i * 2.34
+        text(slide, v, x, 5.68, 2.2, 0.35, size=17, color=WHITE, bold=True, font="Helvetica Neue")
+        text(slide, l, x, 6.22, 2.2, 0.24, size=8.6, color="A8B0AC")
+    text(
+        slide,
+        "开发者 Codex/CLI 与普通用户 Web 助手共用同一条证据合同；完整证据台账见末页。",
+        0.75,
+        6.95,
+        11.8,
+        0.22,
+        size=9,
+        color=MUTED,
+    )
+
+    # 02 — problem
+    slide = new_slide(
+        prs,
+        3,
         "真实问题",
         "Prompt 改一行，Agent 行为可能变五层",
         "最终回答相似，不代表工具选择、参数、顺序和结果引用仍然正确。",
@@ -344,7 +389,7 @@ def build() -> Presentation:
     # 03 — boundary
     slide = new_slide(
         prs,
-        3,
+        4,
         "产品边界",
         "AgentRig 不替 Agent 回答，只治理评测边界",
         "模型仍真实推理；工具结果来源、事实记录与裁决责任被独立控制。",
@@ -402,7 +447,7 @@ def build() -> Presentation:
     # 04 — closed loop
     slide = new_slide(
         prs,
-        4,
+        5,
         "平台闭环",
         "Identity → Asset → Run → Evidence → Gate",
         "每一层都有稳定身份；历史 Run 不被修复动作覆盖。",
@@ -461,7 +506,7 @@ def build() -> Presentation:
     # 05 — two entries
     slide = new_slide(
         prs,
-        5,
+        6,
         "双入口",
         "不同能力可以给出不同方案，共享同一种证据合同",
         "Codex 面向开发者闭环；Web 助手面向产品、运营与测试人员。",
@@ -503,10 +548,126 @@ def build() -> Presentation:
         align=PP_ALIGN.CENTER,
     )
 
+
+    # 07 — three-agent collaboration design
+    slide = new_slide(
+        prs,
+        7,
+        "多 Agent 协同",
+        "以 AgentTeams 为基点的三职能 Agent 设计",
+        "Agent 分工、任务拆解、上下文传递、结果验证、异常分支与安全边界一页讲清。",
+    )
+    roles = [
+        ("MANAGER", "Evaluation Manager", "目标理解 → 资产选择 → EvaluationPlan → 确认后提交 → 诊断",
+         "常驻规划;不能绕过人工确认,不能伪造 Run", BLUE, BLUE_SOFT),
+        ("CURATOR", "Simulation Curator", "领取 invocation → 读取脱敏冻结输入 → 生成 Schema 合法模拟结果",
+         "条件触发;读不到 rubric,不为“通过评测”优化", AMBER, AMBER_SOFT),
+        ("JUDGE", "Evidence Judge", "冻结 rubric + 脱敏证据 → pass/fail/inconclusive + 事件引用",
+         "条件触发;不遵循被测输出指令,不覆盖 Rule", GREEN, GREEN_SOFT),
+    ]
+    for i, (tag, name, flow, bound, accent, soft) in enumerate(roles):
+        x = 0.75 + i * 4.05
+        box(slide, x, 2.0, 3.85, 2.62, fill=WHITE, stroke=LINE)
+        chip(slide, tag, x + 0.24, 2.22, 1.1, fill=soft, color=accent)
+        text(slide, name, x + 0.24, 2.72, 3.4, 0.28, size=13.5, color=INK, bold=True)
+        text(slide, flow, x + 0.24, 3.14, 3.42, 0.72, size=9.4, color=TEXT, spacing=1.3)
+        text(slide, bound, x + 0.24, 4.02, 3.42, 0.44, size=8.8, color=accent, spacing=1.25)
+    text(slide, "任务拆解与上下文传递", 0.78, 4.92, 3.4, 0.26, size=12.5, color=INK, bold=True)
+    text(
+        slide,
+        "用户目标 → Manager 拆解为 Plan/Matrix → Curator/Judge 以受控 invocation 领取任务;"
+        "上下文按角色隔离传递:Curator 只见冻结输入,Judge 只见冻结 rubric 与脱敏证据,"
+        "彼此不可见;全部往返以 Matrix request/response 事件 ID 进入 Timeline。",
+        0.78,
+        5.28,
+        6.9,
+        0.95,
+        size=9.6,
+        color=MUTED,
+        spacing=1.35,
+    )
+    text(slide, "结果验证与异常分支", 8.05, 4.92, 3.4, 0.26, size=12.5, color=INK, bold=True)
+    text(
+        slide,
+        "Rule 先做确定性验证,Judge 只补语义裁决;角色失败返回结构化错误而非伪造结果;"
+        "超时/不可用走 fail-closed 门禁;Case/Sample 审批只在 Web 人工入口,MCP 无此权限。",
+        8.05,
+        5.28,
+        4.5,
+        0.95,
+        size=9.6,
+        color=MUTED,
+        spacing=1.35,
+    )
+
+
+    # 08 — three-agent live evidence
+    slide = new_slide(
+        prs,
+        8,
+        "协同实证",
+        "三角色协同的真实 Live 链与诚实状态",
+        "协同不是纸面设计:完整三角色闭环已在 AgentTeams v1.1.2 真实运行。",
+    )
+    box(slide, 0.75, 2.02, 7.4, 3.6, fill="0E1418", stroke=None)
+    chain = [
+        ("01", "用户确认目标", "EvaluationPlan revision 建立"),
+        ("02", "Manager 提交", "Plan → Matrix request 任务拆解"),
+        ("03", "Curator/Judge 领取", "role MCP invocation·上下文隔离"),
+        ("04", "Matrix response", "候选结果/裁决 + 结构化失败"),
+        ("05", "证据合同", "Rule + Judge evidence refs 入 Timeline"),
+    ]
+    for i, (num, head, detail) in enumerate(chain):
+        y = 2.32 + i * 0.64
+        text(slide, num, 1.05, y, 0.5, 0.26, size=11, color="80A9FF", bold=True, font="Menlo")
+        text(slide, head, 1.7, y, 2.4, 0.26, size=11.5, color=WHITE, bold=True)
+        text(slide, detail, 4.2, y, 3.8, 0.26, size=9.4, color="A8B0AC")
+    box(slide, 8.45, 2.02, 4.13, 1.62, fill=GREEN_SOFT, stroke=None)
+    text(slide, "已完成", 8.7, 2.22, 2.0, 0.24, size=9, color=GREEN, bold=True)
+    text(
+        slide,
+        "AgentTeams v1.1.2\n三角色历史 Live 闭环",
+        8.7,
+        2.56,
+        3.7,
+        0.72,
+        size=13,
+        color=GREEN,
+        bold=True,
+        spacing=1.25,
+    )
+    box(slide, 8.45, 3.86, 4.13, 1.76, fill=AMBER_SOFT, stroke=None)
+    text(slide, "诚实状态", 8.7, 4.04, 2.0, 0.24, size=9, color=AMBER, bold=True)
+    text(
+        slide,
+        "v1.2.2 双基线兼容包已实现\n外部集群 Live 观测 Pending\n不用旧证据冒充新版本",
+        8.7,
+        4.38,
+        3.75,
+        1.0,
+        size=10.5,
+        color=AMBER,
+        spacing=1.35,
+    )
+    box(slide, 0.75, 5.92, 11.83, 0.92, fill=DARK, stroke=None)
+    text(
+        slide,
+        "Manager 常驻规划;Curator / Judge 按场景条件触发;确定性 Rule / Fixture 是低成本快速路径——"
+        "不为参赛形式把三角色塞进每个 Run,但每个结论都进入同一条证据合同。",
+        1.05,
+        6.14,
+        11.2,
+        0.55,
+        size=10.5,
+        color=WHITE,
+        bold=True,
+        spacing=1.3,
+    )
+
     # 06 — EditFlow
     slide = new_slide(
         prs,
-        6,
+        9,
         "公开被测对象",
         "EditFlow：可公开、可复现、仍然足够真实",
         "以 lassist 的真实修图链路为基础，去除私有素材、版本与基础设施依赖。",
@@ -566,7 +727,7 @@ def build() -> Presentation:
     # 07 — Before
     slide = new_slide(
         prs,
-        7,
+        10,
         "真实回归 · Before",
         "同一冻结 Case 跑 5 次：2 Pass / 3 Behavior Fail",
         "单次成功掩盖模型方差；父 Run completed 不等于业务验收通过。",
@@ -655,7 +816,7 @@ def build() -> Presentation:
     # 08 — case governance
     slide = new_slide(
         prs,
-        8,
+        11,
         "Codex + Skill",
         "不是盲目增加用例，而是按 Prompt Diff 治理风险并沉淀存档",
         "项目 Skill 先冻结身份与不变量、分类资产，最终把整次迭代固化为 PI 存档。",
@@ -722,7 +883,7 @@ def build() -> Presentation:
     # 09 — prompt identity
     slide = new_slide(
         prs,
-        9,
+        12,
         "最小修复",
         "只改模型可见边界，并用 Prompt SHA 证明 Candidate 已生效",
         "HTTP/SSE 适配层没有加入关键词路由，也没有为视频写死答案。",
@@ -774,7 +935,7 @@ def build() -> Presentation:
     # 10 — candidate matrix
     slide = new_slide(
         prs,
-        10,
+        13,
         "Candidate 回归",
         "同 Case 5/5；六 Case 矩阵 30/30",
         "每次 Attempt 都独立执行；没有用一个绿色总分掩盖方差。",
@@ -815,7 +976,7 @@ def build() -> Presentation:
     # 11 — timeline
     slide = new_slide(
         prs,
-        11,
+        14,
         "行为证据",
         "不只验证最终文字：完整 Timeline 可以下钻",
         "工具参数、Provider 来源、结果引用与裁决都关联同一 Attempt。",
@@ -851,7 +1012,7 @@ def build() -> Presentation:
     # 12 — sample
     slide = new_slide(
         prs,
-        12,
+        15,
         "低副作用核心",
         "真实工具结果，如何变成可审核的零真实调用回归资产",
         "真实来源、人工责任和重复成本被放进同一条证据链。",
@@ -902,7 +1063,7 @@ def build() -> Presentation:
     # 13 — assistant
     slide = new_slide(
         prs,
-        13,
+        16,
         "普通用户入口",
         "自然语言规划，确认与提交分离",
         "无需理解 MCP；成本边界和人工责任仍由 Core 强制执行。",
@@ -934,7 +1095,7 @@ def build() -> Presentation:
     # 14 — platform
     slide = new_slide(
         prs,
-        14,
+        17,
         "平台优势",
         "不是 EditFlow 专用脚本，而是可替换的评测控制面",
         "框架、结果来源、裁决方式和消费入口彼此解耦。",
@@ -969,7 +1130,7 @@ def build() -> Presentation:
     # 15 — ecosystem
     slide = new_slide(
         prs,
-        15,
+        18,
         "开源生态",
         "把 AgentScope 的真实闭环经验，抽成可本地部署的开放合同",
         "AgentRig 不是复制一个内部页面，而是开放身份、资产、运行、证据和 Gate。",
@@ -1024,7 +1185,7 @@ def build() -> Presentation:
     # 16 — real production usage (live sessions)
     slide = new_slide(
         prs,
-        16,
+        19,
         "真实生产使用",
         "同一个 Skill，在真实生产 Agent 工程里天天在跑",
         "Claude Code / Codex 按 prompt-regression-governance 驱动真实项目的提示词优化与回归验收。",
@@ -1049,7 +1210,7 @@ def build() -> Presentation:
     # 17 — production PI acceptance report
     slide = new_slide(
         prs,
-        17,
+        20,
         "生产级验收",
         "生产项目的 PI 验收报告：实证迭代、如实披露",
         "55 Cell 矩阵、2064 项单测基线、v1→v4 四轮输入修正与 before 归因闭环。",
@@ -1068,10 +1229,47 @@ def build() -> Presentation:
         align=PP_ALIGN.CENTER,
     )
 
+
+    # 21 — compliance, risk, roadmap
+    slide = new_slide(
+        prs,
+        21,
+        "合规与落地",
+        "工具与云产品、贡献边界、风险控制与落地计划",
+        "真实使用与兼容规划分开陈述;商业服务、许可证与迁移成本一页披露。",
+    )
+    cols = [
+        ("工具与云产品", [
+            "AgentTeams v1.1.2/v1.2.2 — 协同基点(真实 Live/兼容包)",
+            "Agno 2.6.11 + DeepSeek(商业 API,密钥环境变量注入,可替换任意 OpenAI 兼容模型)",
+            "Codex / Claude Code — 开发者入口(真实会话)",
+            "PostgreSQL 17.7 · MCP · OTLP — 标准协议与存储",
+            "AgentScope 2.0 / AG-UI Driver — 已实现,外部 Live Pending",
+        ], BLUE, BLUE_SOFT),
+        ("贡献与许可证", [
+            "基于团队真实评测实践重构;本次新增:开源内核、公开 EditFlow 场景、正式录制证据链、PI 存档合同",
+            "MIT 双仓公开;SBOM(CycloneDX);依赖审计 0 漏洞",
+            "Gitleaks 全历史 0 泄漏;私有项目资产不进入公开物料",
+            "数据来源:公开确定性 Fixture,不上传真实图片",
+        ], GREEN, GREEN_SOFT),
+        ("风险控制与落地", [
+            "模型可替换、Driver/Provider 可插拔,无单点商业依赖",
+            "fail-closed 门禁;人工审批边界;append-only 审计",
+            "复赛里程碑:AgentTeams v1.2.2 集群 Live → K8s/Helm → 容量与 SLO",
+            "目标用户:交付真实 Agent 的工程团队(评测/回归/发布门禁)",
+        ], AMBER, AMBER_SOFT),
+    ]
+    for i, (title_value, items, accent, soft) in enumerate(cols):
+        x = 0.75 + i * 4.05
+        box(slide, x, 2.0, 3.85, 4.75, fill=WHITE, stroke=LINE)
+        chip(slide, f"0{i + 1}", x + 0.24, 2.2, 0.5, fill=soft, color=accent)
+        text(slide, title_value, x + 0.9, 2.22, 2.8, 0.3, size=13, color=INK, bold=True)
+        bullets(slide, items, x + 0.24, 2.78, 3.4, 3.8, size=9.2, color=MUTED, gap=8)
+
     # 18 — ledger
     slide = new_slide(
         prs,
-        18,
+        22,
         "证据台账",
         "正式录制已闭环；全部证据来自干净录制库",
         "已证明的事实与尚未证明的边界必须同时出现在结论里。",
