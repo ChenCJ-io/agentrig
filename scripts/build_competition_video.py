@@ -157,6 +157,13 @@ SCENES = (
     ),
     Scene(
         "slide:16",
+        "真实生产项目中的常态使用",
+        "这套 Skill 治理不是为比赛准备的演示：在真实生产 Agent 工程中，同一个提示词回归治理 Skill "
+        "驱动完成了 Router 上线捆绑的四表面描述瘦身——五十五个 Cell 的正式矩阵、两千零六十四项单测基线、"
+        "四轮实证输入修正与 before 归因闭环，最终以硬性规则二十比二十、带披露的 ACCEPT 报告归档。",
+    ),
+    Scene(
+        "slide:18",
         "证据化结论与诚实边界",
         "本次正式录制得到 Before 二比三、Candidate headline 五比零、最终矩阵三十比零、Sample replay 五比零、"
         "Web 助手三比零，EditFlow 三十四项非 Live 测试通过，真实浏览器可访问性没有严重或致命问题。"
@@ -203,8 +210,8 @@ def render_deck_pages(work_dir: Path) -> dict[int, Path]:
         match = re.search(r"-(\d+)\.png$", path.name)
         if match:
             pages[int(match.group(1))] = path
-    if len(pages) != 16:
-        raise RuntimeError(f"Expected 16 rendered deck pages, got {len(pages)}")
+    if len(pages) != 18:
+        raise RuntimeError(f"Expected 18 rendered deck pages, got {len(pages)}")
     return pages
 
 
@@ -247,7 +254,7 @@ async def synthesize_narration(
 _KOKORO_PIPELINE = None
 
 
-def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.78) -> None:
+def synthesize_kokoro_narration(value: str, output: Path, *, voice: str, speed: float = 0.82) -> None:
     """Local neural TTS (Kokoro-82M-v1.1-zh) with English terms via misaki G2P."""
     global _KOKORO_PIPELINE
     import numpy as np
@@ -475,7 +482,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--engine", choices=("edge", "macos", "kokoro"), default="edge")
     parser.add_argument("--kokoro-voice", default="zf_001")
-    parser.add_argument("--kokoro-speed", type=float, default=0.78)
+    parser.add_argument("--kokoro-speed", type=float, default=0.82)
     parser.add_argument("--voice", default="zh-CN-YunxiNeural")
     parser.add_argument("--rate", default="-4%")
     parser.add_argument("--pitch", default="-2Hz")

@@ -1,6 +1,6 @@
 # 初赛方案 PPT 讲稿
 
-完整 Review 版共 16 页：13 页主叙事 + 3 页附录。建议陈述 8—10 分钟；正式比赛如有更短硬限制，
+完整版共 18 页：13 页主叙事 + 5 页实证与附录。建议陈述 8—10 分钟；正式比赛如有更短硬限制，
 保留第 1、2、4、6—13 页，其余移到答辩附录。
 
 ## 01｜让 Agent 的每次变化都有证据
@@ -88,10 +88,22 @@ Real Tool；Rule/Judge、人工审核、Release Gate、生产 Trace、失败模�
 AgentRig 与 AgentScope 共享同一类评测闭环经验，并复用了部分前端工作台设计，但把内部依赖抽成协议无关、
 可本地部署的 MIT 开源合同。公开 EditFlow 证明可复现；真实 lassist 兼容验证证明不是只适配演示 Agent。
 
-## 16｜证据台账与诚实边界
+## 16｜真实生产使用
+
+这套治理不是为比赛准备的:在真实生产 Agent 工程里,同一个 prompt-regression-governance Skill
+由 Claude Code / Codex 以 goal 模式整段驱动——建 PI 档案、冻结基线、精读能力路由、手术级 diff
+瘦身、哨兵异常归因、逐波回归。页面三张实拍:完整会话、失败归因过程、v4 终态汇总。
+
+## 17｜生产级 PI 验收报告
+
+PI-20260815-01(Router 上线捆绑,四表面描述瘦身 −16%):55 Cell 正式矩阵、2064 项单测基线、
+v1→v4 四轮实证输入修正、既有缺口 before 归因闭环,最终 ACCEPT 带披露——语义 1 个 Cell 4/5 的
+判定口径争议如实写进报告。证据不粉饰,是这套方法的核心卖点。
+
+## 18｜证据台账与诚实边界
 
 正式录制硬证据：Before 2/5、Candidate headline 5/5、最终矩阵 30/30、Sample replay 5/5、Web Run 3/3、
-EditFlow 34 tests、真实 Browser E2E 与 Axe 0 serious/critical。正式拍摄必须生成新 Run ID；Sample 仅覆盖
+EditFlow 34 tests、真实 Browser E2E 与 Axe 0 serious/critical。全部 Run ID 来自干净录制库并记录在台账；Sample 仅覆盖
 `inspect_image`；动态引用等值以 Timeline 展示；AgentTeams 外部 Live 和目标容量不冒充本次结论。
 
 收束句：Codex 负责思考和改变软件，AgentRig 负责把每次改变变成可复用、可执行、可追溯的评测资产。

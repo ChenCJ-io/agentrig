@@ -557,7 +557,7 @@ def main() -> None:
         slides = count_pptx_slides(COMPETITION_DIR / "AgentRig-GOAI-2026-初赛方案.pptx")
         subtitles = srt_metadata(srt_source)
         video = video_metadata(ffmpeg, video_source)
-        if intro_length() > 500 or slides != 16 or pdf["pages"] != 16:
+        if intro_length() > 500 or slides != 18 or pdf["pages"] != 18:
             raise RuntimeError("competition document constraints failed")
         if not 360 <= video["duration_seconds"] <= 600:
             raise RuntimeError("demo video must remain between 6:00 and 10:00")

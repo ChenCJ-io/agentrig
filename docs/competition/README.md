@@ -41,7 +41,7 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 |---|---|
 | [01 作品简介](./01-作品简介.md) | 报名系统 500 字以内正文 |
 | [02 Agent Identity](./02-Agent-Identity-清单.md) | 可选 Manager/Curator/Judge 边界 |
-| [03 16 页 PPT 讲稿](./03-初赛方案PPT-讲稿.md) | 完整陈述与删减基线 |
+| [03 18 页 PPT 讲稿](./03-初赛方案PPT-讲稿.md) | 完整陈述与删减基线 |
 | [04 Demo 演示脚本](./04-Demo演示脚本.md) | Codex 主流程与 Web 辅助流程 |
 | [05 FAQ](./05-评审映射与答辩FAQ.md) | 真实性、AgentScope、Mock、差异规划答辩 |
 | [06 检查清单](./06-提交与开源检查清单.md) | 录制、开源、媒体和提交门禁 |
@@ -53,7 +53,7 @@ Codex 与 Web Assistant 不要求输出同一方案。AgentRig 提供的是统�
 | [12 lassist 附录](./12-lassist真实闭环验收.md) | 生产形态兼容证据，非公开主视频 |
 | [13 Codex + Skill + MCP](./13-Codex-Skill-MCP真实评测.md) | 开发者入口的真实工作流 |
 | [14 音视频规范](./14-音视频与录制质量规范.md) | 稳定画面与自然声音标准 |
-| `AgentRig-GOAI-2026-初赛方案.pptx/.pdf` | 16 页 Review 版方案 |
+| `AgentRig-GOAI-2026-初赛方案.pptx/.pdf` | 18 页方案 |
 | `dist/competition/media/AgentRig-GOAI-2026-Demo.*` | 9:03 正式录制合成版 MP4/SRT/JSON（画面与 ID 来自干净录制库，旁白为合成音） |
 
 内部工作文档（仅在仓库内维护，不进入提交包的 `01-报名材料/`）：

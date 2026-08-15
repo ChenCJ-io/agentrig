@@ -138,10 +138,7 @@ uv run python scripts/run_lassist_recording_suite.py --repeat 3
 - 真实 lassist 模型、HTTP/SSE、session 和工具决策；fixture 只替代 Pixcake 客户端修图副作用。
 
 浏览器已分别验收三次通过 Run 与三次失败 Run，支持 `Attempt 3/3`，Axe critical/serious 为 0，页面无
-横向溢出。截图：
-
-- `docs/competition/assets/live/lassist-pass-01-overview.png` 至 `04-acceptance.png`；
-- `docs/competition/assets/live/lassist-fail-01-overview.png` 至 `04-acceptance.png`。
+横向溢出。相关截图属内部项目资料，由参赛人本地留存备查，不进入公开仓库与提交包。
 
 ## 8. 2026-08-13 双入口实测
 
@@ -151,7 +148,7 @@ uv run python scripts/run_lassist_recording_suite.py --repeat 3
 
 - 1 Case / 1 Attempt，未确认、未提交；
 - 用户明确要求只生成计划，真实工具副作用为 0；
-- 完成截图为 `docs/competition/assets/live/lassist-assistant-plan.png`；
+- 完成截图由参赛人本地留存备查（不进入公开仓库）；
 - 本次模型响应约 228 秒，因此正式视频使用完成后的真实截图，不现场等待。
 
 ### 8.2 Codex + 项目 Skill + AgentRig MCP

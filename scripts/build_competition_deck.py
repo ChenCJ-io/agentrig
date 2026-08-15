@@ -24,8 +24,12 @@ CODEX_SKILL = LIVE / "codex-01-skill-session.png"
 CODEX_VERDICT = LIVE / "codex-02-regression-verdict.png"
 PI_ARCHIVE = LIVE / "skill-pi-archive.png"
 SKILL_ECO = LIVE / "skill-ecosystem.png"
+PROD_LIVE_1 = LIVE / "prod-live-01-session.png"
+PROD_LIVE_2 = LIVE / "prod-live-02-regression.png"
+PROD_LIVE_3 = LIVE / "prod-live-03-report.png"
+PROD_PI = LIVE / "prod-pi-report.png"
 
-W, H, TOTAL = 13.333, 7.5, 16
+W, H, TOTAL = 13.333, 7.5, 18
 INK, TEXT, MUTED, FAINT = "121617", "2B312F", "67706B", "929A95"
 DARK, PAPER, WHITE, LINE = "171B1F", "F7F6F2", "FFFFFF", "D8DDD9"
 BLUE, BLUE_SOFT = "285CF5", "E9EFFF"
@@ -1016,10 +1020,57 @@ def build() -> Presentation:
         align=PP_ALIGN.CENTER,
     )
 
-    # 16 — ledger
+    # 16 — real production usage (live sessions)
     slide = new_slide(
         prs,
         16,
+        "真实生产使用",
+        "同一个 Skill，在真实生产 Agent 工程里天天在跑",
+        "Claude Code / Codex 按 prompt-regression-governance 驱动真实项目的提示词优化与回归验收。",
+    )
+    picture(slide, PROD_LIVE_1, 0.72, 2.0, 7.2, 3.99)
+    text(
+        slide,
+        "goal 模式整段执行：建 PI 档案 → 冻结基线 → 精读能力路由 → 手术级 diff 瘦身",
+        0.72,
+        6.12,
+        7.2,
+        0.24,
+        size=9.2,
+        color=MUTED,
+        font="Menlo",
+    )
+    picture(slide, PROD_LIVE_2, 8.12, 2.0, 4.42, 2.45)
+    picture(slide, PROD_LIVE_3, 8.12, 4.6, 4.42, 2.45)
+    text(slide, "哨兵异常 → 归因 → 修用例/修输入", 8.12, 4.5 - 0.04, 4.42, 0.2, size=8.2, color=MUTED)
+    text(slide, "v4 终态:四表面 −16%,硬例 20/20", 8.12, 7.09, 4.42, 0.2, size=8.2, color=MUTED)
+
+    # 17 — production PI acceptance report
+    slide = new_slide(
+        prs,
+        17,
+        "生产级验收",
+        "生产项目的 PI 验收报告：实证迭代、如实披露",
+        "55 Cell 矩阵、2064 项单测基线、v1→v4 四轮输入修正与 before 归因闭环。",
+    )
+    picture(slide, PROD_PI, 1.48, 2.02, 10.35, 4.62)
+    text(
+        slide,
+        "docs/prompt-iterations/…/PI-20260815-01 · decision: ACCEPT（带披露） · 硬性规则 20/20 · 语义 43 Cell 干净 + 1 Cell 4/5 披露",
+        1.48,
+        6.82,
+        10.35,
+        0.24,
+        size=9.2,
+        color=MUTED,
+        font="Menlo",
+        align=PP_ALIGN.CENTER,
+    )
+
+    # 18 — ledger
+    slide = new_slide(
+        prs,
+        18,
         "证据台账",
         "正式录制已闭环；全部证据来自干净录制库",
         "已证明的事实与尚未证明的边界必须同时出现在结论里。",
@@ -1054,7 +1105,7 @@ def build() -> Presentation:
     text(slide, "诚实边界", 1.04, 4.98, 1.18, 0.25, size=10, color=AMBER, bold=True)
     text(
         slide,
-        "Sample 仅覆盖 inspect_image；动态引用等值以 Timeline 展示；正式录制必须生成新 ID；\n"
+        "Sample 仅覆盖 inspect_image；动态引用等值以 Timeline 展示；全部 ID 来自干净录制库；\n"
         "AgentTeams 外部 Live、目标容量与生产 SLO 不冒充本次 EditFlow 结论。",
         2.35,
         4.91,
