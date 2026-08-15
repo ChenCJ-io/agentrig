@@ -258,7 +258,7 @@ def build() -> Presentation:
     chip(slide, "EDITFLOW · 30 / 30 PASS", 7.03, 5.02, 2.3, fill=GREEN_SOFT, color=GREEN)
     text(
         slide,
-        "公开脱敏 Agent · 真实 Agno + DeepSeek · 本地可复现",
+        "公开 Agent · 真实 Agno + DeepSeek · 本地可复现",
         7.03,
         5.55,
         5.5,
@@ -503,7 +503,7 @@ def build() -> Presentation:
         prs,
         6,
         "公开被测对象",
-        "EditFlow：可复现、可脱敏、仍然足够真实",
+        "EditFlow：可公开、可复现、仍然足够真实",
         "以 lassist 的真实修图链路为基础，去除私有素材、版本与基础设施依赖。",
     )
     box(slide, 0.78, 2.02, 4.2, 4.5, fill=DARK, stroke=None)
@@ -972,7 +972,7 @@ def build() -> Presentation:
     picture(slide, SKILL_ECO, 0.78, 2.04, 7.35, 3.92)
     text(
         slide,
-        "真实工程 Skill 生态（lassist · 已脱敏）",
+        "真实工程 Skill 生态（lassist 生产 Agent 工程）",
         0.78,
         6.08,
         7.3,

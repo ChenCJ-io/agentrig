@@ -32,7 +32,7 @@ Target、Case、Profile、人工确认和证据合同。
 
 ## 06｜公开场景：EditFlow 修图 Agent
 
-EditFlow 是公开脱敏的 Agno + DeepSeek Agent，使用 PostgreSQL Session 和五个 external-execution
+EditFlow 是公开的 Agno + DeepSeek Agent，使用 PostgreSQL Session 和五个 external-execution
 工具。模型推理与 HTTP/SSE 真实；本地 MCP 返回公开确定性修图结果，不上传图片、不调用图片 API。
 
 ## 07｜Before：单次成功掩盖了随机回归

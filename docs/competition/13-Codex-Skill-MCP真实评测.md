@@ -94,4 +94,4 @@ baseline→candidate 的最小 Prompt Diff，并提交 `repeat_count=5` 的回�
 ## 旧 lassist 实测的角色
 
 2026-08-13 的 lassist Codex MCP 1/1 Pass 仍是兼容附录，证明 AgentRig 能接入真实生产形态 Agent；公开
-视频不展示其私有路径、Prompt、工具文案或数据。主叙事改用 EditFlow，解决脱敏和可复现问题。
+视频不展示其私有路径、Prompt、工具文案或数据。主叙事改用 EditFlow，保证公开可复现。

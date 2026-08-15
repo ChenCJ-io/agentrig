@@ -47,7 +47,7 @@ SCENES = (
         "一次 Prompt 修改，怎样获得发布证据",
         "一个 Agent 的 Prompt 只改一行，也可能同时改变工具选择、参数传播、调用顺序、结果引用和最终回答。"
         "一次演示成功，不能证明回归稳定。AgentRig 要做的，是让每次变化都留下可重复、可比较、可归因的发布证据。"
-        "本片使用公开脱敏的 EditFlow 修图 Agent，展示一条已经正式录制通过、可从干净状态完整复现的闭环。",
+        "本片使用公开的 EditFlow 修图 Agent，展示一条已经正式录制通过、可从干净状态完整复现的闭环。",
     ),
     Scene(
         "slide:2",
@@ -80,7 +80,7 @@ SCENES = (
     ),
     Scene(
         "slide:6",
-        "公开脱敏的真实被测 Agent",
+        "公开可复现的真实被测 Agent",
         "EditFlow 基于 Agno 和 DeepSeek，使用 PostgreSQL 保存 Session，通过 HTTP 和 SSE 暴露 Target，"
         "并把五个修图工具交给 external execution。模型推理、协议、会话和工具决策都是真实的；"
         "公开本地 MCP 返回确定性图片引用，不上传任何图片，也不调用第三方图片接口。"
