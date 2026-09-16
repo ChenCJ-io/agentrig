@@ -1,0 +1,21 @@
+{
+  "schema_version": "agentrig.release-policy.v1",
+  "name": "default-agent-release",
+  "policy_version": "1.0.0",
+  "blocking": {
+    "max_outcome_regressions": 0,
+    "max_infrastructure_errors": 0,
+    "max_incomplete_pairs": 0,
+    "max_incomparable_environment_pairs": 0,
+    "min_evidence_reference_validity": 1.0
+  },
+  "warnings": {
+    "max_duration_regression_ratio": 0.15,
+    "max_token_regression_ratio": 0.1
+  },
+  "minimum_samples": {
+    "comparable_pairs": 1,
+    "latency": 20,
+    "token": 1
+  }
+}

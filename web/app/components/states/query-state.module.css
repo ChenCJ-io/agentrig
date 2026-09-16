@@ -1,0 +1,40 @@
+.state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 28px;
+  color: var(--oc-muted);
+  text-align: center;
+}
+
+.state strong { color: var(--oc-graphite); font-size: 14px; }
+.state p { max-width: 480px; margin: 0; font-size: 12px; line-height: 1.65; }
+.icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 3px;
+  border: 1px solid var(--oc-line);
+  border-radius: 50%;
+  place-items: center;
+  background: var(--oc-surface-1);
+}
+.icon svg { width: 17px; height: 17px; }
+.spin { animation: spin 1s linear infinite; }
+.partial {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid #ead39a;
+  border-radius: var(--radius);
+  padding: 9px 11px;
+  background: var(--oc-amber-soft);
+  color: var(--oc-amber);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.partial svg { flex: 0 0 auto; margin-top: 1px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }

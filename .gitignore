@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+web/coverage/
+web/playwright-report/
+web/test-results/
+.env
+.env.*
+agentrig.toml
+.DS_Store
+.omx/
+.idea/
+.vscode/
+
+# playwright 截图/缓存（验证产物，不入库）
+.playwright-mcp/
+/*.png
+.agentrig/
+
+# 私有禁用词表：内部代号索引，只在本机与 CI secret 中存在
+.hygiene-denylist

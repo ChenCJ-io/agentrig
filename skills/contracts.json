@@ -1,0 +1,77 @@
+{
+  "schema_version": "agentrig.skill-contract-manifest.v1",
+  "skills": [
+    {
+      "id": "build-test-case",
+      "name": "build-test-case",
+      "role": "core",
+      "path": "skills/core/build-test-case/SKILL.md",
+      "contract_version": "agentrig.build-test-case.v1",
+      "content_sha256": "sha256:a934e13787a26a1f9361590a7c1eb0ac78216a871e5a2027b7937a048d2efa0f",
+      "allowed_tools": [
+        "get_test_case_schema",
+        "list_test_cases",
+        "find_cases_by_tool",
+        "list_tags",
+        "get_test_case",
+        "update_test_case",
+        "create_test_case",
+        "list_samples"
+      ],
+      "input_schema": "embedded:SKILL.md",
+      "output_schema": "embedded:SKILL.md",
+      "fixtures": [],
+      "compatible": {
+        "agentrig": ">=0.3.0a0,<0.4"
+      }
+    },
+    {
+      "id": "harvest-tool-samples",
+      "name": "harvest-tool-samples",
+      "role": "core",
+      "path": "skills/core/harvest-tool-samples/SKILL.md",
+      "contract_version": "agentrig.harvest-tool-samples.v1",
+      "content_sha256": "sha256:1ab712c685d886cb17ac8e0fd7dbe8c23d10489384a4a0d4170b834570466fe8",
+      "allowed_tools": [
+        "get_run",
+        "list_case_runs",
+        "get_case_run",
+        "create_sample_from_tool_call"
+      ],
+      "input_schema": "embedded:SKILL.md",
+      "output_schema": "embedded:SKILL.md",
+      "fixtures": [],
+      "compatible": {
+        "agentrig": ">=0.3.0a0,<0.4"
+      }
+    },
+    {
+      "id": "run-test-cases",
+      "name": "run-test-cases",
+      "role": "core",
+      "path": "skills/core/run-test-cases/SKILL.md",
+      "contract_version": "agentrig.run-test-cases.v1",
+      "content_sha256": "sha256:b6ef25b5fddd042dbced707b43c2892586c073ec85cb68a2f738e2fd23313f75",
+      "allowed_tools": [
+        "list_test_cases",
+        "get_target",
+        "list_driver_types",
+        "get_target_schema",
+        "check_target",
+        "get_execution_profile",
+        "run_cases",
+        "get_run",
+        "list_case_runs",
+        "get_case_run",
+        "list_case_run_events",
+        "submit_external_verdict"
+      ],
+      "input_schema": "embedded:SKILL.md",
+      "output_schema": "embedded:SKILL.md",
+      "fixtures": [],
+      "compatible": {
+        "agentrig": ">=0.3.0a0,<0.4"
+      }
+    }
+  ]
+}

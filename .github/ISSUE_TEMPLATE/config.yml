@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability / 安全漏洞
+    url: https://github.com/ChenCJ-io/agentrig/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.
+  - name: Documentation and support / 文档与支持
+    url: https://github.com/ChenCJ-io/agentrig/blob/main/SUPPORT.md
+    about: Read the support guide before opening a bug report.

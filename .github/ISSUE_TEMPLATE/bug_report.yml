@@ -1,0 +1,67 @@
+name: Bug report / 缺陷报告
+description: Report a reproducible AgentRig defect / 报告可复现的 AgentRig 缺陷
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve AgentRig. Search existing issues first and remove secrets, tokens, cookies, private conversations, and absolute local paths from all attachments.
+
+        感谢你帮助改进 AgentRig。请先搜索现有 Issue，并从附件中移除 Secret、Token、Cookie、私有对话和本机绝对路径。
+  - type: input
+    id: version
+    attributes:
+      label: AgentRig version / 版本
+      description: Package version and, when available, Git commit SHA.
+      placeholder: "0.2.0a0 / ab0aec3"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: OS, Python, Node.js, database, deployment mode, and relevant adapter.
+      placeholder: "macOS 15, Python 3.12, Node 20, SQLite, local server, http_sse"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction / 最小复现
+      description: Provide the smallest ordered steps or repository that reproduces the issue.
+      placeholder: |
+        1. Configure ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted logs or evidence / 脱敏日志或证据
+      description: Paste only the smallest relevant excerpt. Do not include credentials or private data.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist / 检查项
+      options:
+        - label: I searched existing issues / 我已搜索现有 Issue
+          required: true
+        - label: I removed secrets and private data / 我已移除 Secret 和私有数据
+          required: true
+        - label: This is not a security vulnerability / 这不是安全漏洞
+          required: true
