@@ -125,10 +125,10 @@ class PythonAgentTargetOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     entry: str = Field(
-        pattern=r"^[A-Za-z_][\w.]*:[A-Za-z_][\w.]*$",
+        pattern=r"^(?:[A-Za-z_][\w.]*|.+\.py):[A-Za-z_][\w.]*$",
         description=(
-            "module:attribute，指向 Agno Agent/Team、LangGraph 编译图或 "
-            "callable(messages)。"
+            "module:attribute 或 path/to/file.py:attribute，指向 Agno Agent/Team、"
+            "LangGraph 编译图或 callable(messages)。"
         ),
     )
     python: str = Field(

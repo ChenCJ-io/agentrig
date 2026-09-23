@@ -35,7 +35,7 @@ uv run agentrig serve
 
 | 字段 | 含义 |
 |---|---|
-| `entry` | Agent 对象在哪：`模块路径:变量名`，相对 `cwd` 导入 |
+| `entry` | Agent 对象在哪：`模块路径:变量名`（相对 `cwd` 导入），或 `文件路径.py:变量名`（所在目录不必是 Python 包） |
 | `python` | 被测项目虚拟环境里的 Python |
 | `cwd` | 项目根目录，用来导入代码、读取项目自己的 `.env` |
 
@@ -180,7 +180,119 @@ JSON，或让编码 Agent 按 [build-test-case Skill](../skills/core/build-test-
   每次调用更稳；`tool_arguments_equal` 要求参数完全相等，只适合参数很少的工具；
 - **预估成本。** 回放时模型仍是真实调用。系统提示词和工具定义很大的 Agent，每轮可能消耗数万输入 token。
 
-## 5. 安全与环境
+## 5. 把用例放进仓库：`agentrig test`
+
+用例也可以写成代码仓库里的 YAML 文件，和 Agent 代码在同一个 PR 里评审；`agentrig test` 一条命令就能
+在本地和 CI 跑完。设计见 [AR-RFC-0006](./12-用例文件与agentrig-test-RFC.md)。
+
+### 5.1 目录
+
+```text
+my-agent-repo/
+├── agentrig/
+│   ├── project.yaml        被测 Agent 与执行配置
+│   ├── entry.py            可选：入口包装，按文件路径引用
+│   └── cases/
+│       └── refund/
+│           └── confirm_first.yaml
+└── my_app/
+```
+
+### 5.2 `project.yaml`
+
+```yaml
+version: 1
+target:
+  name: support-bot
+  entry: agentrig/entry.py:agent       # 也可以写模块路径 my_app.agent:agent
+  python: .venv/bin/python             # 不填时使用运行 agentrig 的解释器
+  secret: env:OPENAI_API_KEY           # 可选：被测 Agent 自己的模型 Key
+  credential_env: OPENAI_API_KEY
+initial_state:                         # 默认世界描述，同时交给 Agent 与 Curator
+  facts:
+    - 订单 ID 形如 A123；金额单位为元
+profile:
+  curator:
+    base_url: https://model.example/v1
+    model: model-name
+    secret: env:CURATOR_API_KEY
+```
+
+- 相对路径以 `root` 为基准。`root` 默认是 `..`，即 `agentrig/` 的上一级，通常就是仓库根目录；
+- `profile` 的其他字段：`providers` 默认 `[fixture, sample, simulation_curator]`，`concurrency`
+  默认 4，`repeat` 默认 1，`case_timeout_seconds` 默认 600；用 `evidence_judge` 的用例还需要配置
+  `judge`，写法与 `curator` 相同；
+- `target` 还支持 §1.2 里的 `adapter`、`factory`、`env`、`inherit_env`、`startup_timeout_seconds`，
+  以及 `version`（默认 `local`，会传给被测代码）。
+
+### 5.3 用例文件
+
+每条用例一个文件，字段和 Web 里的用例完全一样：
+
+```yaml
+name: 退款前必须确认
+tags: [refund, p0]
+turns:
+  - user_message: 订单 A123 帮我退款
+    fixtures:
+      - {tool_name: lookup_order, match_arguments: {order_id: A123}, result: {order_id: A123, amount: 199}}
+    assertions:
+      - {kind: tool_called, tool_name: lookup_order}
+      - {kind: tool_not_called, tool_name: issue_refund}
+      - {kind: text_contains, value: 请确认}
+```
+
+- 轮次的先后顺序就是 `position`，不必手写；
+- 用例 ID 默认由路径生成，例如 `refund.confirm_first`，也可以写 `id:` 固定；
+- 用例的 `initial_state` 与项目默认值递归合并。
+
+### 5.4 运行
+
+```bash
+agentrig test                          # 跑 agentrig/cases 下的全部用例
+agentrig test agentrig/cases/refund    # 只跑一个目录
+agentrig test --tag p0 -k 退款          # 按标签、名称挑选
+agentrig test --no-curator             # 严格模式：只用 Fixture/Sample，不需要模型 Key
+agentrig test --junit report.xml --markdown report.md
+agentrig test --keep-db .agentrig/test.db   # 保留数据库，用 agentrig serve 查看完整证据
+```
+
+```text
+AgentRig · refund-bot@candidate · 2 条用例 × 1 次 · 并发 4
+  ✗ refund.confirm_first  退款前必须确认 · 1 轮 · 0.1s
+      ✗ tool_not_called: issue_refund in turn 1
+        ← 第 1 轮调用 issue_refund {"order_id": "A123", "amount": 199}，结果来自 fixture
+  ? refund.confirm_then_refund  用户确认后才退款 · 2 轮 · 0.1s
+      ? provider_exhausted: …；第 1 轮调用 issue_refund 没有可用的结果
+结果：0 通过 · 1 失败 · 1 无法判定 · …
+结论：出现回归（退出码 2）
+```
+
+| 退出码 | 含义 |
+|---|---|
+| 0 | 选中的用例全部通过 |
+| 1 | 命令或配置错误：文件不合法、缺少 Key、入口无法启动等，运行前就会发现 |
+| 2 | 出现回归：至少一条用例判定失败 |
+| 3 | 无法判定：有用例因执行错误没有结论，例如工具结果无法提供；或者没有选中任何用例 |
+
+所有文件都校验通过才会开始运行。运行前还会真实启动一次被测 Agent：入口导入失败会直接报错，
+不会等到每条用例都失败。
+
+### 5.5 在 CI 里运行
+
+```yaml
+- name: AgentRig regression
+  run: agentrig test --junit agentrig-report.xml --markdown agentrig-report.md
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    CURATOR_API_KEY: ${{ secrets.CURATOR_API_KEY }}
+```
+
+- CI 环境要能运行 `agentrig`。AgentRig 发布到 PyPI 之前，需要从源码安装：先构建 `web/`，再安装；
+- 没有 Curator Key 的环境用 `--no-curator`，此时用例要为每次工具调用准备 Fixture 或 Sample；
+- `--markdown` 生成的报告可以直接贴到 PR 评论里。
+
+## 6. 安全与环境
 
 - **真工具不会执行**：受控模式下被接管的工具不会真的调用；
 - **不用安装 AgentRig**：Driver 把只依赖标准库的 `agentrig.sdk` 复制到私有临时目录，通过 `PYTHONPATH`
@@ -193,7 +305,7 @@ JSON，或让编码 Agent 按 [build-test-case Skill](../skills/core/build-test-
 - **输出不干扰协议**：被测代码的 `print` 和日志全部写到 stderr，AgentRig 只保留最后 16 KiB 用于报错排障；
 - **只放行指定解释器**：不在 `subprocess_allowlist` 中的解释器在保存 Target 时即被拒绝。
 
-## 6. 三种工具方式
+## 7. 三种工具方式
 
 | `tool_mode` | 被测工具 | 证据 |
 |---|---|---|
@@ -201,7 +313,7 @@ JSON，或让编码 Agent 按 [build-test-case Skill](../skills/core/build-test-
 | `observe_only` | 真实执行；用例含 Fixture 或 Profile 含 Curator 时由 Planner 跳过 | `tool_call`（observed_only），结果只保留 sha256 摘要，不导出正文 |
 | `proxy` | 不支持：进程内工具已在框架层接管，Planner 按缺少 `tool_proxy_injection` 跳过 | — |
 
-## 7. 结果如何还给框架
+## 8. 结果如何还给框架
 
 - **Agno**：受控结果统一转成 JSON 文本。Agno 会把工具返回值 `str()` 后交给模型，dict 原样返回会变成
   Python repr；
@@ -211,7 +323,7 @@ JSON，或让编码 Agent 按 [build-test-case Skill](../skills/core/build-test-
 声明了结构化返回类型的工具，Fixture、Sample 与 Curator 结果都要通过该 Schema 校验。标量返回值只
 附带工具说明，不约束结果类型，因此字符串工具也可以写对象形式的 Fixture。
 
-## 8. 已知限制
+## 9. 已知限制
 
 - **Agno**
   - Agent 级 `tool_hooks` 会替换 `@tool(tool_hooks=...)` 声明的单工具 hook，这是 Agno 自身的行为；
@@ -230,7 +342,7 @@ JSON，或让编码 Agent 按 [build-test-case Skill](../skills/core/build-test-
   - 每个 CaseRun 一个进程，导入框架通常需要 1–3 秒；
   - 模型调用是真实的：需要被测 Agent 自己的模型 Key，结果存在波动，用 `repeat_count` 观察分布。
 
-## 9. 排障
+## 10. 排障
 
 | 现象 | 常见原因 |
 |---|---|

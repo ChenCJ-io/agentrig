@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import importlib
+import importlib.util
 import inspect
 import json
 import os
@@ -17,6 +19,8 @@ import queue
 import sys
 import threading
 import traceback
+from pathlib import Path
+from types import ModuleType
 from typing import IO, Any
 
 from .. import __version__
@@ -140,13 +144,30 @@ def _load(
 
 
 def _import_entry(entry: str) -> Any:
-    module_name, separator, attribute = entry.partition(":")
-    if not separator or not module_name or not attribute:
-        raise ValueError("entry must use module:attribute")
-    value: Any = importlib.import_module(module_name)
+    # rpartition：Windows 文件路径里的盘符也带冒号，属性名不会带。
+    location, separator, attribute = entry.rpartition(":")
+    if not separator or not location or not attribute:
+        raise ValueError("entry must use module:attribute or path/to/file.py:attribute")
+    value: Any = (
+        _load_file(location) if location.endswith(".py") else importlib.import_module(location)
+    )
     for part in attribute.split("."):
         value = getattr(value, part)
     return value
+
+
+def _load_file(location: str) -> ModuleType:
+    """按文件路径加载入口，不要求所在目录是 Python 包。"""
+
+    path = Path(location).resolve()
+    name = "agentrig_entry_" + hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:12]
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load entry file: {location}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _description(adapter: Adapter) -> dict[str, Any]:

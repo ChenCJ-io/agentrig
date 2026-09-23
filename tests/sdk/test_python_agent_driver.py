@@ -241,3 +241,19 @@ def test_conversation_initial_state_is_accepted_for_direct_chat() -> None:
         },
         secret_configured=False,
     )
+
+
+async def test_entry_can_be_a_file_inside_a_non_package_agentrig_directory(
+    tmp_path: Path,
+) -> None:
+    entry_file = tmp_path / "agentrig" / "entry.py"
+    entry_file.parent.mkdir()
+    entry_file.write_text("def run(messages):\n    return 'from file entry'\n", encoding="utf-8")
+    driver = PythonAgentDriver(executable_allowlist=[sys.executable])
+    session = await driver.prepare(_context(f"{entry_file}:run", cwd=str(tmp_path)))
+    try:
+        events = [event async for event in driver.send_user_message(session, "hi")]
+    finally:
+        await driver.close(session)
+
+    assert events[0].text == "from file entry"
