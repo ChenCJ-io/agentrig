@@ -2,9 +2,9 @@
 
 > RFC ID：AR-RFC-0006
 >
-> 状态：Accepted（B1—B3 待实施）
+> 状态：Accepted / Partially implemented（B1 已落地，B2—B3 待实施）
 >
-> 版本：0.2
+> 版本：0.3
 >
 > 日期：2026-09-23（提出并接受）
 >
@@ -253,6 +253,16 @@ support-bot · 3 条用例 × 1 次 · 并发 4
 
 | 阶段 | 状态 |
 |---|---|
-| B1 文件格式与 `agentrig test` | Pending |
+| B1 文件格式与 `agentrig test` | Implemented（2026-09-23） |
 | B2 导出与 `agentrig init` | Pending |
 | B3 文档、示例与真实 Agent 回归 | Pending |
+
+B1 实施时相对本文的补充：
+
+- `project.yaml` 增加 `root`，默认 `..`（`agentrig/` 的上一级），相对路径都以它为基准；
+- `profile.judge` 与 `profile.curator` 写法相同，供 `evidence_judge` 用例使用；`external_controller`
+  用例在本地无法判定，启动前直接报错；
+- 运行前真实启动一次被测 Agent，入口无法启动时返回退出码 1，而不是让每条用例各自失败；
+- "无法判定"时指出是哪一轮的哪次工具调用没有拿到结果；
+- 本地命令只把 `project.yaml` 里的解释器加入本次进程的放行名单。
+

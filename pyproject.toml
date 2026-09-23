@@ -37,6 +37,7 @@ dependencies = [
     "pydantic>=2.7",
     "protobuf>=5,<7",
     "pydantic-settings>=2.4",
+    "pyyaml>=6.0",
     "sqlalchemy[asyncio]>=2.0.36",
 ]
 
@@ -48,6 +49,7 @@ dev = [
     "mypy>=1.11",
     "types-jsonschema>=4.23",
     "types-protobuf>=5",
+    "types-PyYAML>=6.0",
     "asgi-lifespan>=2.1",
 ]
 

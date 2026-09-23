@@ -34,7 +34,7 @@
 | [09-V2.3 实施与验收包](./09-V2.3-Agent运行时验证与生产证据闭环/README.md) | Implemented / Live Pending | 质量报告、Driver Event v2、Capability、生产证据与耐久执行 |
 | [10-被测 Agent 上下文联动 RFC](./10-被测Agent上下文选择与联动-RFC.md) | Accepted / Partially implemented | 被测 Agent 选择、路由上下文、助手会话绑定与历史快照边界 |
 | [11-一站式 Trace 接入 RFC](./11-一站式Trace接入与生产回归闭环-RFC.md) | Accepted / Partially implemented（M1—M3 已落地） | 采集车道、接入体验、全文存储策略与 Trace 转用例自动化 |
-| [12-用例文件与 agentrig test RFC](./12-用例文件与agentrig-test-RFC.md) | Accepted（待实施） | 用例写成仓库文件、`agentrig test` 的行为与退出码、CI 中的 Curator 策略 |
+| [12-用例文件与 agentrig test RFC](./12-用例文件与agentrig-test-RFC.md) | Accepted / Partially implemented（B1 已落地） | 用例写成仓库文件、`agentrig test` 的行为与退出码、CI 中的 Curator 策略 |
 
 状态含义：
 
@@ -58,7 +58,7 @@
 
 ## 文档治理
 
-当前实现事实以 00、01、03、04、05、08、09、代码和自动化测试为准。10 与 11 已被接受但只部分落地、12 已接受待实施，
+当前实现事实以 00、01、03、04、05、08、09、代码和自动化测试为准。10 与 11 已被接受但只部分落地、12 已接受且 B1 已落地，
 读这两份文档时必须先看其实施状态段；02 是历史时点记录。若文档与测试、migration 或公开 Schema
 冲突，以可执行契约为准，并应在同一改动中修正文档。
 

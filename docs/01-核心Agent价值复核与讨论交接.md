@@ -39,6 +39,7 @@ src/agentrig/
 ├── target_chat.py          Target 直连探索会话（不产生 Run 与权威 Evaluation）
 ├── proxy/                  MCP 聚合与 CaseRun Scope
 ├── sdk/                    被测解释器内的 harness 与 Agno/LangGraph/函数适配（只依赖标准库）
+├── casefiles/              仓库内的 project.yaml 与用例文件、agentrig test
 ├── infrastructure/
 │   ├── database/           ORM、async Session、9 个 SQL Repository
 │   ├── secrets.py          只解析 env: 引用

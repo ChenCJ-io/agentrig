@@ -11,15 +11,16 @@ from pathlib import Path
 import uvicorn
 from pydantic import ValidationError
 
+from .casefiles import command as test_command
 from .config import get_settings
 from .errors import AgentRigError
 from .gates import ReleaseGateResult, ReleasePolicy
 from .infrastructure.database.migrations import migration_config
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.cmd == "serve":
         settings = get_settings()
@@ -48,6 +49,10 @@ def main() -> None:
         raise SystemExit(asyncio.run(_run_safety_command(args)))
     elif args.cmd == "worker":
         raise SystemExit(asyncio.run(_run_worker_command(args)))
+    elif args.cmd == "test":
+        from .casefiles.command import run_test_command
+
+        raise SystemExit(run_test_command(args))
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -107,6 +112,8 @@ def _build_parser() -> argparse.ArgumentParser:
         )
         command.add_argument("--suite-version", default="1.0.0")
         command.add_argument("--output", default="-", help="输出路径；- 表示 stdout")
+
+    test_command.add_parser(sub)
 
     worker = sub.add_parser("worker", help="运行数据库租约保护的耐久执行 Worker")
     worker.add_argument("--worker-id", default=None)

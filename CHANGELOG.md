@@ -29,6 +29,11 @@ M4（失败聚类建议、会话转多轮用例、批量导入车道、CI 门禁
   定义写入 Capability Snapshot。被测进程只继承基础环境变量，模型 Key 经 `credential_env` 或
   `inherit_env` 显式传入。
 - 新增 [Python Agent 接入指南](./docs/05-Python-Agent接入指南.md)。
+- 新增用例文件与 `agentrig test`（AR-RFC-0006 B1）：用例写成仓库里的 YAML，与 Agent 代码一起评审；
+  命令在进程内用临时库执行，支持按目录、标签、名称挑选与并发，输出控制台摘要、JUnit 与 Markdown，
+  退出码与 `agentrig gate` 一致（0 通过、1 配置错误、2 回归、3 无法判定）；默认 Fixture → Sample →
+  Curator，`--no-curator` 为不需要 Key 的严格模式；`--keep-db` 保留的库可直接用 `agentrig serve` 查看。
+- python_agent 的 `entry` 支持 `path/to/file.py:attribute`，入口所在目录不必是 Python 包。
 
 ### Changed
 
@@ -38,6 +43,7 @@ M4（失败聚类建议、会话转多轮用例、批量导入车道、CI 门禁
   上限提高到 8 MiB；非 JSON 输出返回明确的错误事件；观察到的工具结果与 AG-UI 一致只保留摘要。
 - Driver 准备上下文增加 `tool_mode`，执行器与「对话验证」都会传入；只观察的 python_agent 不再把
   `tool_calls` 当作等待结果回灌，observe 模式的直连对话不会卡住。
+- 新增运行时依赖 PyYAML（此前随 `uvicorn[standard]` 间接安装）。
 - CI 增加 SDK 框架适配任务，在最新 Agno、LangGraph 与 Python 3.10 上验证 harness。
 - python_agent Target 支持 `conversation_initial_state`，「对话验证」可以向 Curator 描述业务世界。
 - 文档基线同步到当前实现：重写[总体架构](./docs/00-总体架构.md)（六个对外入口、分层模块地图、
