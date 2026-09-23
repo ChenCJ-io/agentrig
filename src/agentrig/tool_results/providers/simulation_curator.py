@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from ...agents.ports import SimulationCuratorPort
 from ...agents.schemas import CuratorInput
 from ...profiles.schemas import ModelConfigRef
@@ -44,6 +46,22 @@ class SimulationCuratorProvider:
                     model_config=self._model_config,
                     timeout_seconds=self._timeout_seconds,
                 )
+            except ValidationError as exc:
+                # 模型给出了合法 JSON 却不是 {result, state_updates} 外壳：与结果不合法一样纠正一次。
+                feedback = [
+                    "response must be one JSON object with fields result and state_updates: "
+                    f"{'.'.join(str(part) for part in error['loc']) or 'response'} {error['msg']}"
+                    for error in exc.errors(include_url=False)
+                ]
+                attempts.append(
+                    {
+                        "attempt": attempt_index + 1,
+                        "candidate": None,
+                        "valid": False,
+                        "validation_errors": feedback,
+                    }
+                )
+                continue
             except Exception as exc:
                 return ProviderResponse(
                     status=ProviderStatus.ERROR,
