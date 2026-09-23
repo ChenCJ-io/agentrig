@@ -122,6 +122,7 @@ tools are controlled:
 
 | Driver | Protocol |
 |---|---|
+| `python_agent` | Python agents built with Agno, LangGraph, or plain functions: no code changes, tools are taken over inside the framework (see the [Python agent guide](./docs/05-Python-Agent接入指南.md), Chinese) |
 | `acp` | stdio Agent Client Protocol (Goose and similar coding agents) |
 | `http_sse` | Generic externally executed tool-calling SSE protocol |
 | `ag_ui` | AG-UI protocol (AgentScope 2.x and others) |
@@ -138,7 +139,7 @@ Coding agents such as Codex or Claude Code can drive evaluations over MCP using 
 | Area | Capability |
 |---|---|
 | **Orchestration** | Single, batch, multi-version, repeated, two-target A/B runs, plan preview and confirmation |
-| **Tool control** | controlled, per-CaseRun MCP proxy, observe-only; Fixture/Sample/Curator/Real Tool chain |
+| **Tool control** | controlled, per-CaseRun MCP proxy, observe-only; Fixture/Sample/Curator/Real Tool chain; in-framework takeover for Agno/LangGraph |
 | **Evaluation** | Deterministic Rules, Evidence Judge, and external-controller records archived separately |
 | **Evidence & recovery** | Immutable snapshots, append-only RunEvents, result references, idempotent state machines |
 | **Quality gates** | QualityReport, A/B ComparisonReport, versioned ReleaseGate with stable source hashes |

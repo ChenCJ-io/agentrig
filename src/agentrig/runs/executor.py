@@ -200,6 +200,7 @@ class CaseExecutor:
                         self._proxy_public_url if proxy_scope is not None else None
                     ),
                     tool_proxy_headers=proxy_headers,
+                    tool_mode=profile.tool_mode.value,
                 )
                 session = await driver.prepare(prepare_context)
                 capability_snapshot = detail.capability_snapshot

@@ -238,6 +238,7 @@ class TargetChatService:
                     initial_state=initial_state,
                     secret_value=self._secrets.resolve(target.secret_ref),
                     component_timeout_seconds=config.component_timeouts.driver,
+                    tool_mode=config.tool_mode.value,
                 )
             )
         except AgentRigError:

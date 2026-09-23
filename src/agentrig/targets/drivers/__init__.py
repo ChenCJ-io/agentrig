@@ -21,6 +21,7 @@ from .base import (
 )
 from .http_sse import HttpSseDriver
 from .openai_compatible import OpenAICompatibleDriver
+from .python_agent import PythonAgentDriver
 from .registry import DriverRegistry
 from .subprocess import SubprocessDriver
 
@@ -42,6 +43,7 @@ __all__ = [
     "OpenAICompatibleDriver",
     "PermissionResponseAgentDriver",
     "ProbeableAgentDriver",
+    "PythonAgentDriver",
     "ResumableAgentDriver",
     "SubprocessDriver",
     "ToolCall",

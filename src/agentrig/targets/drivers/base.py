@@ -132,6 +132,7 @@ class DriverPrepareContext(BaseModel):
     component_timeout_seconds: float = Field(gt=0)
     tool_proxy_url: str | None = None
     tool_proxy_headers: dict[str, str] = Field(default_factory=dict)
+    tool_mode: str | None = None
 
 
 class DriverSession(BaseModel):

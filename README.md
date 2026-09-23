@@ -119,6 +119,7 @@ uv run agentrig serve
 
 | Driver | 适用协议 |
 |---|---|
+| `python_agent` | Agno、LangGraph 或普通函数写的 Python Agent：不改代码，工具在框架层被接管（见 [Python Agent 接入指南](./docs/05-Python-Agent接入指南.md)） |
 | `acp` | stdio Agent Client Protocol（Goose 等编码 Agent） |
 | `http_sse` | 通用外置 tool-calling SSE 协议 |
 | `ag_ui` | AG-UI 协议（AgentScope 2.x 等） |
@@ -134,7 +135,7 @@ Codex、Claude Code 等编码 Agent 可直接按 [Skill 目录](./skills/README.
 | 领域 | 能力 |
 |---|---|
 | **评测编排** | 单用例、批量、多版本、重复运行、双 Target A/B、计划预览与确认 |
-| **工具控制** | controlled、CaseRun 级 MCP proxy、observe-only；Fixture/Sample/Curator/Real Tool 链 |
+| **工具控制** | controlled、CaseRun 级 MCP proxy、observe-only；Fixture/Sample/Curator/Real Tool 链；Agno/LangGraph 框架层接管 |
 | **评判体系** | Deterministic Rule、Evidence Judge、External Controller 分层存档 |
 | **证据与恢复** | 不可变快照、append-only RunEvent、结果引用、幂等状态机、断线恢复 |
 | **质量门禁** | QualityReport、A/B ComparisonReport、版本化 ReleaseGate 与稳定来源哈希 |

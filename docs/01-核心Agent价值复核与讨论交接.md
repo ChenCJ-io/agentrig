@@ -13,7 +13,7 @@
 src/agentrig/
 ├── cases/                  TestCase、Turn、Selector、审核规则
 ├── targets/
-│   ├── drivers/            ACP、HTTP/SSE、AG-UI、AgentScope、OpenAI、Python、subprocess
+│   ├── drivers/            ACP、HTTP/SSE、AG-UI、AgentScope、OpenAI、Python、subprocess、python_agent
 │   ├── driver_schemas.py   Driver 级 JSON Schema 发现
 │   └── agentscope_compat.py
 ├── profiles/               ExecutionProfile 与配置合并
@@ -38,6 +38,7 @@ src/agentrig/
 ├── assistant/              V2 助手会话、EvaluationPlan 状态机、Run 终态回写
 ├── target_chat.py          Target 直连探索会话（不产生 Run 与权威 Evaluation）
 ├── proxy/                  MCP 聚合与 CaseRun Scope
+├── sdk/                    被测解释器内的 harness 与 Agno/LangGraph/函数适配（只依赖标准库）
 ├── infrastructure/
 │   ├── database/           ORM、async Session、9 个 SQL Repository
 │   ├── secrets.py          只解析 env: 引用
@@ -128,6 +129,7 @@ Target 定义如何连接被测 Agent：
 | `openai_compatible` | OpenAI Chat Completions tool-calling |
 | `python` | 已安装且位于部署 allowlist 的 `module:Class` |
 | `subprocess` | 实验性 allowlisted executable + stdin/stdout JSONL |
+| `python_agent` | 用被测项目自己的解释器运行 harness，Agno、LangGraph 或普通函数 Agent 不改代码即可接管工具，见 [Python Agent 接入指南](./05-Python-Agent接入指南.md) |
 
 所有 Driver 都把协议事件归一到 `DriverEvent`（`agentrig.driver-event.v2`，31 种类型），并通过
 `DriverCapabilities` 的 19 个布尔位声明能力；Planner 以此做 preflight，不兼容项结构化跳过。

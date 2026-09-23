@@ -165,6 +165,32 @@ jobs:
           uv run --frozen agentrig db downgrade
           uv run --frozen agentrig db upgrade
 
+  sdk-frameworks:
+    name: SDK framework adapters
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies and Agno/LangGraph
+        run: uv sync --frozen --extra dev --group frameworks
+
+      - name: Provide Python 3.10 for harness compatibility
+        shell: bash
+        run: |
+          uv python install 3.10
+          dirname "$(uv python find --no-project 3.10)" >> "${GITHUB_PATH}"
+
+      - name: Run SDK and python_agent tests
+        run: uv run --frozen pytest -q tests/sdk
+
   reference-demo:
     name: Public reference demo
     runs-on: ubuntu-latest
@@ -267,7 +293,14 @@ jobs:
 
   package:
     name: Package smoke test
-    needs: [backend, quality, frontend, postgresql, reference-demo, real-backend-browser]
+    needs:
+      - backend
+      - quality
+      - sdk-frameworks
+      - frontend
+      - postgresql
+      - reference-demo
+      - real-backend-browser
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
