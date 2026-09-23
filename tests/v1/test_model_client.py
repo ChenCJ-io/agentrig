@@ -49,6 +49,7 @@ async def test_model_client_falls_back_from_json_schema_to_json_object() -> None
         },
     }
     assert payloads[1]["response_format"] == {"type": "json_object"}
+    assert "JSON Schema" in payloads[1]["messages"][-1]["content"]
     assert result.value == {"kind": "answer"}
     assert result.metadata["structured_output_mode"] == "json_object"
     assert result.metadata["structured_output_fallbacks"] == ["http_400:json_schema"]

@@ -25,6 +25,8 @@ M4（失败聚类建议、会话转多轮用例、批量导入车道、CI 门禁
 
 ### Changed
 
+- Simulation Curator 更稳健：`json_object` 输出模式也附上结构 Schema；模型返回合法 JSON 但外壳不是
+  `{result, state_updates}` 时，按校验反馈纠正一次，而不是直接让 CaseRun 失败。
 - 文档基线同步到当前实现：重写[总体架构](./docs/00-总体架构.md)（六个对外入口、分层模块地图、
   Run/Cell/Attempt 执行模型、39 张表与两种执行形态），更新[实现与接入](./docs/01-核心Agent价值复核与讨论交接.md)
   的包结构与 MCP 工具面，修正快速开始中早已移除的 `/mcp/manager`、`/mcp/curator`、`/mcp/judge`

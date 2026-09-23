@@ -388,3 +388,35 @@ async def test_curator_and_judge_are_integrated_but_have_separate_contexts(
         assert "SECRET_JUDGE_RUBRIC" in judge_prompt
     finally:
         await services.close()
+
+
+async def test_curator_corrects_a_malformed_envelope_once(
+    model_config: ModelConfigRef,
+) -> None:
+    client = FakeModelClient(
+        [
+            {"type": "json_object", "todos": [{"id": "1"}]},
+            {"result": {"items": []}, "state_updates": {}},
+        ]
+    )
+    provider = SimulationCuratorProvider(
+        SimulationCurator(client, SecretResolver()),
+        model_config=model_config.model_copy(
+            update={"options": {"structured_output": "json_object"}}
+        ),
+        timeout_seconds=10,
+        validator=ToolResultValidator(),
+    )
+    response = await provider.resolve(
+        ProviderContext(
+            case_run_id="cr",
+            turn_position=1,
+            tool_call=ToolCall(id="call", name="search"),
+        )
+    )
+    assert response.status is ProviderStatus.HIT
+    assert response.result == {"items": []}
+    assert len(client.requests) == 2
+    assert response.metadata["attempts"][0]["valid"] is False
+    correction_prompt = client.requests[1]["messages"][1]["content"]
+    assert "fields result and state_updates" in correction_prompt

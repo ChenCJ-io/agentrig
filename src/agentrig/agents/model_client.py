@@ -132,9 +132,10 @@ class OpenAICompatibleModelClient:
                     "schema": json_schema,
                 },
             }
-        elif output_mode == "json_object":
-            payload["response_format"] = {"type": "json_object"}
         else:
+            # json_object 只保证输出是合法 JSON，不约束结构，所以和纯提示模式一样附上 Schema。
+            if output_mode == "json_object":
+                payload["response_format"] = {"type": "json_object"}
             payload["messages"] = [
                 *base_payload["messages"],
                 {
