@@ -5,11 +5,11 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  github-release:
-    name: GitHub release
+  build:
+    name: Build distributions
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -44,6 +44,27 @@ jobs:
       - name: Build distributions
         run: uv build
 
+      - name: Upload distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  github-release:
+    name: GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,6 +72,7 @@ jobs:
         run: |
           package_version="${GITHUB_REF_NAME#v}"
           release_args=(
+            --repo "${GITHUB_REPOSITORY}"
             --verify-tag
             --generate-notes
             --title "AgentRig ${GITHUB_REF_NAME}"
@@ -59,3 +81,29 @@ jobs:
             release_args+=(--prerelease)
           fi
           gh release create "${GITHUB_REF_NAME}" dist/* "${release_args[@]}"
+
+  pypi:
+    name: Publish to PyPI
+    needs: build
+    # 先在 PyPI 为本仓库配置 trusted publisher（Workflow release.yml，Environment pypi），
+    # 再把仓库变量 PYPI_PUBLISH 设为 true；未开启时只发布到 GitHub Release。
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/agentrig/
+    permissions:
+      id-token: write
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish with trusted publishing
+        run: uv publish --trusted-publishing always dist/*

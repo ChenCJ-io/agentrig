@@ -115,6 +115,18 @@ Default entry points: web `http://127.0.0.1:8000/`, HTTP API `/api/`, streamable
 Configuration, authentication, and network boundaries are covered in the
 [English quick start](./docs/quickstart.en.md).
 
+### Path C: install the release package
+
+No clone and no frontend build required:
+
+```bash
+pip install https://github.com/ChenCJ-io/agentrig/releases/download/v0.4.0a0/agentrig-0.4.0a0-py3-none-any.whl
+agentrig db upgrade
+agentrig serve
+```
+
+Once AgentRig is published to PyPI, `pip install agentrig` is enough.
+
 ## Bring your own agent
 
 Create a Target pointing at your agent, pick the matching driver, and let an ExecutionProfile decide how
@@ -174,7 +186,7 @@ cd web && npm run typecheck && npm run test:coverage && npm run e2e && npm run b
 
 ## Version and maturity
 
-The current version is `0.3.0a0`, an **alpha**. The public reference CI, evidence export, and security
+The current version is `0.4.0a0`, an **alpha**. The public reference CI, evidence export, and security
 boundaries are implemented and locally verified. AgentRig currently fits reproducible evaluation and
 controlled pilots; it is not yet a general-availability release for unattended production. Production
 pilots should keep plan confirmation, human approval, least privilege, and audit gates in place.

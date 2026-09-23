@@ -4,8 +4,15 @@
 
 ## [Unreleased]
 
-按 RFC AR-RFC-0005 落地生产 Trace 接入的前三个里程碑：把"能收 trace"变成"好接入、能转用例"。
-M4（失败聚类建议、会话转多轮用例、批量导入车道、CI 门禁 Action）尚未实施。
+## [0.4.0a0] - 2026-09-23
+
+这一版让现有 Agent 更容易接进来，让用例能进仓库：
+
+- 生产 Trace 接入（AR-RFC-0005 M1—M3）：OpenAI 兼容网关、OTLP/JSON、全文策略与 Trace 转用例；
+- `python_agent`：Agno、LangGraph 与普通函数写的 Agent 不改代码即可接受驱动；
+- 用例文件与 `agentrig test`（AR-RFC-0006 B1）：用例写进仓库，本地与 CI 一条命令运行。
+
+AR-RFC-0005 的 M4（失败聚类建议、会话转多轮用例、批量导入车道、CI 门禁 Action）尚未实施。
 
 ### Added
 

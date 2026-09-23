@@ -113,6 +113,18 @@ uv run agentrig serve
 默认入口：Web `http://127.0.0.1:8000/`、HTTP API `/api/`、Streamable HTTP MCP `/mcp/`。
 配置、鉴权和网络边界见[快速开始与安全部署](./docs/08-快速开始与安全部署.md)。
 
+### 路径 C：直接安装发布包
+
+不需要克隆仓库，也不需要构建前端：
+
+```bash
+pip install https://github.com/ChenCJ-io/agentrig/releases/download/v0.4.0a0/agentrig-0.4.0a0-py3-none-any.whl
+agentrig db upgrade
+agentrig serve
+```
+
+发布到 PyPI 后可以直接 `pip install agentrig`。
+
 ## 接入自己的 Agent
 
 创建一个 Target 指向你的 Agent，选择匹配的 Driver，再用 ExecutionProfile 决定工具控制方式：
@@ -170,7 +182,7 @@ cd web && npm run typecheck && npm run test:coverage && npm run e2e && npm run b
 
 ## 版本与成熟度
 
-当前版本为 `0.3.0a0`，定位为 **Alpha**。公开 Reference CI、证据导出与安全边界均已实现并
+当前版本为 `0.4.0a0`，定位为 **Alpha**。公开 Reference CI、证据导出与安全边界均已实现并
 完成本机验收；当前适合评测复现和受控试点，尚不是无人值守生产环境的通用 GA 版本。生产试点
 应保留计划确认、人工审批、最小权限和审计门禁。
 
