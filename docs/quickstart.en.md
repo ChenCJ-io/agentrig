@@ -166,6 +166,8 @@ configuration, target definitions, Skills, screenshots, or logs.
 - Keep `allow_private_networks = false`; list exact trusted hosts instead of disabling egress protection.
 - Real tools require deployment allowlisting, an enabled profile provider, and user authorization.
 - Python and subprocess drivers must be installed and allowlisted by the deployer; MCP cannot upload code.
+  The `python_agent` interpreter must also be listed exactly in `subprocess_allowlist`; the agent process
+  inherits only a minimal environment, so AgentRig's own secrets never reach agent code.
 - Reports fail explicitly at configured limits rather than silently truncating evidence.
 - A trusted principal header is valid only behind a proxy that strips and rewrites the client header.
 

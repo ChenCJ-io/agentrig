@@ -8,4 +8,5 @@ class DriverType(StrEnum):
     HTTP_SSE = "http_sse"
     OPENAI_COMPATIBLE = "openai_compatible"
     PYTHON = "python"
+    PYTHON_AGENT = "python_agent"
     SUBPROCESS = "subprocess"

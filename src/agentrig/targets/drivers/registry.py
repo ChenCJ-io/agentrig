@@ -20,6 +20,7 @@ from .base import (
 )
 from .http_sse import HttpSseDriver
 from .openai_compatible import OpenAICompatibleDriver
+from .python_agent import PythonAgentDriver
 from .subprocess import SubprocessDriver
 
 DriverFactory = Callable[[], AgentDriver]
@@ -51,6 +52,8 @@ class DriverRegistry:
     def create(self, driver_type: str, *, entrypoint: str | None = None) -> AgentDriver:
         if driver_type == "subprocess":
             return SubprocessDriver(executable_allowlist=self._subprocess_allowlist)
+        if driver_type == "python_agent":
+            return PythonAgentDriver(executable_allowlist=self._subprocess_allowlist)
         if driver_type == "python":
             if not entrypoint or entrypoint not in self._python_allowlist:
                 raise AgentRigError(
@@ -127,6 +130,14 @@ class DriverRegistry:
             return
         if driver_type == "subprocess":
             return
+        if driver_type == "python_agent":
+            PythonAgentDriver(
+                executable_allowlist=self._subprocess_allowlist
+            ).validate_configuration(
+                options,
+                secret_configured=secret_configured,
+            )
+            return
         if driver_type == "python":
             entrypoint = options.get("entrypoint")
             if not isinstance(entrypoint, str) or entrypoint not in self._python_allowlist:
@@ -195,6 +206,16 @@ class DriverRegistry:
         )
         descriptions.append(
             {
+                "driver_type": "python_agent",
+                "capabilities": PythonAgentDriver(
+                    executable_allowlist=self._subprocess_allowlist
+                ).capabilities().names(),
+                "options_schema_available": True,
+                "deployment_ready": bool(self._subprocess_allowlist),
+            }
+        )
+        descriptions.append(
+            {
                 "driver_type": "python",
                 "capabilities": [],
                 "options_schema_available": False,
@@ -206,7 +227,7 @@ class DriverRegistry:
     def configuration_schema(self, driver_type: str) -> dict[str, Any] | None:
         """返回 Driver options Schema；未知 Driver 仍按配置错误处理。"""
 
-        if driver_type not in {*self._factories, "subprocess", "python"}:
+        if driver_type not in {*self._factories, "subprocess", "python", "python_agent"}:
             raise AgentRigError(
                 ErrorCode.VALIDATION_ERROR,
                 f"unsupported driver type: {driver_type}",

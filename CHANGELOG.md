@@ -22,11 +22,24 @@ M4（失败聚类建议、会话转多轮用例、批量导入车道、CI 门禁
   驻留探测第一条 trace 到达；配套浏览器 E2E 与 `scripts/send_demo_traces.py` 本地自检脚本。
 - 新增[生产 Trace 接入指南](./docs/04-Trace接入指南.md)，覆盖两条车道配方、语义方言识别范围与
   隐私三档策略。
+- 新增 `python_agent` Driver 与只依赖标准库的 `agentrig.sdk`：用被测项目自己的解释器启动 harness，
+  Agno Agent/Team 与 LangGraph 编译图（`create_agent`、`create_react_agent`、手写 StateGraph）不改代码
+  即可接受驱动，工具在框架层被接管并按 Fixture → Sample → Simulation Curator 回放；普通函数 Agent 用
+  `@agentrig.sdk.tool` 标记工具。被测环境无需安装 AgentRig，支持 Python 3.10+；harness 上报的工具
+  定义写入 Capability Snapshot。被测进程只继承基础环境变量，模型 Key 经 `credential_env` 或
+  `inherit_env` 显式传入。
+- 新增 [Python Agent 接入指南](./docs/05-Python-Agent接入指南.md)。
 
 ### Changed
 
 - Simulation Curator 更稳健：`json_object` 输出模式也附上结构 Schema；模型返回合法 JSON 但外壳不是
   `{result, state_updates}` 时，按校验反馈纠正一次，而不是直接让 CaseRun 失败。
+- subprocess Driver 持续排空 stderr 并只保留末尾 16 KiB，避免被测进程日志写满管道后卡死；单行协议
+  上限提高到 8 MiB；非 JSON 输出返回明确的错误事件；观察到的工具结果与 AG-UI 一致只保留摘要。
+- Driver 准备上下文增加 `tool_mode`，执行器与「对话验证」都会传入；只观察的 python_agent 不再把
+  `tool_calls` 当作等待结果回灌，observe 模式的直连对话不会卡住。
+- CI 增加 SDK 框架适配任务，在最新 Agno、LangGraph 与 Python 3.10 上验证 harness。
+- python_agent Target 支持 `conversation_initial_state`，「对话验证」可以向 Curator 描述业务世界。
 - 文档基线同步到当前实现：重写[总体架构](./docs/00-总体架构.md)（六个对外入口、分层模块地图、
   Run/Cell/Attempt 执行模型、39 张表与两种执行形态），更新[实现与接入](./docs/01-核心Agent价值复核与讨论交接.md)
   的包结构与 MCP 工具面，修正快速开始中早已移除的 `/mcp/manager`、`/mcp/curator`、`/mcp/judge`

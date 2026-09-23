@@ -119,6 +119,61 @@ class AgUiTargetOptions(BaseModel):
     collaboration: dict[str, Any] = Field(default_factory=dict)
 
 
+class PythonAgentTargetOptions(BaseModel):
+    """在被测 Agent 自己的 Python 解释器里运行 AgentRig harness 的 options。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entry: str = Field(
+        pattern=r"^[A-Za-z_][\w.]*:[A-Za-z_][\w.]*$",
+        description=(
+            "module:attribute，指向 Agno Agent/Team、LangGraph 编译图或 "
+            "callable(messages)。"
+        ),
+    )
+    python: str = Field(
+        min_length=1,
+        description="被测 Agent 虚拟环境里的 Python 解释器；必须在部署 subprocess_allowlist 中。",
+    )
+    cwd: str | None = Field(
+        default=None,
+        description="被测项目根目录，用于导入 entry 模块和读取项目自己的 .env。",
+    )
+    adapter: Literal["auto", "agno", "langgraph", "callable"] = "auto"
+    factory: bool = Field(
+        default=False,
+        description="entry 是无参工厂函数时，先调用它构建 Agent。",
+    )
+    credential_env: str | None = Field(
+        default=None,
+        description="把 Target secret_ref 解析后的值注入被测进程时使用的环境变量名。",
+    )
+    env: dict[str, str] = Field(
+        default_factory=dict,
+        description="不含凭据的被测进程环境变量覆盖。",
+    )
+    inherit_env: list[str] = Field(
+        default_factory=list,
+        description=(
+            "从 AgentRig 进程原样转发的环境变量名。被测进程默认只继承 PATH、HOME、"
+            "语言、代理和证书等基础变量，AgentRig 自身的 Secret 不会泄漏给被测代码。"
+        ),
+    )
+    startup_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        le=600,
+        description="导入被测 Agent 并完成 harness 握手的最长时间。",
+    )
+    conversation_initial_state: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "「对话验证」会话的初始状态，同时交给被测 Agent 和 Simulation Curator；"
+            "可以描述业务世界，让模拟的工具结果贴近真实数据。"
+        ),
+    )
+
+
 def options_schema(driver_type: str) -> dict[str, Any] | None:
     """返回内置 Driver 的 options JSON Schema。"""
 
@@ -129,6 +184,8 @@ def options_schema(driver_type: str) -> dict[str, Any] | None:
         if driver_type == "agentscope":
             schema["title"] = "AgentScopeTargetOptions"
         return schema
+    if driver_type == "python_agent":
+        return PythonAgentTargetOptions.model_json_schema(by_alias=True)
     return None
 
 
@@ -168,5 +225,12 @@ def options_example(driver_type: str) -> dict[str, Any] | None:
             "framework": "agentscope" if driver_type == "agentscope" else "ag-ui",
             "framework_version": "2.0.6" if driver_type == "agentscope" else None,
             "protocol_version": "1",
+        }
+    if driver_type == "python_agent":
+        return {
+            "entry": "my_app.agent:agent",
+            "python": "/absolute/path/to/agent/.venv/bin/python",
+            "cwd": "/absolute/path/to/agent",
+            "credential_env": "MODEL_API_KEY",
         }
     return None
