@@ -22,7 +22,7 @@
       "output_schema": "embedded:SKILL.md",
       "fixtures": [],
       "compatible": {
-        "agentrig": ">=0.3.0a0,<0.4"
+        "agentrig": ">=0.3.0a0,<0.5"
       }
     },
     {
@@ -42,7 +42,7 @@
       "output_schema": "embedded:SKILL.md",
       "fixtures": [],
       "compatible": {
-        "agentrig": ">=0.3.0a0,<0.4"
+        "agentrig": ">=0.3.0a0,<0.5"
       }
     },
     {
@@ -70,7 +70,7 @@
       "output_schema": "embedded:SKILL.md",
       "fixtures": [],
       "compatible": {
-        "agentrig": ">=0.3.0a0,<0.4"
+        "agentrig": ">=0.3.0a0,<0.5"
       }
     }
   ]

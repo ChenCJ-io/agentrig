@@ -149,6 +149,17 @@ docs/                      权威架构、运行手册与设计史
 - 中文 README 与英文 README 的能力、命令和成熟度必须同步；
 - 截图和证据必须来自真实运行，并在提交前完成脱敏检查。
 
+## 发布
+
+维护者按以下步骤发布新版本：
+
+1. 在 PR 里修改 `pyproject.toml` 与 `src/agentrig/__init__.py` 的版本号，把 CHANGELOG 的
+   Unreleased 整理成版本段落；
+2. 合并后在 main 上打 `v<版本号>` 标签并推送；
+3. `Release` 工作流构建 Web 前端与 wheel/sdist，创建 GitHub Release；`a`/`b`/`rc` 版本标为预发布；
+4. 发布到 PyPI 使用 trusted publishing：先在 PyPI 为本仓库配置 publisher（Workflow `release.yml`，
+   Environment `pypi`），再把仓库变量 `PYPI_PUBLISH` 设为 `true`。未开启时只发布到 GitHub Release。
+
 ## Pull Request 要求
 
 PR 描述应包含：

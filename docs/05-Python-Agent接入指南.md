@@ -281,6 +281,9 @@ AgentRig · refund-bot@candidate · 2 条用例 × 1 次 · 并发 4
 ### 5.5 在 CI 里运行
 
 ```yaml
+- name: Install AgentRig
+  run: pip install https://github.com/ChenCJ-io/agentrig/releases/download/v0.4.0a0/agentrig-0.4.0a0-py3-none-any.whl
+
 - name: AgentRig regression
   run: agentrig test --junit agentrig-report.xml --markdown agentrig-report.md
   env:
@@ -288,7 +291,8 @@ AgentRig · refund-bot@candidate · 2 条用例 × 1 次 · 并发 4
     CURATOR_API_KEY: ${{ secrets.CURATOR_API_KEY }}
 ```
 
-- CI 环境要能运行 `agentrig`。AgentRig 发布到 PyPI 之前，需要从源码安装：先构建 `web/`，再安装；
+- 发布包已内置 Web 前端，直接用 GitHub Release 上的 wheel 安装；发布到 PyPI 后改为 `pip install agentrig`；
+- AgentRig 与被测 Agent 装在同一个环境时，`target.python` 可以不填；
 - 没有 Curator Key 的环境用 `--no-curator`，此时用例要为每次工具调用准备 Fixture 或 Sample；
 - `--markdown` 生成的报告可以直接贴到 PR 评论里。
 

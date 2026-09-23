@@ -1,3 +1,3 @@
 """AgentRig —— 面向 AI agent 的 MCP 原生测试台。"""
 
-__version__ = "0.3.0a0"
+__version__ = "0.4.0a0"
